@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(start index.html)",
+      "Bash(python:*)",
+      "Bash(start C:/neural_vm_experiments/web_interface/index.html)",
+      "Bash(curl:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(pip install:*)",
+      "Bash(git --version)",
+      "Bash(gh:*)",
+      "Bash(winget install:*)",
+      "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" auth login)",
+      "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" auth status)",
+      "Bash(mkdir:*)",
+      "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" auth login --web)",
+      "Bash(refreshenv)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

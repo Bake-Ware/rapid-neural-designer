@@ -1,0 +1,2000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural VM Builder - Scratch-like Interface</title>
+    <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+    <script src="https://unpkg.com/blockly/python_compressed.js"></script>
+    <!-- Monaco Editor for syntax highlighting and IDE features -->
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/editor/editor.main.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            color: #ffffff;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #header {
+            background: #2d2d30;
+            padding: 15px 20px;
+            border-bottom: 2px solid #007acc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #header h1 {
+            font-size: 20px;
+            color: #007acc;
+        }
+
+        #header-right {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        #tabs {
+            display: flex;
+            gap: 5px;
+        }
+
+        .tab {
+            background: transparent;
+            border: none;
+            color: #cccccc;
+            padding: 8px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab:hover {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tab.active {
+            color: #007acc;
+            border-bottom-color: #007acc;
+        }
+
+        #controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background: #007acc;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #005a9e;
+        }
+
+        button:active {
+            background: #004578;
+        }
+
+        #container {
+            height: calc(100vh - 60px);
+            position: relative;
+        }
+
+        .tab-content {
+            display: none;
+            height: 100%;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        #blockly-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #code-container {
+            width: 100%;
+            height: 100%;
+            background: #1e1e1e;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #code-header {
+            background: #2d2d30;
+            padding: 10px 20px;
+            border-bottom: 1px solid #3e3e42;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #code-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .run-button {
+            background: #0e7a0d;
+        }
+
+        .run-button:hover {
+            background: #0c6b0b;
+        }
+
+        .run-button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .running {
+            background: #cca700 !important;
+        }
+
+        #code-output {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #monaco-editor {
+            width: 100%;
+            height: 100%;
+        }
+
+        #validation-messages {
+            background: #252526;
+            border-top: 1px solid #3e3e42;
+            padding: 10px 20px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .validation-error {
+            color: #f48771;
+            padding: 5px 0;
+            font-size: 12px;
+        }
+
+        .validation-warning {
+            color: #cca700;
+            padding: 5px 0;
+            font-size: 12px;
+        }
+
+        .validation-success {
+            color: #4ec9b0;
+            padding: 5px 0;
+            font-size: 12px;
+        }
+
+        #execution-output {
+            background: #1e1e1e;
+            border-top: 2px solid #007acc;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        #execution-output.visible {
+            display: block;
+        }
+
+        #execution-header {
+            background: #2d2d30;
+            padding: 10px 20px;
+            border-bottom: 1px solid #3e3e42;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #execution-content {
+            padding: 15px 20px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .exec-stdout {
+            color: #d4d4d4;
+            white-space: pre-wrap;
+        }
+
+        .exec-stderr {
+            color: #f48771;
+            white-space: pre-wrap;
+        }
+
+        .exec-info {
+            color: #4ec9b0;
+            padding: 5px 0;
+        }
+
+        .exec-error {
+            color: #f48771;
+            padding: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>🧠 Neural VM Builder</h1>
+        <div id="header-right">
+            <div id="tabs">
+                <button class="tab active" onclick="switchTab('designer')">Designer</button>
+                <button class="tab" onclick="switchTab('code')">Code</button>
+            </div>
+            <div id="controls">
+                <button onclick="saveWorkspace()">💾 Save</button>
+                <button onclick="loadWorkspace()">📁 Load</button>
+                <button onclick="clearWorkspace()">🗑️ Clear</button>
+                <button onclick="copyCode()">📋 Copy Code</button>
+                <button onclick="downloadCode()">⬇️ Download</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="container">
+        <div id="designer-tab" class="tab-content active">
+            <div id="blockly-container"></div>
+        </div>
+        <div id="code-tab" class="tab-content">
+            <div id="code-container">
+                <div id="code-header">
+                    <span>Generated Python Code</span>
+                    <div id="code-actions">
+                        <button id="run-button" class="run-button" onclick="runCode()">▶️ Run Code</button>
+                    </div>
+                </div>
+                <div id="code-output">
+                    <div id="monaco-editor"></div>
+                </div>
+                <div id="validation-messages"></div>
+                <div id="execution-output">
+                    <div id="execution-header">
+                        <span>Execution Output</span>
+                        <button onclick="clearExecutionOutput()" style="background: transparent; padding: 2px 8px;">✕</button>
+                    </div>
+                    <div id="execution-content"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Monaco Editor
+        let monacoEditor = null;
+
+        require.config({
+            paths: {
+                'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs'
+            }
+        });
+
+        require(['vs/editor/editor.main'], function() {
+            monacoEditor = monaco.editor.create(document.getElementById('monaco-editor'), {
+                value: '# Drag blocks to build your Neural VM experiment\n# Code will appear here automatically',
+                language: 'python',
+                theme: 'vs-dark',
+                automaticLayout: true,
+                readOnly: false,
+                minimap: { enabled: true },
+                fontSize: 14,
+                lineNumbers: 'on',
+                roundedSelection: false,
+                scrollBeyondLastLine: false,
+                renderWhitespace: 'selection',
+                contextmenu: true,
+                formatOnPaste: true,
+                formatOnType: true,
+                suggestOnTriggerCharacters: true,
+                acceptSuggestionOnEnter: 'on',
+                tabCompletion: 'on',
+                wordBasedSuggestions: true,
+                parameterHints: { enabled: true },
+                quickSuggestions: {
+                    other: true,
+                    comments: false,
+                    strings: false
+                }
+            });
+
+            // Add Python linting markers
+            window.validatePythonCode = function(code) {
+                const markers = [];
+                const lines = code.split('\n');
+
+                lines.forEach((line, index) => {
+                    // Check for common issues
+                    if (line.trim().startsWith('import') && index > 10) {
+                        markers.push({
+                            severity: monaco.MarkerSeverity.Warning,
+                            startLineNumber: index + 1,
+                            startColumn: 1,
+                            endLineNumber: index + 1,
+                            endColumn: line.length + 1,
+                            message: 'Imports should be at the top of the file'
+                        });
+                    }
+
+                    // Check for undefined variables in forward passes
+                    if (line.includes('.forward(') && !line.includes('=')) {
+                        markers.push({
+                            severity: monaco.MarkerSeverity.Warning,
+                            startLineNumber: index + 1,
+                            startColumn: 1,
+                            endLineNumber: index + 1,
+                            endColumn: line.length + 1,
+                            message: 'Forward pass result is not assigned to a variable'
+                        });
+                    }
+
+                    // Check for tensor dimension mismatches (basic heuristic)
+                    const dimMatch = line.match(/SimpleLinearAtom\((\d+),\s*(\d+)/);
+                    if (dimMatch && index > 0) {
+                        const inDim = parseInt(dimMatch[1]);
+                        const outDim = parseInt(dimMatch[2]);
+
+                        // Look at previous line for potential mismatch
+                        const prevLine = lines[index - 1];
+                        const prevDimMatch = prevLine.match(/SimpleLinearAtom\(\d+,\s*(\d+)/);
+                        if (prevDimMatch) {
+                            const prevOutDim = parseInt(prevDimMatch[1]);
+                            if (prevOutDim !== inDim) {
+                                markers.push({
+                                    severity: monaco.MarkerSeverity.Error,
+                                    startLineNumber: index + 1,
+                                    startColumn: 1,
+                                    endLineNumber: index + 1,
+                                    endColumn: line.length + 1,
+                                    message: `Dimension mismatch: expected input ${prevOutDim}, got ${inDim}`
+                                });
+                            }
+                        }
+                    }
+                });
+
+                monaco.editor.setModelMarkers(monacoEditor.getModel(), 'python', markers);
+                return markers;
+            };
+        });
+
+        // Define custom blocks for Neural VM atomic components
+        Blockly.Blocks['nvm_linear'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Linear Layer")
+                    .appendField("in:")
+                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "IN_FEATURES")
+                    .appendField("out:")
+                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "OUT_FEATURES")
+                    .appendField("bias:")
+                    .appendField(new Blockly.FieldCheckbox("TRUE"), "USE_BIAS");
+                this.appendValueInput("INPUT")
+                    .setCheck("Tensor")
+                    .appendField("input");
+                this.setOutput(true, "Tensor");
+                this.setColour(230);
+                this.setTooltip("Linear transformation layer with full state capture");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_attention'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Multi-Head Attention")
+                    .appendField("embed_dim:")
+                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "EMBED_DIM")
+                    .appendField("heads:")
+                    .appendField(new Blockly.FieldNumber(8, 1, 64), "NUM_HEADS");
+                this.appendValueInput("INPUT")
+                    .setCheck("Tensor")
+                    .appendField("input");
+                this.setOutput(true, "Tensor");
+                this.setColour(160);
+                this.setTooltip("Multi-head attention mechanism with QKV state capture");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_input'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Input Tensor")
+                    .appendField("batch:")
+                    .appendField(new Blockly.FieldNumber(1, 1, 1000), "BATCH_SIZE")
+                    .appendField("seq:")
+                    .appendField(new Blockly.FieldNumber(10, 1, 10000), "SEQ_LEN")
+                    .appendField("dim:")
+                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "EMBED_DIM");
+                this.setOutput(true, "Tensor");
+                this.setColour(290);
+                this.setTooltip("Create random input tensor");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_experiment'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("🧪 Neural VM Experiment")
+                    .appendField(new Blockly.FieldTextInput("my_experiment"), "EXP_NAME");
+                this.appendStatementInput("SETUP")
+                    .appendField("Setup");
+                this.appendStatementInput("COMPONENTS")
+                    .appendField("Components");
+                this.appendStatementInput("EXECUTION")
+                    .appendField("Execute");
+                this.setColour(20);
+                this.setTooltip("Main experiment container");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_create_component'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Create")
+                    .appendField(new Blockly.FieldTextInput("layer1"), "VAR_NAME")
+                    .appendField("=");
+                this.appendValueInput("COMPONENT")
+                    .setCheck(null);
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(60);
+                this.setTooltip("Create and name a component");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_forward'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Forward Pass")
+                    .appendField(new Blockly.FieldVariable("output"), "OUTPUT_VAR")
+                    .appendField("=")
+                    .appendField(new Blockly.FieldVariable("layer1"), "COMPONENT_VAR")
+                    .appendField("(");
+                this.appendValueInput("INPUT")
+                    .setCheck("Tensor");
+                this.appendDummyInput()
+                    .appendField(")");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(120);
+                this.setTooltip("Execute forward pass through component");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_print_state'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Print State")
+                    .appendField(new Blockly.FieldVariable("state"), "STATE_VAR");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(180);
+                this.setTooltip("Print captured computational state");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_variable'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField(new Blockly.FieldVariable("x"), "VAR");
+                this.setOutput(true, "Tensor");
+                this.setColour(330);
+                this.setTooltip("Reference a variable");
+                this.setHelpUrl("");
+            }
+        };
+
+        // New blocks for GPT
+        Blockly.Blocks['nvm_layernorm'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Layer Norm")
+                    .appendField("dims:")
+                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "NORMALIZED_SHAPE");
+                this.appendValueInput("INPUT")
+                    .setCheck("Tensor")
+                    .appendField("input");
+                this.setOutput(true, "Tensor");
+                this.setColour(230);
+                this.setTooltip("Layer normalization");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_activation'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Activation")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["ReLU", "relu"],
+                        ["GELU", "gelu"],
+                        ["Tanh", "tanh"],
+                        ["Sigmoid", "sigmoid"]
+                    ]), "ACTIVATION_TYPE");
+                this.appendValueInput("INPUT")
+                    .setCheck("Tensor")
+                    .appendField("input");
+                this.setOutput(true, "Tensor");
+                this.setColour(230);
+                this.setTooltip("Apply activation function");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_add'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Add (Residual)");
+                this.appendValueInput("INPUT_A")
+                    .setCheck("Tensor")
+                    .appendField("a:");
+                this.appendValueInput("INPUT_B")
+                    .setCheck("Tensor")
+                    .appendField("b:");
+                this.setOutput(true, "Tensor");
+                this.setColour(230);
+                this.setTooltip("Add two tensors (for residual connections)");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_embedding'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Embedding")
+                    .appendField("vocab:")
+                    .appendField(new Blockly.FieldNumber(50257, 1, 1000000), "VOCAB_SIZE")
+                    .appendField("dim:")
+                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "EMBED_DIM");
+                this.setOutput(true, "Tensor");
+                this.setColour(290);
+                this.setTooltip("Token embedding layer");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_positional_encoding'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Positional Encoding")
+                    .appendField("max_len:")
+                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "MAX_LEN")
+                    .appendField("dim:")
+                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "EMBED_DIM");
+                this.appendValueInput("INPUT")
+                    .setCheck("Tensor")
+                    .appendField("input");
+                this.setOutput(true, "Tensor");
+                this.setColour(290);
+                this.setTooltip("Add positional encoding to embeddings");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_dropout'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Dropout")
+                    .appendField("rate:")
+                    .appendField(new Blockly.FieldNumber(0.1, 0, 1, 0.01), "DROPOUT_RATE");
+                this.appendValueInput("INPUT")
+                    .setCheck("Tensor")
+                    .appendField("input");
+                this.setOutput(true, "Tensor");
+                this.setColour(230);
+                this.setTooltip("Dropout for regularization");
+                this.setHelpUrl("");
+            }
+        };
+
+        // File I/O and Data Loading blocks
+        Blockly.Blocks['nvm_load_dataset'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Load Dataset")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["HuggingFace", "huggingface"],
+                        ["CSV File", "csv"],
+                        ["NumPy File", "numpy"],
+                        ["Text File", "text"],
+                        ["JSON File", "json"]
+                    ]), "SOURCE_TYPE")
+                    .appendField("path:")
+                    .appendField(new Blockly.FieldTextInput("dataset_name"), "PATH");
+                this.setOutput(true, null);
+                this.setColour(290);
+                this.setTooltip("Load dataset from various sources");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_save_data'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Save Data")
+                    .appendField("path:")
+                    .appendField(new Blockly.FieldTextInput("output.npy"), "PATH");
+                this.appendValueInput("DATA")
+                    .setCheck(null)
+                    .appendField("data:");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(290);
+                this.setTooltip("Save data to file");
+                this.setHelpUrl("");
+            }
+        };
+
+        // Model checkpoint blocks
+        Blockly.Blocks['nvm_load_pretrained'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Load Pretrained")
+                    .appendField("model:")
+                    .appendField(new Blockly.FieldTextInput("gpt2"), "MODEL_NAME")
+                    .appendField("from:")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["HuggingFace", "huggingface"],
+                        ["Local Path", "local"]
+                    ]), "SOURCE");
+                this.setOutput(true, null);
+                this.setColour(290);
+                this.setTooltip("Load pretrained model weights");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_save_checkpoint'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Save Checkpoint")
+                    .appendField("path:")
+                    .appendField(new Blockly.FieldTextInput("checkpoint.pth"), "PATH");
+                this.appendValueInput("MODEL")
+                    .setCheck(null)
+                    .appendField("model:");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(290);
+                this.setTooltip("Save model checkpoint");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_load_checkpoint'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Load Checkpoint")
+                    .appendField("path:")
+                    .appendField(new Blockly.FieldTextInput("checkpoint.pth"), "PATH");
+                this.setOutput(true, null);
+                this.setColour(290);
+                this.setTooltip("Load model checkpoint");
+                this.setHelpUrl("");
+            }
+        };
+
+        // Training blocks
+        Blockly.Blocks['nvm_optimizer'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Optimizer")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["Adam", "Adam"],
+                        ["AdamW", "AdamW"],
+                        ["SGD", "SGD"],
+                        ["RMSprop", "RMSprop"]
+                    ]), "OPTIMIZER_TYPE")
+                    .appendField("lr:")
+                    .appendField(new Blockly.FieldNumber(0.001, 0, 1, 0.0001), "LEARNING_RATE");
+                this.appendValueInput("PARAMS")
+                    .setCheck(null)
+                    .appendField("params:");
+                this.setOutput(true, null);
+                this.setColour(120);
+                this.setTooltip("Create optimizer");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_loss_function'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Loss Function")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["CrossEntropyLoss", "CrossEntropyLoss"],
+                        ["MSELoss", "MSELoss"],
+                        ["L1Loss", "L1Loss"],
+                        ["BCELoss", "BCELoss"]
+                    ]), "LOSS_TYPE");
+                this.setOutput(true, null);
+                this.setColour(120);
+                this.setTooltip("Create loss function");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_compute_loss'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Compute Loss");
+                this.appendValueInput("PREDICTIONS")
+                    .setCheck(null)
+                    .appendField("predictions:");
+                this.appendValueInput("TARGETS")
+                    .setCheck(null)
+                    .appendField("targets:");
+                this.appendValueInput("LOSS_FN")
+                    .setCheck(null)
+                    .appendField("loss_fn:");
+                this.setOutput(true, null);
+                this.setColour(120);
+                this.setTooltip("Compute loss between predictions and targets");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_backward'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Backward Pass");
+                this.appendValueInput("LOSS")
+                    .setCheck(null)
+                    .appendField("loss:");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(120);
+                this.setTooltip("Compute gradients via backpropagation");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_optimizer_step'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Optimizer Step");
+                this.appendValueInput("OPTIMIZER")
+                    .setCheck(null)
+                    .appendField("optimizer:");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(120);
+                this.setTooltip("Update model parameters");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_zero_grad'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Zero Gradients");
+                this.appendValueInput("OPTIMIZER")
+                    .setCheck(null)
+                    .appendField("optimizer:");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(120);
+                this.setTooltip("Clear gradients");
+                this.setHelpUrl("");
+            }
+        };
+
+        // Utility blocks
+        Blockly.Blocks['nvm_print_shape'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Print Shape")
+                    .appendField("label:")
+                    .appendField(new Blockly.FieldTextInput("tensor"), "LABEL");
+                this.appendValueInput("TENSOR")
+                    .setCheck(null)
+                    .appendField("tensor:");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(180);
+                this.setTooltip("Print tensor shape for debugging");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_set_seed'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Set Random Seed")
+                    .appendField("seed:")
+                    .appendField(new Blockly.FieldNumber(42, 0, 999999), "SEED");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(180);
+                this.setTooltip("Set random seed for reproducibility");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_device'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Device")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["Auto (CUDA if available)", "auto"],
+                        ["CPU", "cpu"],
+                        ["CUDA", "cuda"],
+                        ["MPS", "mps"]
+                    ]), "DEVICE_TYPE");
+                this.setOutput(true, null);
+                this.setColour(180);
+                this.setTooltip("Specify compute device");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_to_device'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("To Device");
+                this.appendValueInput("TENSOR")
+                    .setCheck(null)
+                    .appendField("tensor:");
+                this.appendValueInput("DEVICE")
+                    .setCheck(null)
+                    .appendField("device:");
+                this.setOutput(true, null);
+                this.setColour(180);
+                this.setTooltip("Move tensor to device");
+                this.setHelpUrl("");
+            }
+        };
+
+        // Control flow blocks
+        Blockly.Blocks['nvm_for_range'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("For")
+                    .appendField(new Blockly.FieldVariable("i"), "VAR")
+                    .appendField("in range")
+                    .appendField(new Blockly.FieldNumber(10, 1, 1000000), "COUNT");
+                this.appendStatementInput("DO")
+                    .appendField("do:");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(210);
+                this.setTooltip("For loop over range");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_for_each'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("For each")
+                    .appendField(new Blockly.FieldVariable("item"), "VAR");
+                this.appendValueInput("LIST")
+                    .setCheck(null)
+                    .appendField("in:");
+                this.appendStatementInput("DO")
+                    .appendField("do:");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(210);
+                this.setTooltip("For each loop over iterable");
+                this.setHelpUrl("");
+            }
+        };
+
+        // Multimodal blocks for models like Qwen3-Omni
+        Blockly.Blocks['nvm_load_multimodal_model'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Load Multimodal Model")
+                    .appendField("name:")
+                    .appendField(new Blockly.FieldTextInput("Qwen/Qwen3-Omni-30B-A3B-Instruct"), "MODEL_NAME");
+                this.appendDummyInput()
+                    .appendField("dtype:")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["auto", "auto"],
+                        ["float32", "float32"],
+                        ["float16", "float16"],
+                        ["bfloat16", "bfloat16"]
+                    ]), "DTYPE")
+                    .appendField("attention:")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["flash_attention_2", "flash_attention_2"],
+                        ["sdpa", "sdpa"],
+                        ["eager", "eager"]
+                    ]), "ATTN_IMPL");
+                this.setOutput(true, null);
+                this.setColour(290);
+                this.setTooltip("Load multimodal model from HuggingFace");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_load_processor'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Load Processor")
+                    .appendField("name:")
+                    .appendField(new Blockly.FieldTextInput("Qwen/Qwen3-Omni-30B-A3B-Instruct"), "MODEL_NAME");
+                this.setOutput(true, null);
+                this.setColour(290);
+                this.setTooltip("Load multimodal processor/tokenizer");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_multimodal_input'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Multimodal Input")
+                    .appendField("type:")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["Text", "text"],
+                        ["Image URL", "image_url"],
+                        ["Image Path", "image_path"],
+                        ["Audio URL", "audio_url"],
+                        ["Audio Path", "audio_path"],
+                        ["Video URL", "video_url"],
+                        ["Video Path", "video_path"]
+                    ]), "INPUT_TYPE")
+                    .appendField("content:")
+                    .appendField(new Blockly.FieldTextInput("content"), "CONTENT");
+                this.setOutput(true, null);
+                this.setColour(290);
+                this.setTooltip("Create multimodal input (text, image, audio, video)");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_conversation'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Create Conversation");
+                this.appendDummyInput()
+                    .appendField("(add messages below)");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(290);
+                this.setTooltip("Initialize empty conversation list");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_message'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Add Message")
+                    .appendField("role:")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["user", "user"],
+                        ["assistant", "assistant"],
+                        ["system", "system"]
+                    ]), "ROLE")
+                    .appendField("text:")
+                    .appendField(new Blockly.FieldTextInput("Hello"), "TEXT");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(290);
+                this.setTooltip("Add text message to conversation");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_message_multimodal'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Add Multimodal Message")
+                    .appendField("role:")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["user", "user"],
+                        ["assistant", "assistant"]
+                    ]), "ROLE");
+                this.appendValueInput("IMAGE")
+                    .setCheck(null)
+                    .appendField("image (optional):");
+                this.appendValueInput("AUDIO")
+                    .setCheck(null)
+                    .appendField("audio (optional):");
+                this.appendValueInput("VIDEO")
+                    .setCheck(null)
+                    .appendField("video (optional):");
+                this.appendDummyInput()
+                    .appendField("text:")
+                    .appendField(new Blockly.FieldTextInput(""), "TEXT");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(290);
+                this.setTooltip("Add multimodal message with images/audio/video");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_process_multimodal'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Process Multimodal Inputs");
+                this.appendValueInput("PROCESSOR")
+                    .setCheck(null)
+                    .appendField("processor:");
+                this.appendValueInput("CONVERSATION")
+                    .setCheck(null)
+                    .appendField("conversation:");
+                this.setOutput(true, null);
+                this.setColour(290);
+                this.setTooltip("Process conversation with multimodal inputs");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_generate_multimodal'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Generate Multimodal Response")
+                    .appendField("max_tokens:")
+                    .appendField(new Blockly.FieldNumber(1024, 1, 8192), "MAX_TOKENS")
+                    .appendField("speaker:")
+                    .appendField(new Blockly.FieldTextInput("Ethan"), "SPEAKER");
+                this.appendValueInput("MODEL")
+                    .setCheck(null)
+                    .appendField("model:");
+                this.appendValueInput("INPUTS")
+                    .setCheck(null)
+                    .appendField("inputs:");
+                this.setOutput(true, null);
+                this.setColour(120);
+                this.setTooltip("Generate text/audio response from multimodal model");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_decode_response'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Decode Response")
+                    .appendField("type:")
+                    .appendField(new Blockly.FieldDropdown([
+                        ["text", "text"],
+                        ["audio", "audio"],
+                        ["both", "both"]
+                    ]), "DECODE_TYPE");
+                this.appendValueInput("PROCESSOR")
+                    .setCheck(null)
+                    .appendField("processor:");
+                this.appendValueInput("OUTPUT")
+                    .setCheck(null)
+                    .appendField("output:");
+                this.setOutput(true, null);
+                this.setColour(120);
+                this.setTooltip("Decode model output to text/audio");
+                this.setHelpUrl("");
+            }
+        };
+
+        Blockly.Blocks['nvm_save_audio'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Save Audio")
+                    .appendField("path:")
+                    .appendField(new Blockly.FieldTextInput("output.wav"), "PATH")
+                    .appendField("rate:")
+                    .appendField(new Blockly.FieldNumber(16000, 8000, 48000), "SAMPLE_RATE");
+                this.appendValueInput("AUDIO")
+                    .setCheck(null)
+                    .appendField("audio:");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(290);
+                this.setTooltip("Save audio to file");
+                this.setHelpUrl("");
+            }
+        };
+
+        // Python code generators for each block
+        // Debug: Check what we have
+        console.log('Blockly.Python:', Blockly.Python);
+        console.log('Available generators:', Object.keys(Blockly.Python || {}));
+
+        const pythonGenerator = Blockly.Python;
+
+        // Use forBlock method for modern Blockly
+        pythonGenerator.forBlock['nvm_linear'] = function(block, generator) {
+            const inFeatures = block.getFieldValue('IN_FEATURES');
+            const outFeatures = block.getFieldValue('OUT_FEATURES');
+            const useBias = block.getFieldValue('USE_BIAS') === 'TRUE';
+
+            const code = `SimpleLinearAtom(${inFeatures}, ${outFeatures}, bias=${useBias})`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_attention'] = function(block, generator) {
+            const embedDim = block.getFieldValue('EMBED_DIM');
+            const numHeads = block.getFieldValue('NUM_HEADS');
+
+            const code = `SimpleAttentionAtom(${embedDim}, ${numHeads})`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_input'] = function(block, generator) {
+            const batchSize = block.getFieldValue('BATCH_SIZE');
+            const seqLen = block.getFieldValue('SEQ_LEN');
+            const embedDim = block.getFieldValue('EMBED_DIM');
+
+            // For embedding layer, generate random token IDs, not embeddings
+            // embedDim parameter is ignored for integer tokens
+            const code = `np.random.randint(0, 1000, (${batchSize}, ${seqLen}))`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_experiment'] = function(block, generator) {
+            const expName = block.getFieldValue('EXP_NAME');
+            let setup = generator.statementToCode(block, 'SETUP');
+            let components = generator.statementToCode(block, 'COMPONENTS');
+            let execution = generator.statementToCode(block, 'EXECUTION');
+
+            // Remove leading indentation from statementToCode
+            const removeIndent = (code) => {
+                return code.split('\n').map(line => line.replace(/^  /, '')).join('\n');
+            };
+
+            setup = removeIndent(setup);
+            components = removeIndent(components);
+            execution = removeIndent(execution);
+
+            let code = `# Neural VM Experiment: ${expName}\n`;
+            code += `# Generated by Neural VM Builder\n\n`;
+
+            // Add necessary imports
+            code += `import numpy as np\n`;
+            code += `import torch\n`;
+            code += `import torch.nn as nn\n`;
+            code += `from typing import Dict, Any, List, Optional, Tuple\n`;
+            code += `from dataclasses import dataclass, field\n`;
+            code += `import time\n\n`;
+
+            // Add placeholder Atom classes (these would come from your NVM library)
+            code += `# Atomic Components (placeholder implementations)\n`;
+            code += `class SimpleLinearAtom(nn.Module):\n`;
+            code += `    def __init__(self, in_features, out_features, bias=True):\n`;
+            code += `        super().__init__()\n`;
+            code += `        self.linear = nn.Linear(in_features, out_features, bias=bias)\n`;
+            code += `    def forward(self, x): return self.linear(x)\n\n`;
+
+            code += `class SimpleAttentionAtom(nn.Module):\n`;
+            code += `    def __init__(self, embed_dim, num_heads):\n`;
+            code += `        super().__init__()\n`;
+            code += `        self.attn = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)\n`;
+            code += `    def forward(self, x): return self.attn(x, x, x)[0]\n\n`;
+
+            code += `class EmbeddingAtom(nn.Module):\n`;
+            code += `    def __init__(self, vocab_size, embed_dim):\n`;
+            code += `        super().__init__()\n`;
+            code += `        self.embed = nn.Embedding(vocab_size, embed_dim)\n`;
+            code += `    def forward(self, x): return self.embed(x.long())\n\n`;
+
+            code += `class PositionalEncodingAtom(nn.Module):\n`;
+            code += `    def __init__(self, max_len, embed_dim):\n`;
+            code += `        super().__init__()\n`;
+            code += `        self.max_len = max_len\n`;
+            code += `        self.embed_dim = embed_dim\n`;
+            code += `        pe = torch.zeros(max_len, embed_dim)\n`;
+            code += `        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)\n`;
+            code += `        div_term = torch.exp(torch.arange(0, embed_dim, 2).float() * (-np.log(10000.0) / embed_dim))\n`;
+            code += `        pe[:, 0::2] = torch.sin(position * div_term)\n`;
+            code += `        pe[:, 1::2] = torch.cos(position * div_term)\n`;
+            code += `        self.register_buffer('pe', pe.unsqueeze(0))\n`;
+            code += `    def forward(self, x): return x + self.pe[:, :x.size(1), :]\n\n`;
+
+            code += `class LayerNormAtom(nn.Module):\n`;
+            code += `    def __init__(self, normalized_shape):\n`;
+            code += `        super().__init__()\n`;
+            code += `        self.ln = nn.LayerNorm(normalized_shape)\n`;
+            code += `    def forward(self, x): return self.ln(x)\n\n`;
+
+            code += `class ActivationAtom(nn.Module):\n`;
+            code += `    def __init__(self, activation_type='relu'):\n`;
+            code += `        super().__init__()\n`;
+            code += `        self.act = nn.GELU() if activation_type == 'gelu' else nn.ReLU()\n`;
+            code += `    def forward(self, x): return self.act(x)\n\n`;
+
+            code += `class AddAtom(nn.Module):\n`;
+            code += `    def __init__(self): super().__init__()\n`;
+            code += `    def forward(self, x, y=None): return x + y if y is not None else x\n\n`;
+
+            code += `class DropoutAtom(nn.Module):\n`;
+            code += `    def __init__(self, dropout_rate=0.1):\n`;
+            code += `        super().__init__()\n`;
+            code += `        self.dropout = nn.Dropout(dropout_rate)\n`;
+            code += `    def forward(self, x): return self.dropout(x)\n\n`;
+
+            if (setup.trim()) {
+                code += `# Setup\n${setup}\n`;
+            }
+
+            if (components.trim()) {
+                code += `# Component definitions\n${components}\n`;
+            }
+
+            if (execution.trim()) {
+                code += `# Execution\n${execution}\n`;
+            }
+
+            code += `print("Experiment '${expName}' completed successfully!")\n`;
+
+            return code;
+        };
+
+        pythonGenerator.forBlock['nvm_create_component'] = function(block, generator) {
+            const varName = block.getFieldValue('VAR_NAME');
+            const component = generator.valueToCode(block, 'COMPONENT', generator.ORDER_NONE) || 'None';
+
+            return `${varName} = ${component}\n`;
+        };
+
+        pythonGenerator.forBlock['nvm_forward'] = function(block, generator) {
+            const outputVar = generator.nameDB_.getName(block.getFieldValue('OUTPUT_VAR'), Blockly.Names.NameType.VARIABLE);
+            const componentVar = generator.nameDB_.getName(block.getFieldValue('COMPONENT_VAR'), Blockly.Names.NameType.VARIABLE);
+            const input = generator.valueToCode(block, 'INPUT', generator.ORDER_NONE) || 'x';
+
+            return `${outputVar}, state = ${componentVar}.forward(${input})\nprint(f"Captured {state.component_type} state: {state.get_full_state_size()} elements")\n`;
+        };
+
+        pythonGenerator.forBlock['nvm_print_state'] = function(block, generator) {
+            const stateVar = generator.nameDB_.getName(block.getFieldValue('STATE_VAR'), Blockly.Names.NameType.VARIABLE);
+
+            return `print(f"State: {${stateVar}}")\n`;
+        };
+
+        pythonGenerator.forBlock['nvm_variable'] = function(block, generator) {
+            const varName = generator.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
+            return [varName, generator.ORDER_ATOMIC];
+        };
+
+        pythonGenerator.forBlock['nvm_layernorm'] = function(block, generator) {
+            const normalizedShape = block.getFieldValue('NORMALIZED_SHAPE');
+            const code = `LayerNormAtom(${normalizedShape})`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_activation'] = function(block, generator) {
+            const activationType = block.getFieldValue('ACTIVATION_TYPE');
+            const code = `ActivationAtom('${activationType}')`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_add'] = function(block, generator) {
+            const code = `AddAtom()`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_embedding'] = function(block, generator) {
+            const vocabSize = block.getFieldValue('VOCAB_SIZE');
+            const embedDim = block.getFieldValue('EMBED_DIM');
+            const code = `EmbeddingAtom(${vocabSize}, ${embedDim})`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_positional_encoding'] = function(block, generator) {
+            const maxLen = block.getFieldValue('MAX_LEN');
+            const embedDim = block.getFieldValue('EMBED_DIM');
+            const code = `PositionalEncodingAtom(${maxLen}, ${embedDim})`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_dropout'] = function(block, generator) {
+            const dropoutRate = block.getFieldValue('DROPOUT_RATE');
+            const code = `DropoutAtom(${dropoutRate})`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        // File I/O generators
+        pythonGenerator.forBlock['nvm_load_dataset'] = function(block, generator) {
+            const sourceType = block.getFieldValue('SOURCE_TYPE');
+            const path = block.getFieldValue('PATH');
+            let code = '';
+
+            if (sourceType === 'huggingface') {
+                code = `load_dataset('${path}')`;
+            } else if (sourceType === 'numpy') {
+                code = `np.load('${path}')`;
+            } else if (sourceType === 'csv') {
+                code = `pd.read_csv('${path}')`;
+            } else if (sourceType === 'text') {
+                code = `open('${path}', 'r').read()`;
+            } else if (sourceType === 'json') {
+                code = `json.load(open('${path}', 'r'))`;
+            }
+
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_save_data'] = function(block, generator) {
+            const path = block.getFieldValue('PATH');
+            const data = generator.valueToCode(block, 'DATA', generator.ORDER_NONE) || 'data';
+            return `np.save('${path}', ${data})\n`;
+        };
+
+        pythonGenerator.forBlock['nvm_load_pretrained'] = function(block, generator) {
+            const modelName = block.getFieldValue('MODEL_NAME');
+            const source = block.getFieldValue('SOURCE');
+
+            if (source === 'huggingface') {
+                return [`AutoModel.from_pretrained('${modelName}')`, generator.ORDER_FUNCTION_CALL];
+            } else {
+                return [`load_model('${modelName}')`, generator.ORDER_FUNCTION_CALL];
+            }
+        };
+
+        pythonGenerator.forBlock['nvm_save_checkpoint'] = function(block, generator) {
+            const path = block.getFieldValue('PATH');
+            const model = generator.valueToCode(block, 'MODEL', generator.ORDER_NONE) || 'model';
+            return `torch.save(${model}.state_dict(), '${path}')\n`;
+        };
+
+        pythonGenerator.forBlock['nvm_load_checkpoint'] = function(block, generator) {
+            const path = block.getFieldValue('PATH');
+            return [`torch.load('${path}')`, generator.ORDER_FUNCTION_CALL];
+        };
+
+        // Training generators
+        pythonGenerator.forBlock['nvm_optimizer'] = function(block, generator) {
+            const optimizerType = block.getFieldValue('OPTIMIZER_TYPE');
+            const learningRate = block.getFieldValue('LEARNING_RATE');
+            const params = generator.valueToCode(block, 'PARAMS', generator.ORDER_NONE) || 'model.parameters()';
+            return [`torch.optim.${optimizerType}(${params}, lr=${learningRate})`, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_loss_function'] = function(block, generator) {
+            const lossType = block.getFieldValue('LOSS_TYPE');
+            return [`nn.${lossType}()`, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_compute_loss'] = function(block, generator) {
+            const predictions = generator.valueToCode(block, 'PREDICTIONS', generator.ORDER_NONE) || 'predictions';
+            const targets = generator.valueToCode(block, 'TARGETS', generator.ORDER_NONE) || 'targets';
+            const lossFn = generator.valueToCode(block, 'LOSS_FN', generator.ORDER_NONE) || 'loss_fn';
+            return [`${lossFn}(${predictions}, ${targets})`, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_backward'] = function(block, generator) {
+            const loss = generator.valueToCode(block, 'LOSS', generator.ORDER_NONE) || 'loss';
+            return `${loss}.backward()\n`;
+        };
+
+        pythonGenerator.forBlock['nvm_optimizer_step'] = function(block, generator) {
+            const optimizer = generator.valueToCode(block, 'OPTIMIZER', generator.ORDER_NONE) || 'optimizer';
+            return `${optimizer}.step()\n`;
+        };
+
+        pythonGenerator.forBlock['nvm_zero_grad'] = function(block, generator) {
+            const optimizer = generator.valueToCode(block, 'OPTIMIZER', generator.ORDER_NONE) || 'optimizer';
+            return `${optimizer}.zero_grad()\n`;
+        };
+
+        // Utility generators
+        pythonGenerator.forBlock['nvm_print_shape'] = function(block, generator) {
+            const label = block.getFieldValue('LABEL');
+            const tensor = generator.valueToCode(block, 'TENSOR', generator.ORDER_NONE) || 'tensor';
+            return `print(f"${label} shape: {${tensor}.shape}")\n`;
+        };
+
+        pythonGenerator.forBlock['nvm_set_seed'] = function(block, generator) {
+            const seed = block.getFieldValue('SEED');
+            return `np.random.seed(${seed})\ntorch.manual_seed(${seed})\n`;
+        };
+
+        pythonGenerator.forBlock['nvm_device'] = function(block, generator) {
+            const deviceType = block.getFieldValue('DEVICE_TYPE');
+            if (deviceType === 'auto') {
+                return [`torch.device('cuda' if torch.cuda.is_available() else 'cpu')`, generator.ORDER_FUNCTION_CALL];
+            } else {
+                return [`torch.device('${deviceType}')`, generator.ORDER_FUNCTION_CALL];
+            }
+        };
+
+        pythonGenerator.forBlock['nvm_to_device'] = function(block, generator) {
+            const tensor = generator.valueToCode(block, 'TENSOR', generator.ORDER_NONE) || 'tensor';
+            const device = generator.valueToCode(block, 'DEVICE', generator.ORDER_NONE) || 'device';
+            return [`${tensor}.to(${device})`, generator.ORDER_FUNCTION_CALL];
+        };
+
+        // Control flow generators
+        pythonGenerator.forBlock['nvm_for_range'] = function(block, generator) {
+            const varName = generator.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
+            const count = block.getFieldValue('COUNT');
+            const doCode = generator.statementToCode(block, 'DO');
+
+            return `for ${varName} in range(${count}):\n${doCode || '    pass\n'}`;
+        };
+
+        pythonGenerator.forBlock['nvm_for_each'] = function(block, generator) {
+            const varName = generator.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
+            const list = generator.valueToCode(block, 'LIST', generator.ORDER_NONE) || 'items';
+            const doCode = generator.statementToCode(block, 'DO');
+
+            return `for ${varName} in ${list}:\n${doCode || '    pass\n'}`;
+        };
+
+        // Multimodal generators
+        pythonGenerator.forBlock['nvm_load_multimodal_model'] = function(block, generator) {
+            const modelName = block.getFieldValue('MODEL_NAME');
+            const dtype = block.getFieldValue('DTYPE');
+            const attnImpl = block.getFieldValue('ATTN_IMPL');
+
+            return [`Qwen3OmniMoeForConditionalGeneration.from_pretrained("${modelName}", dtype="${dtype}", device_map="auto", attn_implementation="${attnImpl}")`, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_load_processor'] = function(block, generator) {
+            const modelName = block.getFieldValue('MODEL_NAME');
+            return [`Qwen3OmniMoeProcessor.from_pretrained("${modelName}")`, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_multimodal_input'] = function(block, generator) {
+            const inputType = block.getFieldValue('INPUT_TYPE');
+            const content = block.getFieldValue('CONTENT');
+
+            if (inputType === 'text') {
+                return [`{"type": "text", "text": "${content}"}`, generator.ORDER_ATOMIC];
+            } else if (inputType.includes('image')) {
+                return [`{"type": "image", "image": "${content}"}`, generator.ORDER_ATOMIC];
+            } else if (inputType.includes('audio')) {
+                return [`{"type": "audio", "audio": "${content}"}`, generator.ORDER_ATOMIC];
+            } else if (inputType.includes('video')) {
+                return [`{"type": "video", "video": "${content}"}`, generator.ORDER_ATOMIC];
+            }
+        };
+
+        pythonGenerator.forBlock['nvm_conversation'] = function(block, generator) {
+            return `conversation = []\n`;
+        };
+
+        pythonGenerator.forBlock['nvm_message'] = function(block, generator) {
+            const role = block.getFieldValue('ROLE');
+            const text = block.getFieldValue('TEXT');
+            return `conversation.append({"role": "${role}", "content": [{"type": "text", "text": "${text}"}]})\n`;
+        };
+
+        pythonGenerator.forBlock['nvm_message_multimodal'] = function(block, generator) {
+            const role = block.getFieldValue('ROLE');
+            const text = block.getFieldValue('TEXT');
+            const image = generator.valueToCode(block, 'IMAGE', generator.ORDER_NONE);
+            const audio = generator.valueToCode(block, 'AUDIO', generator.ORDER_NONE);
+            const video = generator.valueToCode(block, 'VIDEO', generator.ORDER_NONE);
+
+            let code = `content = []\n`;
+
+            if (image) {
+                code += `content.append(${image})\n`;
+            }
+            if (audio) {
+                code += `content.append(${audio})\n`;
+            }
+            if (video) {
+                code += `content.append(${video})\n`;
+            }
+            if (text) {
+                code += `content.append({"type": "text", "text": "${text}"})\n`;
+            }
+
+            code += `conversation.append({"role": "${role}", "content": content})\n`;
+            return code;
+        };
+
+        pythonGenerator.forBlock['nvm_process_multimodal'] = function(block, generator) {
+            const processor = generator.valueToCode(block, 'PROCESSOR', generator.ORDER_NONE) || 'processor';
+            const conversation = generator.valueToCode(block, 'CONVERSATION', generator.ORDER_NONE) || 'conversation';
+
+            const code = `
+# Apply chat template and process multimodal inputs
+text = ${processor}.apply_chat_template(${conversation}, add_generation_prompt=True, tokenize=False)
+from qwen_omni_utils import process_mm_info
+audios, images, videos = process_mm_info(${conversation}, use_audio_in_video=True)
+
+inputs = ${processor}(
+    text=text,
+    audio=audios,
+    images=images,
+    videos=videos,
+    return_tensors="pt",
+    padding=True,
+    use_audio_in_video=True
+)
+inputs = inputs.to(model.device).to(model.dtype)
+`;
+            return [code.trim(), generator.ORDER_ATOMIC];
+        };
+
+        pythonGenerator.forBlock['nvm_generate_multimodal'] = function(block, generator) {
+            const model = generator.valueToCode(block, 'MODEL', generator.ORDER_NONE) || 'model';
+            const inputs = generator.valueToCode(block, 'INPUTS', generator.ORDER_NONE) || 'inputs';
+            const maxTokens = block.getFieldValue('MAX_TOKENS');
+            const speaker = block.getFieldValue('SPEAKER');
+
+            return [`${model}.generate(**${inputs}, max_new_tokens=${maxTokens}, speaker="${speaker}", thinker_return_dict_in_generate=True, use_audio_in_video=True)`, generator.ORDER_FUNCTION_CALL];
+        };
+
+        pythonGenerator.forBlock['nvm_decode_response'] = function(block, generator) {
+            const processor = generator.valueToCode(block, 'PROCESSOR', generator.ORDER_NONE) || 'processor';
+            const output = generator.valueToCode(block, 'OUTPUT', generator.ORDER_NONE) || 'output';
+            const decodeType = block.getFieldValue('DECODE_TYPE');
+
+            if (decodeType === 'text') {
+                return [`${processor}.batch_decode(${output}[0], skip_special_tokens=True)[0]`, generator.ORDER_FUNCTION_CALL];
+            } else if (decodeType === 'audio') {
+                return [`${output}[1]`, generator.ORDER_ATOMIC];
+            } else {
+                return [`(${processor}.batch_decode(${output}[0], skip_special_tokens=True)[0], ${output}[1])`, generator.ORDER_ATOMIC];
+            }
+        };
+
+        pythonGenerator.forBlock['nvm_save_audio'] = function(block, generator) {
+            const path = block.getFieldValue('PATH');
+            const sampleRate = block.getFieldValue('SAMPLE_RATE');
+            const audio = generator.valueToCode(block, 'AUDIO', generator.ORDER_NONE) || 'audio';
+
+            return `import soundfile as sf\nsf.write("${path}", ${audio}.cpu().numpy(), ${sampleRate})\n`;
+        };
+
+        // Toolbox definition
+        const toolbox = {
+            "kind": "categoryToolbox",
+            "contents": [
+                {
+                    "kind": "category",
+                    "name": "🧪 Experiment",
+                    "colour": 20,
+                    "contents": [
+                        {"kind": "block", "type": "nvm_experiment"},
+                        {"kind": "block", "type": "nvm_create_component"},
+                        {"kind": "block", "type": "nvm_forward"},
+                        {"kind": "block", "type": "nvm_print_state"}
+                    ]
+                },
+                {
+                    "kind": "category",
+                    "name": "🔢 Atomic Components",
+                    "colour": 230,
+                    "contents": [
+                        {"kind": "block", "type": "nvm_linear"},
+                        {"kind": "block", "type": "nvm_attention"},
+                        {"kind": "block", "type": "nvm_layernorm"},
+                        {"kind": "block", "type": "nvm_activation"},
+                        {"kind": "block", "type": "nvm_add"},
+                        {"kind": "block", "type": "nvm_dropout"}
+                    ]
+                },
+                {
+                    "kind": "category",
+                    "name": "📊 Data",
+                    "colour": 290,
+                    "contents": [
+                        {"kind": "block", "type": "nvm_input"},
+                        {"kind": "block", "type": "nvm_embedding"},
+                        {"kind": "block", "type": "nvm_positional_encoding"},
+                        {"kind": "block", "type": "nvm_variable"}
+                    ]
+                },
+                {
+                    "kind": "category",
+                    "name": "💾 File I/O",
+                    "colour": 290,
+                    "contents": [
+                        {"kind": "block", "type": "nvm_load_dataset"},
+                        {"kind": "block", "type": "nvm_save_data"},
+                        {"kind": "block", "type": "nvm_load_pretrained"},
+                        {"kind": "block", "type": "nvm_save_checkpoint"},
+                        {"kind": "block", "type": "nvm_load_checkpoint"}
+                    ]
+                },
+                {
+                    "kind": "category",
+                    "name": "🎓 Training",
+                    "colour": 120,
+                    "contents": [
+                        {"kind": "block", "type": "nvm_optimizer"},
+                        {"kind": "block", "type": "nvm_loss_function"},
+                        {"kind": "block", "type": "nvm_compute_loss"},
+                        {"kind": "block", "type": "nvm_backward"},
+                        {"kind": "block", "type": "nvm_optimizer_step"},
+                        {"kind": "block", "type": "nvm_zero_grad"}
+                    ]
+                },
+                {
+                    "kind": "category",
+                    "name": "🔁 Control Flow",
+                    "colour": 210,
+                    "contents": [
+                        {"kind": "block", "type": "nvm_for_range"},
+                        {"kind": "block", "type": "nvm_for_each"}
+                    ]
+                },
+                {
+                    "kind": "category",
+                    "name": "🛠️ Utilities",
+                    "colour": 180,
+                    "contents": [
+                        {"kind": "block", "type": "nvm_print_shape"},
+                        {"kind": "block", "type": "nvm_set_seed"},
+                        {"kind": "block", "type": "nvm_device"},
+                        {"kind": "block", "type": "nvm_to_device"}
+                    ]
+                },
+                {
+                    "kind": "category",
+                    "name": "🎭 Multimodal",
+                    "colour": 270,
+                    "contents": [
+                        {"kind": "block", "type": "nvm_load_multimodal_model"},
+                        {"kind": "block", "type": "nvm_load_processor"},
+                        {"kind": "block", "type": "nvm_conversation"},
+                        {"kind": "block", "type": "nvm_message"},
+                        {"kind": "block", "type": "nvm_message_multimodal"},
+                        {"kind": "block", "type": "nvm_multimodal_input"},
+                        {"kind": "block", "type": "nvm_process_multimodal"},
+                        {"kind": "block", "type": "nvm_generate_multimodal"},
+                        {"kind": "block", "type": "nvm_decode_response"},
+                        {"kind": "block", "type": "nvm_save_audio"}
+                    ]
+                },
+                {
+                    "kind": "category",
+                    "name": "🔧 Variables",
+                    "colour": 330,
+                    "custom": "VARIABLE"
+                }
+            ]
+        };
+
+        // Tab switching function
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(tabName + '-tab').classList.add('active');
+
+            // Resize Blockly when switching back to designer
+            if (tabName === 'designer') {
+                Blockly.svgResize(workspace);
+            }
+        }
+
+        // Initialize Blockly workspace
+        const workspace = Blockly.inject('blockly-container', {
+            toolbox: toolbox,
+            grid: {
+                spacing: 20,
+                length: 3,
+                colour: '#3e3e42',
+                snap: true
+            },
+            zoom: {
+                controls: true,
+                wheel: true,
+                startScale: 0.9,
+                maxScale: 3,
+                minScale: 0.3,
+                scaleSpeed: 1.2
+            },
+            trashcan: true,
+            theme: Blockly.Theme.defineTheme('dark', {
+                'base': Blockly.Themes.Classic,
+                'componentStyles': {
+                    'workspaceBackgroundColour': '#1e1e1e',
+                    'toolboxBackgroundColour': '#252526',
+                    'flyoutBackgroundColour': '#2d2d30',
+                    'flyoutForegroundColour': '#ccc',
+                    'flyoutOpacity': 0.95,
+                    'scrollbarColour': '#797979',
+                    'scrollbarOpacity': 0.4,
+                    'insertionMarkerColour': '#fff',
+                    'insertionMarkerOpacity': 0.3
+                }
+            })
+        });
+
+        // Update code display when workspace changes
+        function updateCode() {
+            try {
+                let code = pythonGenerator.workspaceToCode(workspace);
+
+                // Add imports if there's actual code
+                if (code.trim()) {
+                    const imports = `import numpy as np
+from typing import Dict, Any, List, Optional, Tuple
+from dataclasses import dataclass, field
+import time
+
+# Import atomic components from simple_experiment.py
+# (Assumes SimpleLinearAtom, SimpleAttentionAtom, ComputationalState are defined)
+
+`;
+                    code = imports + code;
+                } else {
+                    code = "# Drag blocks to build your Neural VM experiment\n# Code will appear here automatically";
+                }
+
+                // Update Monaco Editor if it's loaded
+                if (monacoEditor) {
+                    monacoEditor.setValue(code);
+                    // Run validation
+                    setTimeout(() => {
+                        const markers = window.validatePythonCode(code);
+                        updateValidationMessages(markers);
+                    }, 100);
+                }
+
+                validateWorkspace();
+            } catch (e) {
+                console.error('Code generation error:', e);
+                if (monacoEditor) {
+                    monacoEditor.setValue(`# Error generating code:\n# ${e.message}\n\n# Please check the console for details.`);
+                }
+            }
+        }
+
+        // Update validation messages display
+        function updateValidationMessages(markers) {
+            const validationDiv = document.getElementById('validation-messages');
+            if (!markers || markers.length === 0) {
+                return;
+            }
+
+            let html = '';
+            markers.forEach(marker => {
+                const className = marker.severity === 8 ? 'validation-error' : 'validation-warning';
+                const icon = marker.severity === 8 ? '❌' : '⚠️';
+                html += `<div class="${className}">${icon} Line ${marker.startLineNumber}: ${marker.message}</div>`;
+            });
+
+            if (html) {
+                validationDiv.innerHTML = html;
+            }
+        }
+
+        workspace.addChangeListener(updateCode);
+
+        // Validation function
+        function validateWorkspace() {
+            const messages = [];
+            const blocks = workspace.getAllBlocks(false);
+
+            // Basic validation
+            let hasExperiment = false;
+            let componentCount = 0;
+
+            blocks.forEach(block => {
+                if (block.type === 'nvm_experiment') {
+                    hasExperiment = true;
+                }
+                if (block.type === 'nvm_linear' || block.type === 'nvm_attention') {
+                    componentCount++;
+                }
+            });
+
+            const validationDiv = document.getElementById('validation-messages');
+            validationDiv.innerHTML = '';
+
+            if (blocks.length === 0) {
+                validationDiv.innerHTML = '<div class="validation-warning">⚠️ Workspace is empty. Start by dragging an Experiment block.</div>';
+                return;
+            }
+
+            if (!hasExperiment) {
+                validationDiv.innerHTML += '<div class="validation-warning">⚠️ Add an Experiment block to structure your code.</div>';
+            }
+
+            if (componentCount === 0) {
+                validationDiv.innerHTML += '<div class="validation-warning">⚠️ No atomic components added yet.</div>';
+            } else {
+                validationDiv.innerHTML += `<div class="validation-success">✓ ${componentCount} atomic component(s) defined.</div>`;
+            }
+
+            if (hasExperiment && componentCount > 0) {
+                validationDiv.innerHTML += '<div class="validation-success">✓ Experiment looks good! Ready to generate code.</div>';
+            }
+        }
+
+        // Workspace management functions
+        function saveWorkspace() {
+            const xml = Blockly.Xml.workspaceToDom(workspace);
+            const xmlText = Blockly.Xml.domToText(xml);
+            const blob = new Blob([xmlText], {type: 'text/xml'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'nvm_experiment.xml';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function loadWorkspace() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.xml';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = event => {
+                    const xml = Blockly.utils.xml.textToDom(event.target.result);
+                    workspace.clear();
+                    Blockly.Xml.domToWorkspace(xml, workspace);
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        function clearWorkspace() {
+            if (confirm('Clear workspace? This cannot be undone.')) {
+                workspace.clear();
+            }
+        }
+
+        function copyCode() {
+            const code = monacoEditor ? monacoEditor.getValue() : '';
+            navigator.clipboard.writeText(code).then(() => {
+                alert('Code copied to clipboard!');
+            });
+        }
+
+        function downloadCode() {
+            const code = monacoEditor ? monacoEditor.getValue() : '';
+            const blob = new Blob([code], {type: 'text/plain'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'nvm_experiment.py';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Backend execution functions
+        const BACKEND_URL = 'http://localhost:5000';
+
+        async function runCode() {
+            const code = monacoEditor ? monacoEditor.getValue() : '';
+            const runButton = document.getElementById('run-button');
+            const executionOutput = document.getElementById('execution-output');
+            const executionContent = document.getElementById('execution-content');
+
+            if (!code.trim()) {
+                alert('No code to run!');
+                return;
+            }
+
+            // Disable button and show loading
+            runButton.disabled = true;
+            runButton.classList.add('running');
+            runButton.textContent = '⏳ Running...';
+
+            executionOutput.classList.add('visible');
+            executionContent.innerHTML = '<div class="exec-info">⏳ Executing code...</div>';
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/execute`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ code })
+                });
+
+                const result = await response.json();
+
+                let output = '';
+
+                if (result.success) {
+                    output += `<div class="exec-info">✓ Execution completed in ${result.execution_time}s</div>`;
+
+                    if (result.stdout) {
+                        output += `<div class="exec-stdout"><strong>Output:</strong>\n${escapeHtml(result.stdout)}</div>`;
+                    }
+
+                    if (result.stderr) {
+                        output += `<div class="exec-stderr"><strong>Warnings:</strong>\n${escapeHtml(result.stderr)}</div>`;
+                    }
+
+                    if (!result.stdout && !result.stderr) {
+                        output += `<div class="exec-info">No output produced</div>`;
+                    }
+                } else {
+                    output += `<div class="exec-error">✗ Execution failed</div>`;
+
+                    if (result.error) {
+                        output += `<div class="exec-error"><strong>Error:</strong>\n${escapeHtml(result.error)}</div>`;
+                    }
+
+                    if (result.stderr) {
+                        output += `<div class="exec-stderr"><strong>Details:</strong>\n${escapeHtml(result.stderr)}</div>`;
+                    }
+
+                    if (result.stdout) {
+                        output += `<div class="exec-stdout"><strong>Partial output:</strong>\n${escapeHtml(result.stdout)}</div>`;
+                    }
+                }
+
+                executionContent.innerHTML = output;
+
+            } catch (error) {
+                executionContent.innerHTML = `
+                    <div class="exec-error">✗ Failed to connect to backend</div>
+                    <div class="exec-error">Make sure the backend server is running:</div>
+                    <div class="exec-info">python backend.py</div>
+                    <div class="exec-stderr">Error: ${escapeHtml(error.message)}</div>
+                `;
+            } finally {
+                // Re-enable button
+                runButton.disabled = false;
+                runButton.classList.remove('running');
+                runButton.textContent = '▶️ Run Code';
+            }
+        }
+
+        function clearExecutionOutput() {
+            document.getElementById('execution-output').classList.remove('visible');
+            document.getElementById('execution-content').innerHTML = '';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Check backend health on load
+        async function checkBackendHealth() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/health`);
+                const result = await response.json();
+                console.log('✓ Backend connected:', result.message);
+            } catch (error) {
+                console.warn('⚠️ Backend not connected. Run "python backend.py" to enable code execution.');
+            }
+        }
+
+        // Initialize with empty validation
+        updateCode();
+        checkBackendHealth();
+    </script>
+</body>
+</html>

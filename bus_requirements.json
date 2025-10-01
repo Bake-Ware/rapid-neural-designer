@@ -1,0 +1,122 @@
+{
+  "experiment_results": {
+    "total_states_captured": 6,
+    "state_size_distribution": [
+      229760,
+      530448,
+      229760,
+      464928,
+      229760,
+      661512
+    ],
+    "semantic_intents": [
+      "linear_transformation",
+      "selective_attention_mechanism"
+    ],
+    "computational_trajectories": [
+      "attention_weight_normalization",
+      "input_projection",
+      "input_reception",
+      "qkv_projection",
+      "output_projection",
+      "multi_head_concatenation",
+      "value_aggregation",
+      "bias_addition",
+      "attention_score_computation",
+      "output_generation"
+    ],
+    "intermediate_state_types": [
+      "Q_projections",
+      "output_stats",
+      "v_transform_magnitude",
+      "attention_concentration",
+      "raw_attention_scores",
+      "k_transform_magnitude",
+      "attention_entropy",
+      "head_configurations",
+      "attended_values",
+      "transformation_magnitude",
+      "weight_matrix",
+      "attention_weights",
+      "K_projections",
+      "query_key_similarity",
+      "bias_vector",
+      "q_transform_magnitude",
+      "attention_diversity",
+      "activation_sparsity",
+      "V_projections",
+      "input_stats"
+    ]
+  },
+  "bus_specification": {
+    "hyperbolic_space_layers": {
+      "attention_manifold": {
+        "dimension": 1024,
+        "curvature": -1.0,
+        "stored_objects": [
+          "Q_states",
+          "K_states",
+          "V_states",
+          "attention_weights"
+        ],
+        "geometric_properties": "hierarchical_attention_patterns"
+      },
+      "transformation_manifold": {
+        "dimension": 512,
+        "curvature": 0.0,
+        "stored_objects": [
+          "weight_matrices",
+          "transformation_vectors"
+        ],
+        "geometric_properties": "linear_transformations"
+      },
+      "semantic_manifold": {
+        "dimension": 256,
+        "curvature": -0.5,
+        "stored_objects": [
+          "semantic_intents",
+          "computational_trajectories"
+        ],
+        "geometric_properties": "concept_hierarchies"
+      }
+    },
+    "storage_requirements": {
+      "total_state_types": 20,
+      "semantic_intents": [
+        "linear_transformation",
+        "selective_attention_mechanism"
+      ],
+      "computational_trajectories": [
+        "attention_weight_normalization",
+        "input_projection",
+        "input_reception",
+        "qkv_projection",
+        "output_projection",
+        "multi_head_concatenation",
+        "value_aggregation",
+        "bias_addition",
+        "attention_score_computation",
+        "output_generation"
+      ],
+      "estimated_storage_per_component": 391028
+    },
+    "interface_requirements": {
+      "read_operations": [
+        "query_by_semantic_intent",
+        "query_by_trajectory",
+        "query_by_state_type"
+      ],
+      "write_operations": [
+        "store_qkv_states",
+        "store_attention_patterns",
+        "store_transformations"
+      ],
+      "transform_operations": [
+        "attention_to_convolution",
+        "linear_to_graph",
+        "semantic_translation"
+      ]
+    }
+  },
+  "experiment_timestamp": 1759033788.7307742
+}

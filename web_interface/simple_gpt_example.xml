@@ -1,0 +1,304 @@
+<xml xmlns="https://developers.google.com/blockly/xml">
+  <variables>
+    <variable id="input_tokens">input_tokens</variable>
+    <variable id="embedded">embedded</variable>
+    <variable id="x">x</variable>
+    <variable id="attn_out">attn_out</variable>
+    <variable id="x_residual">x_residual</variable>
+    <variable id="ffn_out">ffn_out</variable>
+    <variable id="logits">logits</variable>
+  </variables>
+  <block type="nvm_experiment" x="50" y="50">
+    <field name="EXP_NAME">simple_gpt</field>
+    <statement name="SETUP">
+      <block type="nvm_create_component">
+        <field name="VAR_NAME">input_tokens</field>
+        <value name="COMPONENT">
+          <block type="nvm_input">
+            <field name="BATCH_SIZE">1</field>
+            <field name="SEQ_LEN">10</field>
+            <field name="EMBED_DIM">512</field>
+          </block>
+        </value>
+      </block>
+    </statement>
+    <statement name="COMPONENTS">
+      <block type="nvm_create_component">
+        <field name="VAR_NAME">embedding</field>
+        <value name="COMPONENT">
+          <block type="nvm_embedding">
+            <field name="VOCAB_SIZE">50257</field>
+            <field name="EMBED_DIM">512</field>
+          </block>
+        </value>
+        <next>
+          <block type="nvm_create_component">
+            <field name="VAR_NAME">pos_encoding</field>
+            <value name="COMPONENT">
+              <block type="nvm_positional_encoding">
+                <field name="MAX_LEN">512</field>
+                <field name="EMBED_DIM">512</field>
+              </block>
+            </value>
+            <next>
+              <block type="nvm_create_component">
+                <field name="VAR_NAME">attention</field>
+                <value name="COMPONENT">
+                  <block type="nvm_attention">
+                    <field name="EMBED_DIM">512</field>
+                    <field name="NUM_HEADS">8</field>
+                  </block>
+                </value>
+                <next>
+                  <block type="nvm_create_component">
+                    <field name="VAR_NAME">add1</field>
+                    <value name="COMPONENT">
+                      <block type="nvm_add"></block>
+                    </value>
+                    <next>
+                      <block type="nvm_create_component">
+                        <field name="VAR_NAME">attn_norm</field>
+                        <value name="COMPONENT">
+                          <block type="nvm_layernorm">
+                            <field name="NORMALIZED_SHAPE">512</field>
+                          </block>
+                        </value>
+                        <next>
+                          <block type="nvm_create_component">
+                            <field name="VAR_NAME">ffn_linear1</field>
+                            <value name="COMPONENT">
+                              <block type="nvm_linear">
+                                <field name="IN_FEATURES">512</field>
+                                <field name="OUT_FEATURES">2048</field>
+                                <field name="USE_BIAS">TRUE</field>
+                              </block>
+                            </value>
+                            <next>
+                              <block type="nvm_create_component">
+                                <field name="VAR_NAME">ffn_activation</field>
+                                <value name="COMPONENT">
+                                  <block type="nvm_activation">
+                                    <field name="ACTIVATION_TYPE">gelu</field>
+                                  </block>
+                                </value>
+                                <next>
+                                  <block type="nvm_create_component">
+                                    <field name="VAR_NAME">ffn_linear2</field>
+                                    <value name="COMPONENT">
+                                      <block type="nvm_linear">
+                                        <field name="IN_FEATURES">2048</field>
+                                        <field name="OUT_FEATURES">512</field>
+                                        <field name="USE_BIAS">TRUE</field>
+                                      </block>
+                                    </value>
+                                    <next>
+                                      <block type="nvm_create_component">
+                                        <field name="VAR_NAME">add2</field>
+                                        <value name="COMPONENT">
+                                          <block type="nvm_add"></block>
+                                        </value>
+                                        <next>
+                                          <block type="nvm_create_component">
+                                            <field name="VAR_NAME">ffn_norm</field>
+                                            <value name="COMPONENT">
+                                              <block type="nvm_layernorm">
+                                                <field name="NORMALIZED_SHAPE">512</field>
+                                              </block>
+                                            </value>
+                                            <next>
+                                              <block type="nvm_create_component">
+                                                <field name="VAR_NAME">dropout</field>
+                                                <value name="COMPONENT">
+                                                  <block type="nvm_dropout">
+                                                    <field name="DROPOUT_RATE">0.1</field>
+                                                  </block>
+                                                </value>
+                                                <next>
+                                                  <block type="nvm_create_component">
+                                                    <field name="VAR_NAME">final_norm</field>
+                                                    <value name="COMPONENT">
+                                                      <block type="nvm_layernorm">
+                                                        <field name="NORMALIZED_SHAPE">512</field>
+                                                      </block>
+                                                    </value>
+                                                    <next>
+                                                      <block type="nvm_create_component">
+                                                        <field name="VAR_NAME">output_projection</field>
+                                                        <value name="COMPONENT">
+                                                          <block type="nvm_linear">
+                                                            <field name="IN_FEATURES">512</field>
+                                                            <field name="OUT_FEATURES">50257</field>
+                                                            <field name="USE_BIAS">FALSE</field>
+                                                          </block>
+                                                        </value>
+                                                      </block>
+                                                    </next>
+                                                  </block>
+                                                </next>
+                                              </block>
+                                            </next>
+                                          </block>
+                                        </next>
+                                      </block>
+                                    </next>
+                                  </block>
+                                </next>
+                              </block>
+                            </next>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+    <statement name="EXECUTION">
+      <block type="nvm_forward">
+        <field name="OUTPUT_VAR" id="embedded">embedded</field>
+        <field name="COMPONENT_VAR" id="embedding">embedding</field>
+        <value name="INPUT">
+          <block type="nvm_variable">
+            <field name="VAR" id="input_tokens">input_tokens</field>
+          </block>
+        </value>
+        <next>
+          <block type="nvm_forward">
+            <field name="OUTPUT_VAR" id="x">x</field>
+            <field name="COMPONENT_VAR" id="pos_encoding">pos_encoding</field>
+            <value name="INPUT">
+              <block type="nvm_variable">
+                <field name="VAR" id="embedded">embedded</field>
+              </block>
+            </value>
+            <next>
+              <block type="nvm_forward">
+                <field name="OUTPUT_VAR" id="attn_out">attn_out</field>
+                <field name="COMPONENT_VAR" id="attention">attention</field>
+                <value name="INPUT">
+                  <block type="nvm_variable">
+                    <field name="VAR" id="x">x</field>
+                  </block>
+                </value>
+                <next>
+                  <block type="nvm_forward">
+                    <field name="OUTPUT_VAR" id="x_residual">x_residual</field>
+                    <field name="COMPONENT_VAR" id="add1">add1</field>
+                    <value name="INPUT">
+                      <block type="nvm_variable">
+                        <field name="VAR" id="x">x</field>
+                      </block>
+                    </value>
+                    <next>
+                      <block type="nvm_forward">
+                        <field name="OUTPUT_VAR" id="x">x</field>
+                        <field name="COMPONENT_VAR" id="attn_norm">attn_norm</field>
+                        <value name="INPUT">
+                          <block type="nvm_variable">
+                            <field name="VAR" id="x_residual">x_residual</field>
+                          </block>
+                        </value>
+                        <next>
+                          <block type="nvm_forward">
+                            <field name="OUTPUT_VAR" id="ffn_out">ffn_out</field>
+                            <field name="COMPONENT_VAR" id="ffn_linear1">ffn_linear1</field>
+                            <value name="INPUT">
+                              <block type="nvm_variable">
+                                <field name="VAR" id="x">x</field>
+                              </block>
+                            </value>
+                            <next>
+                              <block type="nvm_forward">
+                                <field name="OUTPUT_VAR" id="ffn_out">ffn_out</field>
+                                <field name="COMPONENT_VAR" id="ffn_activation">ffn_activation</field>
+                                <value name="INPUT">
+                                  <block type="nvm_variable">
+                                    <field name="VAR" id="ffn_out">ffn_out</field>
+                                  </block>
+                                </value>
+                                <next>
+                                  <block type="nvm_forward">
+                                    <field name="OUTPUT_VAR" id="ffn_out">ffn_out</field>
+                                    <field name="COMPONENT_VAR" id="ffn_linear2">ffn_linear2</field>
+                                    <value name="INPUT">
+                                      <block type="nvm_variable">
+                                        <field name="VAR" id="ffn_out">ffn_out</field>
+                                      </block>
+                                    </value>
+                                    <next>
+                                      <block type="nvm_forward">
+                                        <field name="OUTPUT_VAR" id="x_residual">x_residual</field>
+                                        <field name="COMPONENT_VAR" id="add2">add2</field>
+                                        <value name="INPUT">
+                                          <block type="nvm_variable">
+                                            <field name="VAR" id="x">x</field>
+                                          </block>
+                                        </value>
+                                        <next>
+                                          <block type="nvm_forward">
+                                            <field name="OUTPUT_VAR" id="x">x</field>
+                                            <field name="COMPONENT_VAR" id="ffn_norm">ffn_norm</field>
+                                            <value name="INPUT">
+                                              <block type="nvm_variable">
+                                                <field name="VAR" id="x_residual">x_residual</field>
+                                              </block>
+                                            </value>
+                                            <next>
+                                              <block type="nvm_forward">
+                                                <field name="OUTPUT_VAR" id="x">x</field>
+                                                <field name="COMPONENT_VAR" id="dropout">dropout</field>
+                                                <value name="INPUT">
+                                                  <block type="nvm_variable">
+                                                    <field name="VAR" id="x">x</field>
+                                                  </block>
+                                                </value>
+                                                <next>
+                                                  <block type="nvm_forward">
+                                                    <field name="OUTPUT_VAR" id="x">x</field>
+                                                    <field name="COMPONENT_VAR" id="final_norm">final_norm</field>
+                                                    <value name="INPUT">
+                                                      <block type="nvm_variable">
+                                                        <field name="VAR" id="x">x</field>
+                                                      </block>
+                                                    </value>
+                                                    <next>
+                                                      <block type="nvm_forward">
+                                                        <field name="OUTPUT_VAR" id="logits">logits</field>
+                                                        <field name="COMPONENT_VAR" id="output_projection">output_projection</field>
+                                                        <value name="INPUT">
+                                                          <block type="nvm_variable">
+                                                            <field name="VAR" id="x">x</field>
+                                                          </block>
+                                                        </value>
+                                                      </block>
+                                                    </next>
+                                                  </block>
+                                                </next>
+                                              </block>
+                                            </next>
+                                          </block>
+                                        </next>
+                                      </block>
+                                    </next>
+                                  </block>
+                                </next>
+                              </block>
+                            </next>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+  </block>
+</xml>

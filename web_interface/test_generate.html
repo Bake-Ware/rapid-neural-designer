@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+    <script src="https://unpkg.com/blockly/python_compressed.js"></script>
+</head>
+<body>
+    <div id="blockly-container" style="width: 1px; height: 1px;"></div>
+    <script>
+        const workspace = Blockly.inject('blockly-container', {});
+
+        // Load the XML
+        const xmlText = `<?xml version="1.0" encoding="UTF-8"?>
+<xml xmlns="https://developers.google.com/blockly/xml">
+  <variables>
+    <variable id="input_tokens">input_tokens</variable>
+  </variables>
+  <block type="text_print">
+    <value name="TEXT">
+      <shadow type="text">
+        <field name="TEXT">test</field>
+      </shadow>
+    </value>
+  </block>
+</xml>`;
+
+        const xml = Blockly.utils.xml.textToDom(xmlText);
+        Blockly.Xml.domToWorkspace(xml, workspace);
+
+        const pythonGenerator = Blockly.Python;
+        const code = pythonGenerator.workspaceToCode(workspace);
+
+        console.log("Generated code:");
+        console.log(code);
+        console.log("---");
+        console.log(JSON.stringify(code));
+    </script>
+</body>
+</html>

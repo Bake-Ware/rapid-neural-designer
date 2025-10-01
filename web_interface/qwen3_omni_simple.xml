@@ -1,0 +1,156 @@
+<xml xmlns="https://developers.google.com/blockly/xml">
+  <variables>
+    <variable id="model">model</variable>
+    <variable id="processor">processor</variable>
+    <variable id="inputs">inputs</variable>
+    <variable id="output">output</variable>
+    <variable id="response_text">response_text</variable>
+    <variable id="response_audio">response_audio</variable>
+  </variables>
+  <block type="nvm_experiment" x="50" y="50">
+    <field name="EXP_NAME">qwen3_omni_inference</field>
+    <statement name="SETUP">
+      <block type="nvm_set_seed">
+        <field name="SEED">42</field>
+      </block>
+    </statement>
+    <statement name="COMPONENTS">
+      <block type="nvm_create_component">
+        <field name="VAR_NAME">model</field>
+        <value name="COMPONENT">
+          <block type="nvm_load_multimodal_model">
+            <field name="MODEL_NAME">Qwen/Qwen3-Omni-30B-A3B-Instruct</field>
+            <field name="DTYPE">auto</field>
+            <field name="ATTN_IMPL">flash_attention_2</field>
+          </block>
+        </value>
+        <next>
+          <block type="nvm_create_component">
+            <field name="VAR_NAME">processor</field>
+            <value name="COMPONENT">
+              <block type="nvm_load_processor">
+                <field name="MODEL_NAME">Qwen/Qwen3-Omni-30B-A3B-Instruct</field>
+              </block>
+            </value>
+          </block>
+        </next>
+      </block>
+    </statement>
+    <statement name="EXECUTION">
+      <block type="nvm_conversation">
+        <next>
+          <block type="nvm_message_multimodal">
+            <field name="ROLE">user</field>
+            <field name="TEXT">Describe this image in detail</field>
+            <value name="IMAGE">
+              <block type="nvm_multimodal_input">
+                <field name="INPUT_TYPE">image_url</field>
+                <field name="CONTENT">https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-VL/assets/demo.jpeg</field>
+              </block>
+            </value>
+            <next>
+              <block type="nvm_forward">
+                <field name="OUTPUT_VAR" id="inputs">inputs</field>
+                <field name="COMPONENT_VAR" id="processor">processor</field>
+                <value name="INPUT">
+                  <block type="nvm_process_multimodal">
+                    <value name="PROCESSOR">
+                      <block type="nvm_variable">
+                        <field name="VAR" id="processor">processor</field>
+                      </block>
+                    </value>
+                    <value name="CONVERSATION">
+                      <block type="nvm_variable">
+                        <field name="VAR" id="conversation">conversation</field>
+                      </block>
+                    </value>
+                  </block>
+                </value>
+                <next>
+                  <block type="nvm_forward">
+                    <field name="OUTPUT_VAR" id="output">output</field>
+                    <field name="COMPONENT_VAR" id="model">model</field>
+                    <value name="INPUT">
+                      <block type="nvm_generate_multimodal">
+                        <field name="MAX_TOKENS">1024</field>
+                        <field name="SPEAKER">Ethan</field>
+                        <value name="MODEL">
+                          <block type="nvm_variable">
+                            <field name="VAR" id="model">model</field>
+                          </block>
+                        </value>
+                        <value name="INPUTS">
+                          <block type="nvm_variable">
+                            <field name="VAR" id="inputs">inputs</field>
+                          </block>
+                        </value>
+                      </block>
+                    </value>
+                    <next>
+                      <block type="nvm_forward">
+                        <field name="OUTPUT_VAR" id="response_text">response_text</field>
+                        <field name="COMPONENT_VAR" id="processor">processor</field>
+                        <value name="INPUT">
+                          <block type="nvm_decode_response">
+                            <field name="DECODE_TYPE">text</field>
+                            <value name="PROCESSOR">
+                              <block type="nvm_variable">
+                                <field name="VAR" id="processor">processor</field>
+                              </block>
+                            </value>
+                            <value name="OUTPUT">
+                              <block type="nvm_variable">
+                                <field name="VAR" id="output">output</field>
+                              </block>
+                            </value>
+                          </block>
+                        </value>
+                        <next>
+                          <block type="nvm_forward">
+                            <field name="OUTPUT_VAR" id="response_audio">response_audio</field>
+                            <field name="COMPONENT_VAR" id="output">output</field>
+                            <value name="INPUT">
+                              <block type="nvm_decode_response">
+                                <field name="DECODE_TYPE">audio</field>
+                                <value name="PROCESSOR">
+                                  <block type="nvm_variable">
+                                    <field name="VAR" id="processor">processor</field>
+                                  </block>
+                                </value>
+                                <value name="OUTPUT">
+                                  <block type="nvm_variable">
+                                    <field name="VAR" id="output">output</field>
+                                  </block>
+                                </value>
+                              </block>
+                            </value>
+                            <next>
+                              <block type="nvm_print_state">
+                                <field name="STATE_VAR" id="response_text">response_text</field>
+                                <next>
+                                  <block type="nvm_save_audio">
+                                    <field name="PATH">qwen_response.wav</field>
+                                    <field name="SAMPLE_RATE">16000</field>
+                                    <value name="AUDIO">
+                                      <block type="nvm_variable">
+                                        <field name="VAR" id="response_audio">response_audio</field>
+                                      </block>
+                                    </value>
+                                  </block>
+                                </next>
+                              </block>
+                            </next>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+  </block>
+</xml>
