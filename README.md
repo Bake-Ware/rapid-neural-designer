@@ -1,44 +1,91 @@
-# Neural VM Experiments
+# Rapid Neural Designer (RND)
 
-## Project Overview
-Building a Neural Virtual Machine (NVM) with atomic components and a universal context bus for cross-architecture neural computation.
+A Scratch-like visual programming interface for rapidly prototyping neural network experiments with drag-and-drop atomic components.
 
-## Core Concept
-Instead of lossy tensor handoffs between neural components, preserve full computational state (Q,K,V states, attention patterns, semantic intent, etc.) in a hyperbolic space-based context bus.
+## Features
 
-## Research Questions
-1. What's the minimal set of neural "opcodes" needed?
-2. How do we compile high-level operations into neural bytecode?
-3. What semantic information is preserved vs. lost in translation?
-4. Can we measure "semantic fidelity" across VM interpretations?
+- **🎨 Visual Block Programming**: Build neural networks like Scratch - no code required
+- **⚡ Real-time Code Generation**: See Python code generated as you build
+- **✓ Smart Validation**: Automatic linting for component connections and tensor dimensions
+- **💾 Save/Load**: Export and import experiments as XML
+- **📥 Export Code**: Download generated Python code to run locally
+- **🧪 Experiment-First**: Designed for rapid experimentation and iteration
 
-## Experimental Approach
+## Quick Start
 
-### Phase 1: Atomic Component State Capture ✅
-- Build instrumented neural components that capture ALL internal state
-- Analyze what information is actually important to preserve
-- Extract requirements for hyperbolic space design
+1. Open `web_interface/index.html` in any modern browser
+2. Drag blocks from the toolbox to build your neural network
+3. Download the generated Python code
+4. Run it locally - no dependencies except numpy
 
-### Phase 2: Neural Context Bus Design (Next)
-- Build hyperbolic space storage system with dimensional layers
-- Implement universal read/write/transform interfaces
-- Test lossless state preservation
+**No installation, no server, no build tools required.**
 
-### Phase 3: Cross-Architecture Translation (Future)
-- Build neural bytecode compilation/interpretation
-- Test semantic fidelity across different model types
-- Measure preservation vs. loss in translation
+## Available Blocks
 
-## Files
-- `atomic_components.py` - Instrumented neural components with full state capture
-- `bus_analysis.py` - Experimental framework to analyze storage requirements
-- `bus_requirements.json` - Generated specifications for neural context bus
+### 🧪 Experiment Structure
+- **Neural VM Experiment**: Main container for your experiment
+- **Create Component**: Define and name neural components
+- **Forward Pass**: Execute computation through components
+- **Print State**: Display captured computational state
 
-## Vision
-Enable transformer attention states to guide diffusion model generation, CNN feature hierarchies to inform graph neural networks, etc. - true cross-paradigm neural computation with semantic preservation.
+### 🔢 Neural Components
+- **Linear Layer**: Linear transformation with configurable dimensions and bias
+- **Multi-Head Attention**: Attention mechanism with Q/K/V state capture
 
-## Research Impact
-This positions the work as solving fundamental infrastructure problems in AI, enabling new types of hybrid architectures and cross-modal reasoning.
+### 📊 Data & Variables
+- **Input Tensor**: Create random input tensors with configurable shapes
+- **Variable**: Reference variables from your experiment
+
+## Example: Simple Transformer Layer
+
+1. Drag **"🧪 Neural VM Experiment"** to workspace
+2. Add **Input Tensor** (batch=1, seq=10, dim=512)
+3. Create **Multi-Head Attention** component (embed_dim=512, heads=8)
+4. Create **Linear Layer** component (in=512, out=512)
+5. Add **Forward Pass** blocks to execute
+6. Click **"⬇️ Download"** for Python code
+
+## Controls
+
+- **💾 Save**: Export workspace as XML
+- **📁 Load**: Import saved workspace
+- **🗑️ Clear**: Clear entire workspace
+- **📋 Copy Code**: Copy Python to clipboard
+- **⬇️ Download**: Download Python file
+
+## Generated Code
+
+Generates clean, runnable Python compatible with numpy:
+- Proper imports and structure
+- Component initialization
+- Forward passes with full state capture
+- State inspection and logging
+
+## What Makes RND Different?
+
+Most visual neural network builders just create model architectures. **RND captures the full computational state** - all intermediate tensors, attention patterns, Q/K/V projections, and semantic metadata. This enables:
+
+- Deep introspection into what your network is actually doing
+- Research into cross-architecture neural computation
+- Building hybrid architectures that share semantic state
+- Educational tools that show every step of computation
+
+## Future Enhancements
+
+- More atomic components (RNN, Mamba, CNN, GNN)
+- Tensor dimension mismatch detection
+- Visual state visualization
+- Context bus operations (Phase 2)
+- Control flow (loops, conditionals)
+- Live execution in browser
+
+## Technical Details
+
+- Built with Google Blockly (web version of Scratch)
+- Pure JavaScript - runs entirely in browser
+- Generates numpy-based Python code
+- XML workspace format for save/load
 
 ---
-*Brain reset cruise to Alaska, September 2025*
+
+**Built for rapid neural network R&D** 🚀
