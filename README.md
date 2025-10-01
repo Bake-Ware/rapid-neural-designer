@@ -2,6 +2,8 @@
 
 A Scratch-like visual programming interface for rapidly prototyping neural network experiments with drag-and-drop atomic components.
 
+![RND Screenshot](docs/RND_screenshot.png)
+
 ## Features
 
 - **🎨 Visual Block Programming**: Build neural networks like Scratch - no code required
