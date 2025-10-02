@@ -1136,7 +1136,7 @@
             const outFeatures = block.getFieldValue('OUT_FEATURES');
             const useBias = block.getFieldValue('USE_BIAS') === 'TRUE';
 
-            const code = `SimpleLinearAtom(${inFeatures}, ${outFeatures}, bias=${useBias})`;
+            const code = `SimpleLinearAtom(${inFeatures}, ${outFeatures}, bias=${useBias ? 'True' : 'False'})`;
             return [code, generator.ORDER_FUNCTION_CALL];
         };
 
