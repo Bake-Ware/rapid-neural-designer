@@ -1,0 +1,78 @@
+{
+  "word": "dog",
+  "prediction": "NOUN",
+  "confidence": 0.537720012182637,
+  "num_states": 3,
+  "states": [
+    {
+      "component_type": "SimpleAttentionAtom",
+      "semantic_intent": "character_attention",
+      "input_shape": [
+        1,
+        20,
+        28
+      ],
+      "output_shape": [
+        1,
+        20,
+        28
+      ],
+      "intermediate_state_keys": [
+        "Q_projections",
+        "K_projections",
+        "V_projections",
+        "raw_attention_scores",
+        "attention_weights",
+        "attended_values",
+        "head_configurations",
+        "attention_entropy",
+        "attention_concentration",
+        "attention_diversity",
+        "query_key_similarity",
+        "q_transform_magnitude",
+        "k_transform_magnitude",
+        "v_transform_magnitude"
+      ]
+    },
+    {
+      "component_type": "SimpleLinearAtom",
+      "semantic_intent": "feature_extraction",
+      "input_shape": [
+        1,
+        28
+      ],
+      "output_shape": [
+        1,
+        64
+      ],
+      "intermediate_state_keys": [
+        "weight_matrix",
+        "input_stats",
+        "bias_vector",
+        "output_stats",
+        "transformation_magnitude",
+        "activation_sparsity"
+      ]
+    },
+    {
+      "component_type": "SimpleLinearAtom",
+      "semantic_intent": "binary_classification",
+      "input_shape": [
+        1,
+        64
+      ],
+      "output_shape": [
+        1,
+        1
+      ],
+      "intermediate_state_keys": [
+        "weight_matrix",
+        "input_stats",
+        "bias_vector",
+        "output_stats",
+        "transformation_magnitude",
+        "activation_sparsity"
+      ]
+    }
+  ]
+}
