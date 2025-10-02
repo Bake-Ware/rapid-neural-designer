@@ -14,6 +14,10 @@ This example shows RND's key differentiator: **capturing complete computational 
 
 ## Quick Start
 
+### 0. Try in RND Visual Designer (Optional)
+
+Open `../web_interface/index.html` in your browser and load `noun_classifier_workspace.xml` to see the model structure visually and generate the code yourself!
+
 ### 1. Generate Dataset (1000+ words)
 
 ```bash
@@ -59,6 +63,7 @@ Analyzes a word and shows:
 
 ## Files
 
+- `noun_classifier_workspace.xml` - **Load this in RND UI to see the model!**
 - `generate_dataset.py` - Creates the training dataset
 - `train_noun_classifier.py` - Training script using atomic components
 - `test_noun.py` - CLI tool to test words and inspect state

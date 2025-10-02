@@ -1,0 +1,78 @@
+<xml xmlns="https://developers.google.com/blockly/xml">
+  <block type="nvm_experiment" x="20" y="20">
+    <statement name="SETUP">
+      <block type="nvm_input">
+        <field name="VAR_NAME">input_chars</field>
+        <field name="BATCH">1</field>
+        <field name="SEQ_LEN">20</field>
+        <field name="EMBED_DIM">28</field>
+      </block>
+    </statement>
+    <statement name="COMPONENTS">
+      <block type="nvm_create_component">
+        <field name="COMPONENT_NAME">char_attention</field>
+        <statement name="COMPONENT_DEF">
+          <block type="nvm_attention">
+            <field name="EMBED_DIM">28</field>
+            <field name="NUM_HEADS">4</field>
+          </block>
+        </statement>
+        <next>
+          <block type="nvm_create_component">
+            <field name="COMPONENT_NAME">feature_projection</field>
+            <statement name="COMPONENT_DEF">
+              <block type="nvm_linear">
+                <field name="IN_FEATURES">28</field>
+                <field name="OUT_FEATURES">64</field>
+                <field name="USE_BIAS">TRUE</field>
+              </block>
+            </statement>
+            <next>
+              <block type="nvm_create_component">
+                <field name="COMPONENT_NAME">classifier</field>
+                <statement name="COMPONENT_DEF">
+                  <block type="nvm_linear">
+                    <field name="IN_FEATURES">64</field>
+                    <field name="OUT_FEATURES">1</field>
+                    <field name="USE_BIAS">TRUE</field>
+                  </block>
+                </statement>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+    <statement name="EXECUTE">
+      <block type="nvm_forward">
+        <field name="COMPONENT_NAME">char_attention</field>
+        <field name="INPUT_VAR">input_chars</field>
+        <field name="OUTPUT_VAR">attn_output</field>
+        <next>
+          <block type="nvm_print_state">
+            <field name="STATE_VAR">attn_output</field>
+            <next>
+              <block type="nvm_forward">
+                <field name="COMPONENT_NAME">feature_projection</field>
+                <field name="INPUT_VAR">attn_output</field>
+                <field name="OUTPUT_VAR">features</field>
+                <next>
+                  <block type="nvm_forward">
+                    <field name="COMPONENT_NAME">classifier</field>
+                    <field name="INPUT_VAR">features</field>
+                    <field name="OUTPUT_VAR">prediction</field>
+                    <next>
+                      <block type="nvm_print_state">
+                        <field name="STATE_VAR">prediction</field>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </statement>
+  </block>
+</xml>
