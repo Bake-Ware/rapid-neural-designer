@@ -1784,6 +1784,20 @@ inputs = inputs.to(model.device).to(model.dtype)
             if (monacoEditor) {
                 monaco.editor.setModelLanguage(monacoEditor.getModel(), lang === 'python' ? 'python' : 'csharp');
             }
+
+            // Disable run button for C# (only Python backend available)
+            const runButton = document.getElementById('run-button');
+            if (lang === 'csharp') {
+                runButton.disabled = true;
+                runButton.style.opacity = '0.5';
+                runButton.style.cursor = 'not-allowed';
+                runButton.title = 'C# execution not supported (Python backend only)';
+            } else {
+                runButton.disabled = false;
+                runButton.style.opacity = '1';
+                runButton.style.cursor = 'pointer';
+                runButton.title = 'Run code on backend';
+            }
         }
 
         function updateCode() {
@@ -1982,6 +1996,12 @@ namespace NeuralVMExperiment
         const BACKEND_URL = 'http://localhost:5000';
 
         async function runCode() {
+            const lang = document.getElementById('language-selector').value;
+            if (lang !== 'python') {
+                alert('Only Python code can be executed. C# code generation is for download/copy only.');
+                return;
+            }
+
             const code = monacoEditor ? monacoEditor.getValue() : '';
             const runButton = document.getElementById('run-button');
             const executionOutput = document.getElementById('execution-output');
