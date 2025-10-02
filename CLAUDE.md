@@ -30,7 +30,7 @@ The system uses a multi-layer architecture:
 
 ```bash
 # Phase 1 state capture experiment (working, numpy-based)
-python simple_experiment.py
+python neuralAtomLib.py
 
 # Quick test harness
 python quick_test.py
@@ -53,7 +53,7 @@ python --version
 ## File Structure
 
 **Core Implementation:**
-- `simple_experiment.py` - Working numpy-based state capture experiment (Phase 1 complete)
+- `neuralAtomLib.py` - Working numpy-based state capture experiment (Phase 1 complete)
 - `atomic_components.py` - PyTorch-based instrumented components (currently blocked by torch issues, use numpy version)
 - `bus_analysis.py` - Experimental framework to analyze storage requirements
 
@@ -78,7 +78,7 @@ The `ComputationalState` dataclass is the standard container for captured state.
 
 ### Numpy vs PyTorch
 
-- **Current Implementation**: Use numpy for all new development (`simple_experiment.py` is the reference)
+- **Current Implementation**: Use numpy for all new development (`neuralAtomLib.py` is the reference)
 - **Future**: PyTorch implementations exist in `atomic_components.py` but are blocked by environment issues
 - When implementing components: provide both forward pass computation and state capture in single method
 

@@ -333,11 +333,11 @@ print("Experiment 'my_experiment' completed successfully!")
 
 ### Component Classes
 
-RND generates **placeholder PyTorch implementations** for atomic components. These are simplified versions meant for quick prototyping. For production use, replace with full Neural VM atomic components from `simple_experiment.py`.
+RND generates **placeholder PyTorch implementations** for atomic components. These are simplified versions meant for quick prototyping. For production use, replace with full Neural VM atomic components from `neuralAtomLib.py`.
 
 **Placeholder vs. Full Implementation:**
 
-| Aspect | Placeholder (Generated) | Full NVM (simple_experiment.py) |
+| Aspect | Placeholder (Generated) | Full NVM (neuralAtomLib.py) |
 |--------|------------------------|----------------------------------|
 | State Capture | None | Complete (20+ state types) |
 | QKV Preservation | No | Yes (Q/K/V projections saved) |
@@ -778,7 +778,7 @@ print(f"State: {state}")
 └─────────────┬────────────────────────┘
               ↓ uses (when replaced)
 ┌──────────────────────────────────────┐
-│  Neural VM Core (simple_experiment.py)│  ← State Capture
+│  Neural VM Core (neuralAtomLib.py)│  ← State Capture
 │  Complete state preservation          │
 └─────────────┬────────────────────────┘
               ↓ stores in

@@ -45,7 +45,7 @@ A Scratch-like visual programming interface for building Neural VM experiments u
 
 ## Generated Code
 
-The interface generates Python code compatible with the Neural VM atomic components from `simple_experiment.py`. The generated code includes:
+The interface generates Python code compatible with the Neural VM atomic components from `neuralAtomLib.py`. The generated code includes:
 - Proper imports (numpy, dataclasses, etc.)
 - Component initialization
 - Forward passes with state capture

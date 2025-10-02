@@ -81,7 +81,7 @@ This empirical validation provides concrete specifications for building a univer
 
 ## Files Generated
 
-- `simple_experiment.py` - Complete working experiment
+- `neuralAtomLib.py` - Complete working experiment
 - `bus_requirements.json` - Formal specifications  
 - `README.md` - Project documentation
 

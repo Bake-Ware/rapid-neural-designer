@@ -30,7 +30,7 @@ Together, they enable researchers to build, experiment with, and deeply understa
 **Current Status:** Phase 1 complete (state capture validated), Phase 2 in design (abstraction system)
 
 **Key Files:**
-- `simple_experiment.py` - Working state capture implementation
+- `neuralAtomLib.py` - Working state capture implementation
 - `bus_requirements.json` - Generated specifications
 - `phase1_results.md` - Experimental validation results
 - `DESIGN_DOC.md` - Complete technical architecture
@@ -92,7 +92,7 @@ Together, they enable researchers to build, experiment with, and deeply understa
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐ │
 │  │  Atomic Components with Full State Capture                │ │
-│  │  (simple_experiment.py)                                   │ │
+│  │  (neuralAtomLib.py)                                   │ │
 │  │                                                           │ │
 │  │  SimpleLinearAtom          SimpleAttentionAtom           │ │
 │  │  ├─ Complete state capture  ├─ QKV preservation          │ │
@@ -179,7 +179,7 @@ Together, they enable researchers to build, experiment with, and deeply understa
 
 ```
 1. Researcher writes Python directly
-   ├─ Uses SimpleLinearAtom, SimpleAttentionAtom from simple_experiment.py
+   ├─ Uses SimpleLinearAtom, SimpleAttentionAtom from neuralAtomLib.py
    ├─ Builds custom architecture
    └─ Runs experiment
 
@@ -203,7 +203,7 @@ Together, they enable researchers to build, experiment with, and deeply understa
 **Definition:** Instrumented neural building blocks that capture complete computational state during forward passes.
 
 **Implementation:**
-- **NVM:** `SimpleLinearAtom`, `SimpleAttentionAtom` with full state capture (simple_experiment.py)
+- **NVM:** `SimpleLinearAtom`, `SimpleAttentionAtom` with full state capture (neuralAtomLib.py)
 - **RND:** Visual blocks that generate code for these components
 
 **State Captured:**
@@ -415,7 +415,7 @@ class TrailState:
 **Key Finding:** Complete state preservation is feasible and bounded in size
 
 **Files:**
-- `simple_experiment.py` - Working implementation
+- `neuralAtomLib.py` - Working implementation
 - `bus_requirements.json` - Generated specs
 - `phase1_results.md` - Validation results
 
@@ -610,7 +610,7 @@ C:\neural_vm_experiments\
 │   ├── rapid_neural_designer.md   # RND comprehensive guide
 │   └── project_overview.md        # This document
 │
-├── simple_experiment.py           # ✅ NVM core implementation (Phase 1)
+├── neuralAtomLib.py           # ✅ NVM core implementation (Phase 1)
 ├── atomic_components.py           # PyTorch version (blocked)
 ├── bus_analysis.py                # Analysis framework
 ├── quick_test.py                  # Test harness
@@ -768,7 +768,7 @@ C:\neural_vm_experiments\
 **Then Explore NVM (Core Research):**
 ```bash
 1. Read docs/theoretical_orientation.md
-2. Run python simple_experiment.py
+2. Run python neuralAtomLib.py
 3. Inspect bus_requirements.json
 4. Modify generated RND code to use full state capture
 ```
@@ -851,7 +851,7 @@ A: No. RND is a convenience tool for rapid prototyping. You can use NVM directly
 A: Yes. RND generates standard PyTorch code that runs independently. State capture integration is optional.
 
 **Q: What's the difference between placeholder and full NVM components?**
-A: RND generates simplified placeholders for quick prototyping. Full NVM components (simple_experiment.py) capture complete state.
+A: RND generates simplified placeholders for quick prototyping. Full NVM components (neuralAtomLib.py) capture complete state.
 
 **Q: Is the hyperbolic manifold actually necessary?**
 A: TBD. It's theoretically motivated for hierarchical data, but empirical validation is needed. Simpler alternatives may suffice.

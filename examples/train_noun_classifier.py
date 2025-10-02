@@ -12,8 +12,8 @@ import json
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
-# Import atomic components from simple_experiment
-from simple_experiment import (
+# Import atomic components from neuralAtomLib
+from neuralAtomLib import (
     SimpleLinearAtom,
     SimpleAttentionAtom,
     ComputationalState

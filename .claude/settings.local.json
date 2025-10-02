@@ -19,7 +19,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" repo create rapid-neural-designer --public --source=. --description=\"Cross-architecture neural computation with semantic preservation\" --push)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(timeout 30 python:*)",
+      "Bash(git mv:*)"
     ],
     "deny": [],
     "ask": []

@@ -52,7 +52,7 @@ Instead of lossy tensor handoffs, preserve full computational state (Q,K,V, atte
 **Key Files:**
 ```
 C:\neural_vm_experiments\
-├── simple_experiment.py          # Working state capture experiment
+├── neuralAtomLib.py          # Working state capture experiment
 ├── atomic_components.py          # PyTorch-based components (blocked by torch issues)
 ├── bus_requirements.json         # Generated specifications
 ├── phase1_results.md            # Experimental results
@@ -483,7 +483,7 @@ C:\neural_vm_experiments\
 ├── phase1_results.md           # Experimental results
 ├── bus_requirements.json       # Context bus specifications
 │
-├── simple_experiment.py        # ✅ Working state capture
+├── neuralAtomLib.py        # ✅ Working state capture
 ├── atomic_components.py        # ⚠️ PyTorch version (blocked)
 ├── bus_analysis.py            # Analysis framework
 └── quick_test.py              # Test harness
@@ -645,7 +645,7 @@ matplotlib>=3.7.0
 ### 10.1 Run Phase 1 Experiment
 ```bash
 cd C:\neural_vm_experiments
-python simple_experiment.py
+python neuralAtomLib.py
 ```
 
 ### 10.2 Begin Phase 2 Development

@@ -355,7 +355,7 @@ We're not trying to interpret, compress, or optimize models. We're building **in
 **File Structure:**
 ```
 neural_vm_experiments/
-├── simple_experiment.py          # ✅ Working state capture
+├── neuralAtomLib.py          # ✅ Working state capture
 ├── bus_requirements.json         # ✅ Generated specifications
 ├── phase1_results.md            # ✅ Experimental findings
 ├── DESIGN_DOC.md                # ✅ Technical design
@@ -414,7 +414,7 @@ neural_vm_experiments/
 1. Read `README.md` - High-level vision
 2. Read `phase1_results.md` - What we've validated
 3. Read `DESIGN_DOC.md` - Technical architecture
-4. Run `simple_experiment.py` - See state capture in action
+4. Run `neuralAtomLib.py` - See state capture in action
 
 **Key Concepts to Grasp:**
 - `ComputationalState` dataclass: Container for all captured state
@@ -426,7 +426,7 @@ neural_vm_experiments/
 
 ```bash
 cd C:\neural_vm_experiments
-python simple_experiment.py
+python neuralAtomLib.py
 ```
 
 **What to observe:**
