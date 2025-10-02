@@ -268,8 +268,12 @@
         <div id="code-tab" class="tab-content">
             <div id="code-container">
                 <div id="code-header">
-                    <span>Generated Python Code</span>
+                    <span id="code-header-title">Generated Python Code</span>
                     <div id="code-actions">
+                        <select id="language-selector" onchange="updateCodeLanguage()" style="margin-right: 10px; padding: 5px; background: #2d2d30; color: #ccc; border: 1px solid #3e3e42; border-radius: 4px;">
+                            <option value="python">Python</option>
+                            <option value="csharp">C#</option>
+                        </select>
                         <button id="run-button" class="run-button" onclick="runCode()">▶️ Run Code</button>
                     </div>
                 </div>
@@ -1123,12 +1127,18 @@
             }
         };
 
-        // Python code generators for each block
+        // Code generators for each block
         // Debug: Check what we have
         console.log('Blockly.Python:', Blockly.Python);
         console.log('Available generators:', Object.keys(Blockly.Python || {}));
 
         const pythonGenerator = Blockly.Python;
+
+        // Create C# generator
+        const csharpGenerator = new Blockly.Generator('CSharp');
+        csharpGenerator.ORDER_ATOMIC = 0;
+        csharpGenerator.ORDER_FUNCTION_CALL = 2;
+        csharpGenerator.ORDER_NONE = 99;
 
         // Use forBlock method for modern Blockly
         pythonGenerator.forBlock['nvm_linear'] = function(block, generator) {
@@ -1522,6 +1532,83 @@ inputs = inputs.to(model.device).to(model.dtype)
             return `import soundfile as sf\nsf.write("${path}", ${audio}.cpu().numpy(), ${sampleRate})\n`;
         };
 
+        // C# code generators
+        csharpGenerator.forBlock['nvm_linear'] = function(block, generator) {
+            const inFeatures = block.getFieldValue('IN_FEATURES');
+            const outFeatures = block.getFieldValue('OUT_FEATURES');
+            const useBias = block.getFieldValue('USE_BIAS') === 'TRUE';
+
+            const code = `new SimpleLinearAtom(${inFeatures}, ${outFeatures}, bias: ${useBias ? 'true' : 'false'})`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        csharpGenerator.forBlock['nvm_attention'] = function(block, generator) {
+            const embedDim = block.getFieldValue('EMBED_DIM');
+            const numHeads = block.getFieldValue('NUM_HEADS');
+
+            const code = `new SimpleAttentionAtom(dModel: ${embedDim}, numHeads: ${numHeads})`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        csharpGenerator.forBlock['nvm_input'] = function(block, generator) {
+            const batchSize = block.getFieldValue('BATCH_SIZE');
+            const seqLen = block.getFieldValue('SEQ_LEN');
+            const embedDim = block.getFieldValue('EMBED_DIM');
+
+            const code = `torch.randn(new long[] {${batchSize}, ${seqLen}, ${embedDim}})`;
+            return [code, generator.ORDER_FUNCTION_CALL];
+        };
+
+        csharpGenerator.forBlock['nvm_create_component'] = function(block, generator) {
+            const varName = block.getFieldValue('VAR_NAME');
+            const component = generator.valueToCode(block, 'COMPONENT', generator.ORDER_NONE) || 'null';
+
+            return `            var ${varName} = ${component};\n`;
+        };
+
+        csharpGenerator.forBlock['nvm_forward'] = function(block, generator) {
+            const outputVar = generator.nameDB_.getName(block.getFieldValue('OUTPUT_VAR'), Blockly.Names.NameType.VARIABLE);
+            const componentVar = generator.nameDB_.getName(block.getFieldValue('COMPONENT_VAR'), Blockly.Names.NameType.VARIABLE);
+            const input = generator.valueToCode(block, 'INPUT', generator.ORDER_NONE) || 'x';
+
+            return `            var (${outputVar}, state) = ${componentVar}.forward(${input});\n            Console.WriteLine($"Captured {state.ComponentType} state: {state.GetFullStateSize()} elements");\n`;
+        };
+
+        csharpGenerator.forBlock['nvm_print_state'] = function(block, generator) {
+            const stateVar = generator.nameDB_.getName(block.getFieldValue('STATE_VAR'), Blockly.Names.NameType.VARIABLE);
+
+            return `            Console.WriteLine($"State: {${stateVar}}");\n`;
+        };
+
+        csharpGenerator.forBlock['nvm_variable'] = function(block, generator) {
+            const varName = generator.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
+            return [varName, generator.ORDER_ATOMIC];
+        };
+
+        csharpGenerator.forBlock['nvm_experiment'] = function(block, generator) {
+            const expName = block.getFieldValue('EXP_NAME');
+            let setup = generator.statementToCode(block, 'SETUP');
+            let components = generator.statementToCode(block, 'COMPONENTS');
+            let execution = generator.statementToCode(block, 'EXECUTION');
+
+            let code = `            // Neural VM Experiment: ${expName}\n`;
+            code += `            // Generated by Rapid Neural Designer\n\n`;
+
+            if (setup.trim()) {
+                code += `            // Setup\n${setup}\n`;
+            }
+
+            if (components.trim()) {
+                code += `            // Component definitions\n${components}\n`;
+            }
+
+            if (execution.trim()) {
+                code += `            // Execution\n${execution}\n`;
+            }
+
+            return code;
+        };
+
         // Toolbox definition
         const toolbox = {
             "kind": "categoryToolbox",
@@ -1687,34 +1774,83 @@ inputs = inputs.to(model.device).to(model.dtype)
         });
 
         // Update code display when workspace changes
+        function updateCodeLanguage() {
+            updateCode();
+            const lang = document.getElementById('language-selector').value;
+            const title = document.getElementById('code-header-title');
+            title.textContent = lang === 'python' ? 'Generated Python Code' : 'Generated C# Code';
+
+            // Update Monaco language
+            if (monacoEditor) {
+                monaco.editor.setModelLanguage(monacoEditor.getModel(), lang === 'python' ? 'python' : 'csharp');
+            }
+        }
+
         function updateCode() {
             try {
-                let code = pythonGenerator.workspaceToCode(workspace);
+                const lang = document.getElementById('language-selector').value;
+                let code;
 
-                // Add imports if there's actual code
-                if (code.trim()) {
-                    const imports = `import numpy as np
+                if (lang === 'python') {
+                    code = pythonGenerator.workspaceToCode(workspace);
+
+                    // Add imports if there's actual code
+                    if (code.trim()) {
+                        const imports = `import numpy as np
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
 import time
 
-# Import atomic components from simple_experiment.py
+# Import atomic components from neuralAtomLib.py
 # (Assumes SimpleLinearAtom, SimpleAttentionAtom, ComputationalState are defined)
 
 `;
-                    code = imports + code;
-                } else {
-                    code = "# Drag blocks to build your Neural VM experiment\n# Code will appear here automatically";
+                        code = imports + code;
+                    } else {
+                        code = "# Drag blocks to build your Neural VM experiment\n# Code will appear here automatically";
+                    }
+                } else if (lang === 'csharp') {
+                    code = csharpGenerator.workspaceToCode(workspace);
+
+                    // Add C# usings and namespace if there's actual code
+                    if (code.trim()) {
+                        const usings = `using System;
+using System.Collections.Generic;
+using System.Linq;
+using TorchSharp;
+using static TorchSharp.torch;
+using static TorchSharp.torch.nn;
+using RapidNeuralDesigner;
+
+namespace NeuralVMExperiment
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+`;
+                        const footer = `
+            Console.WriteLine("Experiment completed successfully!");
+        }
+    }
+}
+`;
+                        code = usings + code + footer;
+                    } else {
+                        code = "// Drag blocks to build your Neural VM experiment\n// Code will appear here automatically";
+                    }
                 }
 
                 // Update Monaco Editor if it's loaded
                 if (monacoEditor) {
                     monacoEditor.setValue(code);
-                    // Run validation
-                    setTimeout(() => {
-                        const markers = window.validatePythonCode(code);
-                        updateValidationMessages(markers);
-                    }, 100);
+                    // Run validation only for Python
+                    if (lang === 'python') {
+                        setTimeout(() => {
+                            const markers = window.validatePythonCode(code);
+                            updateValidationMessages(markers);
+                        }, 100);
+                    }
                 }
 
                 validateWorkspace();
