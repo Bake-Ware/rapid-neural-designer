@@ -1187,17 +1187,31 @@
 
             // Add placeholder Atom classes (these would come from your NVM library)
             code += `# Atomic Components (placeholder implementations)\n`;
+            code += `@dataclass\n`;
+            code += `class ComputationalState:\n`;
+            code += `    component_type: str\n`;
+            code += `    component_id: str = ""\n`;
+            code += `    def get_full_state_size(self): return 0\n\n`;
+
             code += `class SimpleLinearAtom(nn.Module):\n`;
             code += `    def __init__(self, in_features, out_features, bias=True):\n`;
             code += `        super().__init__()\n`;
             code += `        self.linear = nn.Linear(in_features, out_features, bias=bias)\n`;
-            code += `    def forward(self, x): return self.linear(x)\n\n`;
+            code += `        self.component_id = f"LinearAtom_{id(self)}"\n`;
+            code += `    def forward(self, x):\n`;
+            code += `        output = self.linear(x)\n`;
+            code += `        state = ComputationalState(component_type="SimpleLinearAtom", component_id=self.component_id)\n`;
+            code += `        return output, state\n\n`;
 
             code += `class SimpleAttentionAtom(nn.Module):\n`;
             code += `    def __init__(self, embed_dim, num_heads):\n`;
             code += `        super().__init__()\n`;
             code += `        self.attn = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)\n`;
-            code += `    def forward(self, x): return self.attn(x, x, x)[0]\n\n`;
+            code += `        self.component_id = f"AttentionAtom_{id(self)}"\n`;
+            code += `    def forward(self, x):\n`;
+            code += `        output = self.attn(x, x, x)[0]\n`;
+            code += `        state = ComputationalState(component_type="SimpleAttentionAtom", component_id=self.component_id)\n`;
+            code += `        return output, state\n\n`;
 
             code += `class EmbeddingAtom(nn.Module):\n`;
             code += `    def __init__(self, vocab_size, embed_dim):\n`;
