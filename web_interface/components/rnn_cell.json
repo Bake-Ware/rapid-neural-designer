@@ -1,0 +1,19 @@
+{
+  "name": "RNN Layer",
+  "id": "rnn_layer",
+  "description": "Vanilla RNN layer: processes sequence step by step, h = tanh(W_ih @ x + W_hh @ h + b)",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" },
+    { "name": "hidden", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "input_dim", "type": "int", "default": 128, "description": "Input feature dimension" },
+    { "name": "hidden_dim", "type": "int", "default": 256, "description": "Hidden state dimension" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight initialization std" }
+  ],
+  "code": "_rnn{{_id}}_wih = np.random.randn({{hidden_dim}}, {{input_dim}}).astype(np.float32) * {{init_std}}\n_rnn{{_id}}_whh = np.random.randn({{hidden_dim}}, {{hidden_dim}}).astype(np.float32) * {{init_std}}\n_rnn{{_id}}_b = np.zeros({{hidden_dim}}, dtype=np.float32)\n_rnn{{_id}}_bs, _rnn{{_id}}_sl, _ = {{input}}.shape\n_rnn{{_id}}_h = np.zeros((_rnn{{_id}}_bs, {{hidden_dim}}), dtype=np.float32)\n_rnn{{_id}}_outs = []\nfor _rnn{{_id}}_t in range(_rnn{{_id}}_sl):\n    _rnn{{_id}}_xt = {{input}}[:, _rnn{{_id}}_t, :]\n    _rnn{{_id}}_h = np.tanh(np.matmul(_rnn{{_id}}_xt, _rnn{{_id}}_wih.T) + np.matmul(_rnn{{_id}}_h, _rnn{{_id}}_whh.T) + _rnn{{_id}}_b)\n    _rnn{{_id}}_outs.append(_rnn{{_id}}_h)\n{{output}} = np.stack(_rnn{{_id}}_outs, axis=1)\n{{hidden}} = _rnn{{_id}}_h",
+  "imports": ["import numpy as np"]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "GQA Attention",
+  "id": "gqa_attention",
+  "description": "Grouped Query Attention with RoPE — fewer KV heads shared across Q heads (Qwen-style)",
+  "inputs": [
+    { "name": "input", "type": "tensor" },
+    { "name": "mask", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "dim", "type": "int", "default": 3584, "description": "Model dimension" },
+    { "name": "n_q_heads", "type": "int", "default": 28, "description": "Number of query heads" },
+    { "name": "n_kv_heads", "type": "int", "default": 4, "description": "Number of KV heads (grouped)" },
+    { "name": "theta", "type": "float", "default": 1000000.0, "description": "RoPE base frequency" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight init std" }
+  ],
+  "code": "_gqa{{_id}}_d = {{dim}}\n_gqa{{_id}}_qh = {{n_q_heads}}\n_gqa{{_id}}_kvh = {{n_kv_heads}}\n_gqa{{_id}}_dk = _gqa{{_id}}_d // _gqa{{_id}}_qh\n_gqa{{_id}}_g = _gqa{{_id}}_qh // _gqa{{_id}}_kvh\n_gqa{{_id}}_wq = np.random.randn(_gqa{{_id}}_d, _gqa{{_id}}_d).astype(np.float32) * {{init_std}}\n_gqa{{_id}}_wk = np.random.randn(_gqa{{_id}}_kvh * _gqa{{_id}}_dk, _gqa{{_id}}_d).astype(np.float32) * {{init_std}}\n_gqa{{_id}}_wv = np.random.randn(_gqa{{_id}}_kvh * _gqa{{_id}}_dk, _gqa{{_id}}_d).astype(np.float32) * {{init_std}}\n_gqa{{_id}}_wo = np.random.randn(_gqa{{_id}}_d, _gqa{{_id}}_d).astype(np.float32) * {{init_std}}\n_gqa{{_id}}_bq = np.zeros(_gqa{{_id}}_d, dtype=np.float32)\n_gqa{{_id}}_bk = np.zeros(_gqa{{_id}}_kvh * _gqa{{_id}}_dk, dtype=np.float32)\n_gqa{{_id}}_bv = np.zeros(_gqa{{_id}}_kvh * _gqa{{_id}}_dk, dtype=np.float32)\n_gqa{{_id}}_bs, _gqa{{_id}}_sl, _ = {{input}}.shape\n# Q: full heads, K/V: grouped heads\n_gqa{{_id}}_q = (np.matmul({{input}}, _gqa{{_id}}_wq.T) + _gqa{{_id}}_bq).reshape(_gqa{{_id}}_bs, _gqa{{_id}}_sl, _gqa{{_id}}_qh, _gqa{{_id}}_dk).transpose(0, 2, 1, 3)\n_gqa{{_id}}_k = (np.matmul({{input}}, _gqa{{_id}}_wk.T) + _gqa{{_id}}_bk).reshape(_gqa{{_id}}_bs, _gqa{{_id}}_sl, _gqa{{_id}}_kvh, _gqa{{_id}}_dk).transpose(0, 2, 1, 3)\n_gqa{{_id}}_v = (np.matmul({{input}}, _gqa{{_id}}_wv.T) + _gqa{{_id}}_bv).reshape(_gqa{{_id}}_bs, _gqa{{_id}}_sl, _gqa{{_id}}_kvh, _gqa{{_id}}_dk).transpose(0, 2, 1, 3)\n# RoPE\n_gqa{{_id}}_freqs = 1.0 / ({{theta}} ** (np.arange(0, _gqa{{_id}}_dk, 2, dtype=np.float32) / _gqa{{_id}}_dk))\n_gqa{{_id}}_pos = np.arange(_gqa{{_id}}_sl, dtype=np.float32)\n_gqa{{_id}}_ang = np.outer(_gqa{{_id}}_pos, _gqa{{_id}}_freqs)\n_gqa{{_id}}_cos = np.cos(_gqa{{_id}}_ang).astype(np.float32)\n_gqa{{_id}}_sin = np.sin(_gqa{{_id}}_ang).astype(np.float32)\n_gqa{{_id}}_qr = np.zeros_like(_gqa{{_id}}_q)\n_gqa{{_id}}_qr[..., 0::2] = _gqa{{_id}}_q[..., 0::2] * _gqa{{_id}}_cos - _gqa{{_id}}_q[..., 1::2] * _gqa{{_id}}_sin\n_gqa{{_id}}_qr[..., 1::2] = _gqa{{_id}}_q[..., 0::2] * _gqa{{_id}}_sin + _gqa{{_id}}_q[..., 1::2] * _gqa{{_id}}_cos\n_gqa{{_id}}_kr = np.zeros_like(_gqa{{_id}}_k)\n_gqa{{_id}}_kr[..., 0::2] = _gqa{{_id}}_k[..., 0::2] * _gqa{{_id}}_cos - _gqa{{_id}}_k[..., 1::2] * _gqa{{_id}}_sin\n_gqa{{_id}}_kr[..., 1::2] = _gqa{{_id}}_k[..., 0::2] * _gqa{{_id}}_sin + _gqa{{_id}}_k[..., 1::2] * _gqa{{_id}}_cos\n# Repeat KV heads to match Q heads\n_gqa{{_id}}_kr = np.repeat(_gqa{{_id}}_kr, _gqa{{_id}}_g, axis=1)\n_gqa{{_id}}_vr = np.repeat(_gqa{{_id}}_v, _gqa{{_id}}_g, axis=1)\n# Attention\n_gqa{{_id}}_sc = np.matmul(_gqa{{_id}}_qr, _gqa{{_id}}_kr.transpose(0, 1, 3, 2)) / np.sqrt(_gqa{{_id}}_dk)\nif {{mask}} is not None:\n    _gqa{{_id}}_sc = np.where({{mask}} == 0, -1e9, _gqa{{_id}}_sc)\n_gqa{{_id}}_ex = np.exp(_gqa{{_id}}_sc - np.max(_gqa{{_id}}_sc, axis=-1, keepdims=True))\n_gqa{{_id}}_aw = _gqa{{_id}}_ex / np.sum(_gqa{{_id}}_ex, axis=-1, keepdims=True)\n_gqa{{_id}}_av = np.matmul(_gqa{{_id}}_aw, _gqa{{_id}}_vr)\n{{output}} = np.matmul(_gqa{{_id}}_av.transpose(0, 2, 1, 3).reshape(_gqa{{_id}}_bs, _gqa{{_id}}_sl, _gqa{{_id}}_d), _gqa{{_id}}_wo.T)",
+  "imports": ["import numpy as np"]
+}

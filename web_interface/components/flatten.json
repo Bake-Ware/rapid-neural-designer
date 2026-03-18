@@ -1,0 +1,14 @@
+{
+  "name": "Flatten",
+  "id": "flatten",
+  "description": "Flatten all dimensions except batch into a single vector",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [],
+  "code": "{{output}} = {{input}}.reshape({{input}}.shape[0], -1)",
+  "imports": []
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Conv2D",
+  "id": "conv2d",
+  "description": "2D convolution with learnable filters",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "in_channels", "type": "int", "default": 1, "description": "Input channels" },
+    { "name": "out_channels", "type": "int", "default": 32, "description": "Output channels (number of filters)" },
+    { "name": "kernel_size", "type": "int", "default": 3, "description": "Kernel size" },
+    { "name": "stride", "type": "int", "default": 1, "description": "Stride" },
+    { "name": "padding", "type": "int", "default": 1, "description": "Zero padding" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight initialization std" }
+  ],
+  "code": "# Conv2D: {{in_channels}} -> {{out_channels}}, kernel={{kernel_size}}, stride={{stride}}, pad={{padding}}\n_cv{{_id}}_w = np.random.randn({{out_channels}}, {{in_channels}}, {{kernel_size}}, {{kernel_size}}).astype(np.float32) * {{init_std}}\n_cv{{_id}}_b = np.zeros({{out_channels}}, dtype=np.float32)\n_cv{{_id}}_bs, _cv{{_id}}_ci, _cv{{_id}}_h, _cv{{_id}}_wi = {{input}}.shape\n_cv{{_id}}_pad = {{padding}}\nif _cv{{_id}}_pad > 0:\n    _cv{{_id}}_x = np.pad({{input}}, ((0,0),(0,0),(_cv{{_id}}_pad,_cv{{_id}}_pad),(_cv{{_id}}_pad,_cv{{_id}}_pad)), mode='constant')\nelse:\n    _cv{{_id}}_x = {{input}}\n_cv{{_id}}_oh = (_cv{{_id}}_h + 2*_cv{{_id}}_pad - {{kernel_size}}) // {{stride}} + 1\n_cv{{_id}}_ow = (_cv{{_id}}_wi + 2*_cv{{_id}}_pad - {{kernel_size}}) // {{stride}} + 1\n{{output}} = np.zeros((_cv{{_id}}_bs, {{out_channels}}, _cv{{_id}}_oh, _cv{{_id}}_ow), dtype=np.float32)\nfor _cv{{_id}}_i in range(_cv{{_id}}_oh):\n    for _cv{{_id}}_j in range(_cv{{_id}}_ow):\n        _cv{{_id}}_rs = _cv{{_id}}_i * {{stride}}\n        _cv{{_id}}_cs = _cv{{_id}}_j * {{stride}}\n        _cv{{_id}}_patch = _cv{{_id}}_x[:, :, _cv{{_id}}_rs:_cv{{_id}}_rs+{{kernel_size}}, _cv{{_id}}_cs:_cv{{_id}}_cs+{{kernel_size}}]\n        for _cv{{_id}}_f in range({{out_channels}}):\n            {{output}}[:, _cv{{_id}}_f, _cv{{_id}}_i, _cv{{_id}}_j] = np.sum(_cv{{_id}}_patch * _cv{{_id}}_w[_cv{{_id}}_f], axis=(1,2,3)) + _cv{{_id}}_b[_cv{{_id}}_f]",
+  "imports": ["import numpy as np"]
+}

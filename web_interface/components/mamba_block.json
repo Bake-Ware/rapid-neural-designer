@@ -1,0 +1,20 @@
+{
+  "name": "Mamba Block",
+  "id": "mamba_block",
+  "description": "Selective State Space Model block — linear-time sequence modeling with input-dependent dynamics",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "dim", "type": "int", "default": 512, "description": "Model dimension" },
+    { "name": "state_dim", "type": "int", "default": 16, "description": "SSM state dimension (N)" },
+    { "name": "expand", "type": "int", "default": 2, "description": "Expansion factor for inner dim" },
+    { "name": "conv_kernel", "type": "int", "default": 4, "description": "1D conv kernel size" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight init std" }
+  ],
+  "code": "# === Mamba Block {{_id}} ===\n_mb{{_id}}_d = {{dim}}\n_mb{{_id}}_n = {{state_dim}}\n_mb{{_id}}_e = {{expand}}\n_mb{{_id}}_inner = _mb{{_id}}_d * _mb{{_id}}_e\n_mb{{_id}}_ck = {{conv_kernel}}\n_mb{{_id}}_bs, _mb{{_id}}_sl, _ = {{input}}.shape\n#\n# -- Norm --\n_mb{{_id}}_nw = np.ones(_mb{{_id}}_d, dtype=np.float32)\n_mb{{_id}}_xn = {{input}} * (1.0 / np.sqrt(np.mean({{input}} ** 2, axis=-1, keepdims=True) + 1e-6)) * _mb{{_id}}_nw\n#\n# -- Input projection (2x inner for gating) --\n_mb{{_id}}_w_in = np.random.randn(2 * _mb{{_id}}_inner, _mb{{_id}}_d).astype(np.float32) * {{init_std}}\n_mb{{_id}}_proj = np.matmul(_mb{{_id}}_xn, _mb{{_id}}_w_in.T)\n_mb{{_id}}_x = _mb{{_id}}_proj[:, :, :_mb{{_id}}_inner]\n_mb{{_id}}_z = _mb{{_id}}_proj[:, :, _mb{{_id}}_inner:]\n#\n# -- 1D Convolution --\n_mb{{_id}}_cw = np.random.randn(_mb{{_id}}_inner, _mb{{_id}}_ck).astype(np.float32) * {{init_std}}\n_mb{{_id}}_xp = np.pad(_mb{{_id}}_x, ((0,0),(_mb{{_id}}_ck-1,0),(0,0)), mode='constant')\n_mb{{_id}}_conv = np.zeros_like(_mb{{_id}}_x)\nfor _mb{{_id}}_t in range(_mb{{_id}}_sl):\n    _mb{{_id}}_conv[:, _mb{{_id}}_t, :] = np.sum(_mb{{_id}}_xp[:, _mb{{_id}}_t:_mb{{_id}}_t+_mb{{_id}}_ck, :] * _mb{{_id}}_cw.T[None, :, :], axis=1)\n_mb{{_id}}_x = _mb{{_id}}_conv * (1.0 / (1.0 + np.exp(-_mb{{_id}}_conv)))  # SiLU\n#\n# -- Selective SSM --\n_mb{{_id}}_w_B = np.random.randn(_mb{{_id}}_n, _mb{{_id}}_inner).astype(np.float32) * {{init_std}}\n_mb{{_id}}_w_C = np.random.randn(_mb{{_id}}_n, _mb{{_id}}_inner).astype(np.float32) * {{init_std}}\n_mb{{_id}}_w_dt = np.random.randn(_mb{{_id}}_inner, _mb{{_id}}_inner).astype(np.float32) * {{init_std}}\n_mb{{_id}}_A = -np.exp(np.random.randn(_mb{{_id}}_inner, _mb{{_id}}_n).astype(np.float32))\n_mb{{_id}}_D = np.ones(_mb{{_id}}_inner, dtype=np.float32)\n_mb{{_id}}_h = np.zeros((_mb{{_id}}_bs, _mb{{_id}}_inner, _mb{{_id}}_n), dtype=np.float32)\n_mb{{_id}}_outs = []\nfor _mb{{_id}}_t in range(_mb{{_id}}_sl):\n    _mb{{_id}}_xt = _mb{{_id}}_x[:, _mb{{_id}}_t, :]\n    _mb{{_id}}_B_t = np.matmul(_mb{{_id}}_xt, _mb{{_id}}_w_B.T)\n    _mb{{_id}}_C_t = np.matmul(_mb{{_id}}_xt, _mb{{_id}}_w_C.T)\n    _mb{{_id}}_dt_t = np.log(1.0 + np.exp(np.matmul(_mb{{_id}}_xt, _mb{{_id}}_w_dt.T)))\n    _mb{{_id}}_dA = np.exp(_mb{{_id}}_A[None, :, :] * _mb{{_id}}_dt_t[:, :, None])\n    _mb{{_id}}_dB = _mb{{_id}}_dt_t[:, :, None] * _mb{{_id}}_B_t[:, None, :]\n    _mb{{_id}}_h = _mb{{_id}}_dA * _mb{{_id}}_h + _mb{{_id}}_dB * _mb{{_id}}_xt[:, :, None]\n    _mb{{_id}}_yt = np.sum(_mb{{_id}}_h * _mb{{_id}}_C_t[:, None, :], axis=-1) + _mb{{_id}}_D * _mb{{_id}}_xt\n    _mb{{_id}}_outs.append(_mb{{_id}}_yt)\n_mb{{_id}}_y = np.stack(_mb{{_id}}_outs, axis=1)\n#\n# -- Gating --\n_mb{{_id}}_gate = _mb{{_id}}_z * (1.0 / (1.0 + np.exp(-_mb{{_id}}_z)))  # SiLU\n_mb{{_id}}_y = _mb{{_id}}_y * _mb{{_id}}_gate\n#\n# -- Output projection --\n_mb{{_id}}_w_out = np.random.randn(_mb{{_id}}_d, _mb{{_id}}_inner).astype(np.float32) * {{init_std}}\n_mb{{_id}}_ssm_out = np.matmul(_mb{{_id}}_y, _mb{{_id}}_w_out.T)\n#\n# -- Residual --\n{{output}} = {{input}} + _mb{{_id}}_ssm_out",
+  "imports": ["import numpy as np"]
+}

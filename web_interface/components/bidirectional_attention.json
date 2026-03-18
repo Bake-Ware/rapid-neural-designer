@@ -1,0 +1,19 @@
+{
+  "name": "Bidirectional Attention",
+  "id": "bidirectional_attention",
+  "description": "Multi-head attention without causal mask — full bidirectional context (LLaDA-style)",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "dim", "type": "int", "default": 512, "description": "Model dimension" },
+    { "name": "n_heads", "type": "int", "default": 8, "description": "Number of attention heads" },
+    { "name": "theta", "type": "float", "default": 500000.0, "description": "RoPE base frequency" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight init std" }
+  ],
+  "code": "_ba{{_id}}_d = {{dim}}\n_ba{{_id}}_h = {{n_heads}}\n_ba{{_id}}_dk = _ba{{_id}}_d // _ba{{_id}}_h\n_ba{{_id}}_wq = np.random.randn(_ba{{_id}}_d, _ba{{_id}}_d).astype(np.float32) * {{init_std}}\n_ba{{_id}}_wk = np.random.randn(_ba{{_id}}_d, _ba{{_id}}_d).astype(np.float32) * {{init_std}}\n_ba{{_id}}_wv = np.random.randn(_ba{{_id}}_d, _ba{{_id}}_d).astype(np.float32) * {{init_std}}\n_ba{{_id}}_wo = np.random.randn(_ba{{_id}}_d, _ba{{_id}}_d).astype(np.float32) * {{init_std}}\n_ba{{_id}}_bs, _ba{{_id}}_sl, _ = {{input}}.shape\n_ba{{_id}}_q = np.matmul({{input}}, _ba{{_id}}_wq.T).reshape(_ba{{_id}}_bs, _ba{{_id}}_sl, _ba{{_id}}_h, _ba{{_id}}_dk).transpose(0, 2, 1, 3)\n_ba{{_id}}_k = np.matmul({{input}}, _ba{{_id}}_wk.T).reshape(_ba{{_id}}_bs, _ba{{_id}}_sl, _ba{{_id}}_h, _ba{{_id}}_dk).transpose(0, 2, 1, 3)\n_ba{{_id}}_v = np.matmul({{input}}, _ba{{_id}}_wv.T).reshape(_ba{{_id}}_bs, _ba{{_id}}_sl, _ba{{_id}}_h, _ba{{_id}}_dk).transpose(0, 2, 1, 3)\n# RoPE\n_ba{{_id}}_freqs = 1.0 / ({{theta}} ** (np.arange(0, _ba{{_id}}_dk, 2, dtype=np.float32) / _ba{{_id}}_dk))\n_ba{{_id}}_pos = np.arange(_ba{{_id}}_sl, dtype=np.float32)\n_ba{{_id}}_ang = np.outer(_ba{{_id}}_pos, _ba{{_id}}_freqs)\n_ba{{_id}}_cos = np.cos(_ba{{_id}}_ang).astype(np.float32)\n_ba{{_id}}_sin = np.sin(_ba{{_id}}_ang).astype(np.float32)\n_ba{{_id}}_qr = np.zeros_like(_ba{{_id}}_q)\n_ba{{_id}}_qr[..., 0::2] = _ba{{_id}}_q[..., 0::2] * _ba{{_id}}_cos - _ba{{_id}}_q[..., 1::2] * _ba{{_id}}_sin\n_ba{{_id}}_qr[..., 1::2] = _ba{{_id}}_q[..., 0::2] * _ba{{_id}}_sin + _ba{{_id}}_q[..., 1::2] * _ba{{_id}}_cos\n_ba{{_id}}_kr = np.zeros_like(_ba{{_id}}_k)\n_ba{{_id}}_kr[..., 0::2] = _ba{{_id}}_k[..., 0::2] * _ba{{_id}}_cos - _ba{{_id}}_k[..., 1::2] * _ba{{_id}}_sin\n_ba{{_id}}_kr[..., 1::2] = _ba{{_id}}_k[..., 0::2] * _ba{{_id}}_sin + _ba{{_id}}_k[..., 1::2] * _ba{{_id}}_cos\n# Full attention (no causal mask)\n_ba{{_id}}_sc = np.matmul(_ba{{_id}}_qr, _ba{{_id}}_kr.transpose(0, 1, 3, 2)) / np.sqrt(_ba{{_id}}_dk)\n_ba{{_id}}_ex = np.exp(_ba{{_id}}_sc - np.max(_ba{{_id}}_sc, axis=-1, keepdims=True))\n_ba{{_id}}_aw = _ba{{_id}}_ex / np.sum(_ba{{_id}}_ex, axis=-1, keepdims=True)\n_ba{{_id}}_av = np.matmul(_ba{{_id}}_aw, _ba{{_id}}_v)\n{{output}} = np.matmul(_ba{{_id}}_av.transpose(0, 2, 1, 3).reshape(_ba{{_id}}_bs, _ba{{_id}}_sl, _ba{{_id}}_d), _ba{{_id}}_wo.T)",
+  "imports": ["import numpy as np"]
+}

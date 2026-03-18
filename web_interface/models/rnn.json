@@ -1,0 +1,121 @@
+{
+  "last_node_id": 5,
+  "last_link_id": 4,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "atomic/data/input_tensor",
+      "pos": [100, 50],
+      "size": [220, 130],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        { "name": "tensor", "type": "tensor", "links": [1] }
+      ],
+      "properties": {
+        "batch_size": 4,
+        "seq_len": 32,
+        "dtype": "int",
+        "vocab_size": 10000
+      },
+      "widgets_values": [4, 32, "int", 10000]
+    },
+    {
+      "id": 2,
+      "type": "molecular/embedding",
+      "pos": [100, 250],
+      "size": [220, 100],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        { "name": "token_ids", "type": "tensor", "link": 1 }
+      ],
+      "outputs": [
+        { "name": "embeddings", "type": "tensor", "links": [2] }
+      ],
+      "properties": {
+        "vocab_size": 10000,
+        "dim": 128,
+        "init_std": 0.02
+      },
+      "widgets_values": [10000, 128, 0.02]
+    },
+    {
+      "id": 3,
+      "type": "molecular/rnn_layer",
+      "pos": [100, 420],
+      "size": [220, 100],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 2 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [] },
+        { "name": "hidden", "type": "tensor", "links": [3] }
+      ],
+      "properties": {
+        "input_dim": 128,
+        "hidden_dim": 256,
+        "init_std": 0.02
+      },
+      "widgets_values": [128, 256, 0.02]
+    },
+    {
+      "id": 4,
+      "type": "molecular/linear",
+      "pos": [100, 590],
+      "size": [220, 130],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 3 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [4] }
+      ],
+      "title": "Classifier Head",
+      "properties": {
+        "in_features": 256,
+        "out_features": 10,
+        "use_bias": true,
+        "init_std": 0.02
+      },
+      "widgets_values": [256, 10, true, 0.02]
+    },
+    {
+      "id": 5,
+      "type": "atomic/data/output",
+      "pos": [100, 780],
+      "size": [220, 60],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 4 }
+      ],
+      "outputs": [],
+      "properties": {
+        "label": "logits"
+      },
+      "widgets_values": ["logits"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "tensor"],
+    [2, 2, 0, 3, 0, "tensor"],
+    [3, 3, 1, 4, 0, "tensor"],
+    [4, 4, 0, 5, 0, "tensor"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "info": "RNN Sequence Classifier - Embedding(10000, 128) -> RNN(128, 256) -> Linear(256, 10). Uses final hidden state for classification."
+  },
+  "version": 0.4
+}

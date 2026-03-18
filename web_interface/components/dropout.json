@@ -1,0 +1,16 @@
+{
+  "name": "Dropout",
+  "id": "dropout",
+  "description": "Dropout regularization (passthrough in inference mode)",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "rate", "type": "float", "default": 0.1, "description": "Dropout probability" }
+  ],
+  "code": "{{output}} = {{input}}  # Dropout (rate={{rate}}, inference mode = passthrough)",
+  "imports": []
+}

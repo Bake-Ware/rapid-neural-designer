@@ -1,0 +1,17 @@
+{
+  "name": "BatchNorm",
+  "id": "batchnorm",
+  "description": "Batch normalization over the channel dimension",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "num_features", "type": "int", "default": 32, "description": "Number of channels/features" },
+    { "name": "eps", "type": "float", "default": 1e-5, "description": "Epsilon for numerical stability" }
+  ],
+  "code": "_bn{{_id}}_gamma = np.ones({{num_features}}, dtype=np.float32)\n_bn{{_id}}_beta = np.zeros({{num_features}}, dtype=np.float32)\n_bn{{_id}}_axes = tuple(i for i in range({{input}}.ndim) if i != 1)\n_bn{{_id}}_mean = np.mean({{input}}, axis=_bn{{_id}}_axes, keepdims=True)\n_bn{{_id}}_var = np.var({{input}}, axis=_bn{{_id}}_axes, keepdims=True)\n{{output}} = _bn{{_id}}_gamma.reshape(1,-1,*([1]*({{input}}.ndim-2))) * ({{input}} - _bn{{_id}}_mean) / np.sqrt(_bn{{_id}}_var + {{eps}}) + _bn{{_id}}_beta.reshape(1,-1,*([1]*({{input}}.ndim-2)))",
+  "imports": ["import numpy as np"]
+}

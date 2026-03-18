@@ -1,0 +1,19 @@
+{
+  "name": "LSTM Layer",
+  "id": "lstm_layer",
+  "description": "Long Short-Term Memory layer with forget, input, output gates",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" },
+    { "name": "hidden", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "input_dim", "type": "int", "default": 128, "description": "Input feature dimension" },
+    { "name": "hidden_dim", "type": "int", "default": 256, "description": "Hidden state dimension" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight initialization std" }
+  ],
+  "code": "_ls{{_id}}_id = {{input_dim}}\n_ls{{_id}}_hd = {{hidden_dim}}\n_ls{{_id}}_wi = np.random.randn(4 * _ls{{_id}}_hd, _ls{{_id}}_id).astype(np.float32) * {{init_std}}\n_ls{{_id}}_wh = np.random.randn(4 * _ls{{_id}}_hd, _ls{{_id}}_hd).astype(np.float32) * {{init_std}}\n_ls{{_id}}_b = np.zeros(4 * _ls{{_id}}_hd, dtype=np.float32)\n_ls{{_id}}_bs, _ls{{_id}}_sl, _ = {{input}}.shape\n_ls{{_id}}_h = np.zeros((_ls{{_id}}_bs, _ls{{_id}}_hd), dtype=np.float32)\n_ls{{_id}}_c = np.zeros((_ls{{_id}}_bs, _ls{{_id}}_hd), dtype=np.float32)\n_ls{{_id}}_outs = []\nfor _ls{{_id}}_t in range(_ls{{_id}}_sl):\n    _ls{{_id}}_xt = {{input}}[:, _ls{{_id}}_t, :]\n    _ls{{_id}}_gates = np.matmul(_ls{{_id}}_xt, _ls{{_id}}_wi.T) + np.matmul(_ls{{_id}}_h, _ls{{_id}}_wh.T) + _ls{{_id}}_b\n    _ls{{_id}}_i = 1.0 / (1.0 + np.exp(-_ls{{_id}}_gates[:, :_ls{{_id}}_hd]))\n    _ls{{_id}}_f = 1.0 / (1.0 + np.exp(-_ls{{_id}}_gates[:, _ls{{_id}}_hd:2*_ls{{_id}}_hd]))\n    _ls{{_id}}_g = np.tanh(_ls{{_id}}_gates[:, 2*_ls{{_id}}_hd:3*_ls{{_id}}_hd])\n    _ls{{_id}}_o = 1.0 / (1.0 + np.exp(-_ls{{_id}}_gates[:, 3*_ls{{_id}}_hd:]))\n    _ls{{_id}}_c = _ls{{_id}}_f * _ls{{_id}}_c + _ls{{_id}}_i * _ls{{_id}}_g\n    _ls{{_id}}_h = _ls{{_id}}_o * np.tanh(_ls{{_id}}_c)\n    _ls{{_id}}_outs.append(_ls{{_id}}_h)\n{{output}} = np.stack(_ls{{_id}}_outs, axis=1)\n{{hidden}} = _ls{{_id}}_h",
+  "imports": ["import numpy as np"]
+}

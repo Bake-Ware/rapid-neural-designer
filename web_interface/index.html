@@ -138,6 +138,20 @@
             margin-top: 2px;
         }
 
+        .palette-node-tag {
+            display: inline-block;
+            font-size: 9px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.08);
+            color: #999;
+            margin-left: 6px;
+            vertical-align: middle;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+
         .palette-section-header {
             background: #1e3a5f;
             padding: 8px 14px;
@@ -397,8 +411,84 @@
     graphCanvas.default_connection_color = { input_off: "#5a9fd488", input_on: "#7ab8e8", output_off: "#5a9fd488", output_on: "#7ab8e8" };
     graphCanvas.highquality_render = true;
 
-    // Selection - multi-select with shift+click, box select with left-drag on empty
+    // ---- Selection & Navigation ----
+    // LiteGraph 0.7.18 interaction model:
+    //   allow_dragcanvas=true: left-drag pans, scroll zooms, Ctrl+drag box selects
+    //   Zoom is gated on allow_dragcanvas, so it MUST stay true.
+    //
+    // We add:
+    //   - Click empty canvas = deselect all
+    //   - Shift+drag on empty canvas = box select (without needing Ctrl)
+
     graphCanvas.multi_select = true;
+    graphCanvas.allow_dragcanvas = true;
+
+    // Runs AFTER LiteGraph's capture-phase handler.
+    // 1. Left-click node without modifier → deselect others
+    // 2. Left-click/drag empty canvas → deselect all + box select (cancel pan)
+    // 3. Middle-drag → pan
+    canvasElement.addEventListener('mousedown', function(e) {
+        if (e.button !== 0) return;
+        if (graphCanvas.connecting_node) return;
+
+        const rect = canvasElement.getBoundingClientRect();
+        const cx = (e.clientX - rect.left) / graphCanvas.ds.scale - graphCanvas.ds.offset[0];
+        const cy = (e.clientY - rect.top) / graphCanvas.ds.scale - graphCanvas.ds.offset[1];
+        const nodeUnder = graph.getNodeOnPos(cx, cy, graph._nodes);
+
+        if (nodeUnder) {
+            // Clicked a node — if no modifier, deselect everything else
+            if (!e.ctrlKey && !e.shiftKey) {
+                for (const [id, n] of Object.entries(graphCanvas.selected_nodes)) {
+                    if (n !== nodeUnder) {
+                        n.is_selected = false;
+                        delete graphCanvas.selected_nodes[id];
+                    }
+                }
+                graphCanvas.setDirty(true, true);
+            }
+        } else {
+            // Left-click/drag empty canvas → deselect + box select
+            if (!e.shiftKey) {
+                graphCanvas.deselectAllNodes();
+            }
+            // Cancel the pan that LiteGraph just started, replace with box select
+            graphCanvas.dragging_canvas = false;
+            graphCanvas.dragging_rectangle = new Float32Array(4);
+            graphCanvas.dragging_rectangle[0] = cx;
+            graphCanvas.dragging_rectangle[1] = cy;
+            graphCanvas.dragging_rectangle[2] = 1;
+            graphCanvas.dragging_rectangle[3] = 1;
+            graphCanvas.setDirty(true, true);
+        }
+    });
+
+    // Middle-mouse pan (since left-drag is now box select, not pan)
+    let _pan = null;
+
+    canvasElement.addEventListener('pointerdown', function(e) {
+        if (e.button === 1) {
+            e.preventDefault();
+            _pan = { x: e.clientX, y: e.clientY, ox: graphCanvas.ds.offset[0], oy: graphCanvas.ds.offset[1] };
+            canvasElement.setPointerCapture(e.pointerId);
+        }
+    });
+
+    canvasElement.addEventListener('pointermove', function(e) {
+        if (_pan && (e.buttons & 4)) {
+            graphCanvas.ds.offset[0] = _pan.ox + (e.clientX - _pan.x) / graphCanvas.ds.scale;
+            graphCanvas.ds.offset[1] = _pan.oy + (e.clientY - _pan.y) / graphCanvas.ds.scale;
+            graphCanvas.setDirty(true, true);
+        }
+    });
+
+    canvasElement.addEventListener('pointerup', function(e) {
+        if (e.button === 1) _pan = null;
+    });
+
+    canvasElement.addEventListener('mousedown', function(e) {
+        if (e.button === 1) e.preventDefault();
+    });
 
     function resizeCanvas() {
         const wrapper = document.getElementById('graph-canvas-wrapper');
@@ -520,7 +610,7 @@
                         const nodeEl = document.createElement('div');
                         nodeEl.className = 'palette-node';
                         nodeEl.style.borderLeftColor = atomic.color || '#888';
-                        nodeEl.innerHTML = `<div>${atomic.name}</div>` +
+                        nodeEl.innerHTML = `<div>${atomic.name}<span class="palette-node-tag">${atomic.category}</span></div>` +
                             (atomic.description ? `<div class="palette-node-desc">${atomic.description}</div>` : '');
                         nodeEl.addEventListener('click', () => addNodeToGraph(typeName));
                         contentEl.appendChild(nodeEl);
@@ -915,6 +1005,89 @@
         LiteGraph.registerNodeType(typeName, MolecularNode);
     }
 
+    // ---- Merge graph data (add model without clearing) ----
+
+    function mergeGraphData(data, label) {
+        // Find offset: place new nodes to the right of existing content
+        let offsetX = 50, offsetY = 50;
+        if (graph._nodes.length > 0) {
+            let maxX = -Infinity;
+            for (const n of graph._nodes) {
+                const right = n.pos[0] + (n.size[0] || 200);
+                if (right > maxX) maxX = right;
+            }
+            offsetX = maxX + 100;
+            offsetY = 50;
+        }
+
+        // Find the bounding box of incoming nodes to calc relative offset
+        let srcMinX = Infinity, srcMinY = Infinity;
+        for (const nd of (data.nodes || [])) {
+            if (nd.pos[0] < srcMinX) srcMinX = nd.pos[0];
+            if (nd.pos[1] < srcMinY) srcMinY = nd.pos[1];
+        }
+
+        const idRemap = {};
+
+        // Create nodes
+        for (const nd of (data.nodes || [])) {
+            const newNode = LiteGraph.createNode(nd.type);
+            if (!newNode) { console.warn('Cannot create node type:', nd.type); continue; }
+
+            newNode.pos = [
+                offsetX + (nd.pos[0] - srcMinX),
+                offsetY + (nd.pos[1] - srcMinY)
+            ];
+
+            if (nd.properties) {
+                for (const [k, v] of Object.entries(nd.properties)) {
+                    newNode.properties[k] = v;
+                    if (newNode.widgets) {
+                        const w = newNode.widgets.find(w => w.name === k);
+                        if (w) w.value = v;
+                    }
+                }
+            }
+            if (nd.title) newNode.title = nd.title;
+
+            graph.add(newNode);
+            idRemap[nd.id] = newNode.id;
+        }
+
+        // Create links
+        for (const lk of (data.links || [])) {
+            const fromId = idRemap[lk[1]];
+            const toId = idRemap[lk[3]];
+            const fromNode = graph.getNodeById(fromId);
+            const toNode = graph.getNodeById(toId);
+            if (fromNode && toNode) {
+                fromNode.connect(lk[2], toNode, lk[4]);
+            }
+        }
+
+        // Wrap in a group
+        const createdNodes = Object.values(idRemap).map(id => graph.getNodeById(id)).filter(Boolean);
+        if (createdNodes.length > 0) {
+            let gx1 = Infinity, gy1 = Infinity, gx2 = -Infinity, gy2 = -Infinity;
+            for (const n of createdNodes) {
+                gx1 = Math.min(gx1, n.pos[0]);
+                gy1 = Math.min(gy1, n.pos[1]);
+                gx2 = Math.max(gx2, n.pos[0] + (n.size[0] || 200));
+                gy2 = Math.max(gy2, n.pos[1] + (n.size[1] || 100));
+            }
+            const pad = 30;
+            const group = new LGraphGroup();
+            group.title = label || 'Imported Model';
+            group.pos = [gx1 - pad, gy1 - pad - 20];
+            group.size = [gx2 - gx1 + pad * 2, gy2 - gy1 + pad * 2 + 20];
+            group.color = "#335577";
+            graph.add(group);
+        }
+
+        scheduleCompile();
+        updateStatus(`Added model: ${label} (${Object.keys(idRemap).length} nodes)`);
+    }
+
     // ---- Model Library ----
 
     async function loadModels() {
@@ -932,13 +1105,10 @@
                 nodeEl.style.borderLeftColor = model.color || '#e056a0';
                 nodeEl.innerHTML = `<div>${model.name}</div><div class="palette-node-desc">${model.description || ''}</div>`;
                 nodeEl.addEventListener('click', async () => {
-                    if (graph._nodes.length > 0 && !confirm(`Load "${model.name}"? This will replace the current graph.`)) return;
                     try {
                         const r = await fetch(`models/${model.file}`);
                         const data = await r.json();
-                        graph.configure(data);
-                        scheduleCompile();
-                        updateStatus(`Loaded model: ${model.name}`);
+                        mergeGraphData(data, model.name);
                     } catch (err) {
                         alert('Error loading model: ' + err.message);
                     }
@@ -1058,15 +1228,36 @@
         }
 
         // Remove the original molecular node
+        const label = node.title || def.name;
         graph.remove(node);
+
+        // Wrap exploded nodes in a group container
+        const createdNodes = Object.values(idRemap).map(id => graph.getNodeById(id)).filter(Boolean);
+        if (createdNodes.length > 0) {
+            let gx1 = Infinity, gy1 = Infinity, gx2 = -Infinity, gy2 = -Infinity;
+            for (const n of createdNodes) {
+                gx1 = Math.min(gx1, n.pos[0]);
+                gy1 = Math.min(gy1, n.pos[1]);
+                gx2 = Math.max(gx2, n.pos[0] + (n.size[0] || 200));
+                gy2 = Math.max(gy2, n.pos[1] + (n.size[1] || 100));
+            }
+            const pad = 30;
+            const group = new LGraphGroup();
+            group.title = label;
+            group.pos = [gx1 - pad, gy1 - pad - 20];
+            group.size = [gx2 - gx1 + pad * 2, gy2 - gy1 + pad * 2 + 20];
+            group.color = "#335577";
+            graph.add(group);
+        }
+
         scheduleCompile();
-        updateStatus(`Exploded "${node.title || def.name}" → ${subNodes.length} nodes`);
+        updateStatus(`Exploded "${label}" → ${subNodes.length} nodes`);
     }
 
     // ---- Context Menu Cleanup ----
 
     function getSelectedNodes() {
-        return graph._nodes.filter(n => n.is_selected);
+        return Object.values(graphCanvas.selected_nodes || {});
     }
 
     // Override canvas menu (right-click on empty space)

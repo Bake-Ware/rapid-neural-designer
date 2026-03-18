@@ -1,0 +1,160 @@
+{
+  "last_node_id": 7,
+  "last_link_id": 6,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "atomic/data/input_tensor",
+      "pos": [100, 50],
+      "size": [220, 130],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        { "name": "tensor", "type": "tensor", "links": [1] }
+      ],
+      "properties": {
+        "batch_size": 4,
+        "seq_len": 784,
+        "dtype": "float",
+        "vocab_size": 32000
+      },
+      "widgets_values": [4, 784, "float", 32000]
+    },
+    {
+      "id": 2,
+      "type": "molecular/linear",
+      "pos": [100, 250],
+      "size": [220, 130],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 1 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [2] }
+      ],
+      "title": "Linear 784->256",
+      "properties": {
+        "in_features": 784,
+        "out_features": 256,
+        "use_bias": true,
+        "init_std": 0.02
+      },
+      "widgets_values": [784, 256, true, 0.02]
+    },
+    {
+      "id": 3,
+      "type": "atomic/trig/relu",
+      "pos": [100, 440],
+      "size": [180, 60],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 2 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [3] }
+      ],
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "molecular/linear",
+      "pos": [100, 560],
+      "size": [220, 130],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 3 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [4] }
+      ],
+      "title": "Linear 256->128",
+      "properties": {
+        "in_features": 256,
+        "out_features": 128,
+        "use_bias": true,
+        "init_std": 0.02
+      },
+      "widgets_values": [256, 128, true, 0.02]
+    },
+    {
+      "id": 5,
+      "type": "atomic/trig/relu",
+      "pos": [100, 750],
+      "size": [180, 60],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 4 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [5] }
+      ],
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 6,
+      "type": "molecular/linear",
+      "pos": [100, 870],
+      "size": [220, 130],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 5 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [6] }
+      ],
+      "title": "Linear 128->10",
+      "properties": {
+        "in_features": 128,
+        "out_features": 10,
+        "use_bias": true,
+        "init_std": 0.02
+      },
+      "widgets_values": [128, 10, true, 0.02]
+    },
+    {
+      "id": 7,
+      "type": "atomic/data/output",
+      "pos": [100, 1060],
+      "size": [220, 60],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 6 }
+      ],
+      "outputs": [],
+      "properties": {
+        "label": "logits"
+      },
+      "widgets_values": ["logits"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "tensor"],
+    [2, 2, 0, 3, 0, "tensor"],
+    [3, 3, 0, 4, 0, "tensor"],
+    [4, 4, 0, 5, 0, "tensor"],
+    [5, 5, 0, 6, 0, "tensor"],
+    [6, 6, 0, 7, 0, "tensor"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "info": "MLP Classifier - 3-layer feedforward network (784->256->128->10) for MNIST-like classification."
+  },
+  "version": 0.4
+}

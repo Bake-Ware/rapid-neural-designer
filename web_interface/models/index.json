@@ -8,6 +8,55 @@
       "description": "4-layer LLaMA (dim=288, 6 heads, 32k vocab)",
       "file": "llama_mini.json",
       "color": "#e056a0"
+    },
+    {
+      "id": "mlp",
+      "name": "MLP Classifier",
+      "description": "3-layer feedforward (784->256->128->10) for MNIST-like classification",
+      "file": "mlp.json",
+      "color": "#4ecdc4"
+    },
+    {
+      "id": "cnn",
+      "name": "CNN Classifier",
+      "description": "Conv2D(1->32->64) + MaxPool + FC for 28x28 image classification",
+      "file": "cnn.json",
+      "color": "#45b7d1"
+    },
+    {
+      "id": "rnn",
+      "name": "RNN Classifier",
+      "description": "Embedding + RNN(128->256) + Linear for sequence classification",
+      "file": "rnn.json",
+      "color": "#f7dc6f"
+    },
+    {
+      "id": "gat",
+      "name": "GAT Node Classifier",
+      "description": "2-layer GAT (64->64->16, 4 heads) for graph node classification",
+      "file": "gat.json",
+      "color": "#bb8fce"
+    },
+    {
+      "id": "llada",
+      "name": "LLaDA Diffusion LM",
+      "description": "4-layer LLaDA diffusion transformer (dim=256, 4 heads, bidirectional attention, 32k vocab)",
+      "file": "llada.json",
+      "color": "#ff7043"
+    },
+    {
+      "id": "mamba",
+      "name": "Mamba SSM",
+      "description": "6-layer Mamba state space model (dim=256, state_dim=16, expand=2, 32k vocab)",
+      "file": "mamba.json",
+      "color": "#66bb6a"
+    },
+    {
+      "id": "qwen",
+      "name": "Qwen2.5-style LM",
+      "description": "4-layer Qwen2.5 transformer (dim=256, 8 query/2 KV heads GQA, 32k vocab)",
+      "file": "qwen.json",
+      "color": "#42a5f5"
     }
   ]
 }

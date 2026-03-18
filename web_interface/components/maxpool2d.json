@@ -1,0 +1,17 @@
+{
+  "name": "MaxPool2D",
+  "id": "maxpool2d",
+  "description": "2D max pooling",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "kernel_size", "type": "int", "default": 2, "description": "Pool kernel size" },
+    { "name": "stride", "type": "int", "default": 2, "description": "Pool stride" }
+  ],
+  "code": "_mp{{_id}}_bs, _mp{{_id}}_c, _mp{{_id}}_h, _mp{{_id}}_w = {{input}}.shape\n_mp{{_id}}_oh = (_mp{{_id}}_h - {{kernel_size}}) // {{stride}} + 1\n_mp{{_id}}_ow = (_mp{{_id}}_w - {{kernel_size}}) // {{stride}} + 1\n{{output}} = np.zeros((_mp{{_id}}_bs, _mp{{_id}}_c, _mp{{_id}}_oh, _mp{{_id}}_ow), dtype=np.float32)\nfor _mp{{_id}}_i in range(_mp{{_id}}_oh):\n    for _mp{{_id}}_j in range(_mp{{_id}}_ow):\n        _mp{{_id}}_rs = _mp{{_id}}_i * {{stride}}\n        _mp{{_id}}_cs = _mp{{_id}}_j * {{stride}}\n        {{output}}[:, :, _mp{{_id}}_i, _mp{{_id}}_j] = np.max({{input}}[:, :, _mp{{_id}}_rs:_mp{{_id}}_rs+{{kernel_size}}, _mp{{_id}}_cs:_mp{{_id}}_cs+{{kernel_size}}], axis=(2,3))",
+  "imports": ["import numpy as np"]
+}
