@@ -1,0 +1,29 @@
+{
+  "name": "Embedding",
+  "id": "embedding",
+  "description": "Token embedding lookup table",
+  "inputs": [
+    { "name": "token_ids", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "embeddings", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "vocab_size", "type": "int", "default": 32000, "description": "Vocabulary size" },
+    { "name": "dim", "type": "int", "default": 512, "description": "Embedding dimension" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight initialization std" }
+  ],
+  "code": "_emb{{_id}}_table = np.random.randn({{vocab_size}}, {{dim}}).astype(np.float32) * {{init_std}}\n{{embeddings}} = _emb{{_id}}_table[{{token_ids}}]",
+  "imports": ["import numpy as np"],
+  "graph": {
+    "nodes": [
+      { "id": 1, "type": "atomic/init/parameter", "title": "Embedding Table", "pos": [0, 0], "properties": { "shape": "32000,512", "init_std": 0.02, "label": "emb_table" } },
+      { "id": 2, "type": "atomic/data/embedding_lookup", "title": "Lookup", "pos": [280, 0], "properties": {} }
+    ],
+    "links": [
+      [1, 1, 0, 2, 1, "tensor"]
+    ],
+    "input_map": { "token_ids": { "node_id": 2, "slot": 0 } },
+    "output_map": { "embeddings": { "node_id": 2, "slot": 0 } }
+  }
+}

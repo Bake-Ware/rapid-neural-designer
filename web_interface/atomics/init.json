@@ -1,0 +1,138 @@
+[
+  {
+    "name": "RandomNormal",
+    "id": "random_normal",
+    "category": "init",
+    "description": "Create tensor with random normal values",
+    "inputs": [],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "shape", "type": "string", "default": "1,10,512", "description": "Shape as comma-separated ints" },
+      { "name": "mean", "type": "float", "default": 0.0, "description": "Mean of distribution" },
+      { "name": "std", "type": "float", "default": 0.02, "description": "Standard deviation" }
+    ],
+    "code": "{{result}} = np.random.randn({{shape}}).astype(np.float32) * {{std}} + {{mean}}",
+    "imports": ["import numpy as np"],
+    "color": "#fcbad3"
+  },
+  {
+    "name": "RandomUniform",
+    "id": "random_uniform",
+    "category": "init",
+    "description": "Create tensor with random uniform values",
+    "inputs": [],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "shape", "type": "string", "default": "1,10,512", "description": "Shape as comma-separated ints" },
+      { "name": "low", "type": "float", "default": 0.0, "description": "Lower bound" },
+      { "name": "high", "type": "float", "default": 1.0, "description": "Upper bound" }
+    ],
+    "code": "{{result}} = np.random.uniform({{low}}, {{high}}, ({{shape}})).astype(np.float32)",
+    "imports": ["import numpy as np"],
+    "color": "#fcbad3"
+  },
+  {
+    "name": "Zeros",
+    "id": "zeros",
+    "category": "init",
+    "description": "Create tensor of zeros",
+    "inputs": [],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "shape", "type": "string", "default": "1,10,512", "description": "Shape as comma-separated ints" }
+    ],
+    "code": "{{result}} = np.zeros(({{shape}}), dtype=np.float32)",
+    "imports": ["import numpy as np"],
+    "color": "#fcbad3"
+  },
+  {
+    "name": "Ones",
+    "id": "ones",
+    "category": "init",
+    "description": "Create tensor of ones",
+    "inputs": [],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "shape", "type": "string", "default": "1,10,512", "description": "Shape as comma-separated ints" }
+    ],
+    "code": "{{result}} = np.ones(({{shape}}), dtype=np.float32)",
+    "imports": ["import numpy as np"],
+    "color": "#fcbad3"
+  },
+  {
+    "name": "Constant",
+    "id": "constant",
+    "category": "init",
+    "description": "Create a scalar constant value",
+    "inputs": [],
+    "outputs": [
+      { "name": "result", "type": "scalar" }
+    ],
+    "properties": [
+      { "name": "const_value", "type": "float", "default": 1.0, "description": "Constant value" }
+    ],
+    "code": "{{result}} = {{const_value}}",
+    "imports": [],
+    "color": "#fcbad3"
+  },
+  {
+    "name": "Parameter",
+    "id": "parameter",
+    "category": "init",
+    "description": "Learnable parameter matrix (initialized with scaled random normal)",
+    "inputs": [],
+    "outputs": [
+      { "name": "weight", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "shape", "type": "string", "default": "512,512", "description": "Shape as comma-separated ints" },
+      { "name": "init_std", "type": "float", "default": 0.02, "description": "Initialization standard deviation" },
+      { "name": "label", "type": "string", "default": "W", "description": "Human-readable label for this parameter" }
+    ],
+    "code": "{{weight}} = np.random.randn({{shape}}).astype(np.float32) * {{init_std}}  # {{label}}",
+    "imports": ["import numpy as np"],
+    "color": "#fcbad3"
+  },
+  {
+    "name": "Arange",
+    "id": "arange",
+    "category": "init",
+    "description": "Create a 1D tensor of evenly spaced values",
+    "inputs": [],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "start", "type": "int", "default": 0, "description": "Start value" },
+      { "name": "end", "type": "int", "default": 512, "description": "End value (exclusive)" },
+      { "name": "step", "type": "int", "default": 1, "description": "Step size" }
+    ],
+    "code": "{{result}} = np.arange({{start}}, {{end}}, {{step}}, dtype=np.float32)",
+    "imports": ["import numpy as np"],
+    "color": "#fcbad3"
+  },
+  {
+    "name": "TriangularMask",
+    "id": "triangular_mask",
+    "category": "init",
+    "description": "Create a causal (lower triangular) mask for attention",
+    "inputs": [],
+    "outputs": [
+      { "name": "mask", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "size", "type": "int", "default": 512, "description": "Sequence length" }
+    ],
+    "code": "{{mask}} = np.tril(np.ones(({{size}}, {{size}}), dtype=np.float32))",
+    "imports": ["import numpy as np"],
+    "color": "#fcbad3"
+  }
+]

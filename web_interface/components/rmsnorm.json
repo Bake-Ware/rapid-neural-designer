@@ -1,0 +1,49 @@
+{
+  "name": "RMSNorm",
+  "id": "rmsnorm",
+  "description": "Root Mean Square Layer Normalization",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "dim", "type": "int", "default": 512, "description": "Normalization dimension" },
+    { "name": "eps", "type": "float", "default": 1e-6, "description": "Epsilon for numerical stability" }
+  ],
+  "code": "_rms{{_id}}_weight = np.ones({{dim}}, dtype=np.float32)\n_rms{{_id}}_var = np.mean({{input}} ** 2, axis=-1, keepdims=True)\n{{output}} = {{input}} * (1.0 / np.sqrt(_rms{{_id}}_var + {{eps}})) * _rms{{_id}}_weight",
+  "imports": ["import numpy as np"],
+  "graph": {
+    "nodes": [
+      { "id": 1, "type": "atomic/init/constant", "title": "exponent (2)", "pos": [0, 80], "properties": { "const_value": 2.0 } },
+      { "id": 2, "type": "atomic/math/power", "title": "x^2", "pos": [180, 0], "properties": {} },
+      { "id": 3, "type": "atomic/reduction/mean", "title": "mean(x^2)", "pos": [380, 0], "properties": { "axis": -1, "keepdims": true } },
+      { "id": 4, "type": "atomic/init/constant", "title": "epsilon", "pos": [180, 160], "properties": { "const_value": 1e-6 } },
+      { "id": 5, "type": "atomic/math/add", "title": "+ eps", "pos": [560, 0], "properties": {} },
+      { "id": 6, "type": "atomic/math/sqrt", "title": "sqrt", "pos": [740, 0], "properties": {} },
+      { "id": 7, "type": "atomic/math/reciprocal", "title": "1/sqrt", "pos": [900, 0], "properties": {} },
+      { "id": 8, "type": "atomic/math/multiply", "title": "x * (1/rms)", "pos": [1080, 0], "properties": {} },
+      { "id": 9, "type": "atomic/init/ones", "title": "weight (gamma)", "pos": [900, 120], "properties": { "shape": "512" } },
+      { "id": 10, "type": "atomic/math/multiply", "title": "* weight", "pos": [1260, 0], "properties": {} }
+    ],
+    "links": [
+      [1, 1, 0, 2, 1, "scalar"],
+      [2, 2, 0, 3, 0, "tensor"],
+      [3, 3, 0, 5, 0, "tensor"],
+      [4, 4, 0, 5, 1, "tensor"],
+      [5, 5, 0, 6, 0, "tensor"],
+      [6, 6, 0, 7, 0, "tensor"],
+      [7, 7, 0, 8, 1, "tensor"],
+      [8, 8, 0, 10, 0, "tensor"],
+      [9, 9, 0, 10, 1, "tensor"]
+    ],
+    "input_map": {
+      "input": [
+        { "node_id": 2, "slot": 0 },
+        { "node_id": 8, "slot": 0 }
+      ]
+    },
+    "output_map": { "output": { "node_id": 10, "slot": 0 } }
+  }
+}

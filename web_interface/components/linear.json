@@ -1,0 +1,71 @@
+{
+  "name": "Linear",
+  "id": "linear",
+  "description": "Learnable linear transformation: y = xW^T + b",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "in_features", "type": "int", "default": 512, "description": "Input dimension" },
+    { "name": "out_features", "type": "int", "default": 512, "description": "Output dimension" },
+    { "name": "use_bias", "type": "bool", "default": true, "description": "Include bias term" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight initialization std" }
+  ],
+  "code": "_w{{_id}} = np.random.randn({{out_features}}, {{in_features}}).astype(np.float32) * {{init_std}}\n{{output}} = np.matmul({{input}}, _w{{_id}}.T)\nif {{use_bias}}:\n    _b{{_id}} = np.zeros({{out_features}}, dtype=np.float32)\n    {{output}} = {{output}} + _b{{_id}}",
+  "imports": ["import numpy as np"],
+  "graph": {
+    "description": "Linear decomposed into atomics: Parameter -> Transpose -> MatMul -> Add(bias)",
+    "nodes": [
+      {
+        "id": 1,
+        "type": "atomic/init/parameter",
+        "title": "Weight",
+        "pos": [0, 0],
+        "properties": { "shape": "512,512", "init_std": 0.02, "label": "W" }
+      },
+      {
+        "id": 2,
+        "type": "atomic/shape/transpose",
+        "title": "W^T",
+        "pos": [250, 0],
+        "properties": { "axes": "" }
+      },
+      {
+        "id": 3,
+        "type": "atomic/math/matmul",
+        "title": "x @ W^T",
+        "pos": [250, 120],
+        "properties": {}
+      },
+      {
+        "id": 4,
+        "type": "atomic/init/parameter",
+        "title": "Bias",
+        "pos": [0, 240],
+        "properties": { "shape": "512", "init_std": 0.0, "label": "b" }
+      },
+      {
+        "id": 5,
+        "type": "atomic/math/add",
+        "title": "output + bias",
+        "pos": [500, 120],
+        "properties": {}
+      }
+    ],
+    "links": [
+      [1, 1, 0, 2, 0, "tensor"],
+      [2, 2, 0, 3, 1, "tensor"],
+      [3, 3, 0, 5, 0, "tensor"],
+      [4, 4, 0, 5, 1, "tensor"]
+    ],
+    "input_map": {
+      "input": { "node_id": 3, "slot": 0 }
+    },
+    "output_map": {
+      "output": { "node_id": 5, "slot": 0 }
+    }
+  }
+}

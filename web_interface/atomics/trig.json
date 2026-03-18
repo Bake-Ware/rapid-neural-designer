@@ -1,0 +1,125 @@
+[
+  {
+    "name": "Sin",
+    "id": "sin",
+    "category": "trig",
+    "description": "Element-wise sine",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = np.sin({{input}})",
+    "imports": ["import numpy as np"],
+    "color": "#f0a500"
+  },
+  {
+    "name": "Cos",
+    "id": "cos",
+    "category": "trig",
+    "description": "Element-wise cosine",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = np.cos({{input}})",
+    "imports": ["import numpy as np"],
+    "color": "#f0a500"
+  },
+  {
+    "name": "Tanh",
+    "id": "tanh",
+    "category": "trig",
+    "description": "Element-wise hyperbolic tangent",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = np.tanh({{input}})",
+    "imports": ["import numpy as np"],
+    "color": "#f0a500"
+  },
+  {
+    "name": "Sigmoid",
+    "id": "sigmoid",
+    "category": "trig",
+    "description": "Element-wise sigmoid (1 / (1 + e^-x))",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = 1.0 / (1.0 + np.exp(-{{input}}))",
+    "imports": ["import numpy as np"],
+    "color": "#f0a500"
+  },
+  {
+    "name": "SiLU",
+    "id": "silu",
+    "category": "trig",
+    "description": "SiLU / Swish activation (x * sigmoid(x))",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = {{input}} * (1.0 / (1.0 + np.exp(-{{input}})))",
+    "imports": ["import numpy as np"],
+    "color": "#f0a500"
+  },
+  {
+    "name": "ReLU",
+    "id": "relu",
+    "category": "trig",
+    "description": "Rectified linear unit: max(0, x)",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = np.maximum(0, {{input}})",
+    "imports": ["import numpy as np"],
+    "color": "#f0a500"
+  },
+  {
+    "name": "GELU",
+    "id": "gelu",
+    "category": "trig",
+    "description": "Gaussian Error Linear Unit activation",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = 0.5 * {{input}} * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * ({{input}} + 0.044715 * np.power({{input}}, 3))))",
+    "imports": ["import numpy as np"],
+    "color": "#f0a500"
+  },
+  {
+    "name": "Softmax",
+    "id": "softmax",
+    "category": "trig",
+    "description": "Softmax along an axis (numerically stable)",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": -1, "description": "Axis to apply softmax" }
+    ],
+    "code": "_sm{{_id}} = np.exp({{input}} - np.max({{input}}, axis={{axis}}, keepdims=True))\n{{result}} = _sm{{_id}} / np.sum(_sm{{_id}}, axis={{axis}}, keepdims=True)",
+    "imports": ["import numpy as np"],
+    "color": "#f0a500"
+  }
+]

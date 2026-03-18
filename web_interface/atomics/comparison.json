@@ -1,0 +1,86 @@
+[
+  {
+    "name": "GreaterThan",
+    "id": "greater_than",
+    "category": "comparison",
+    "description": "Element-wise greater than comparison",
+    "inputs": [
+      { "name": "A", "type": "tensor" },
+      { "name": "B", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = ({{A}} > {{B}}).astype(np.float32)",
+    "imports": ["import numpy as np"],
+    "color": "#f38181"
+  },
+  {
+    "name": "LessThan",
+    "id": "less_than",
+    "category": "comparison",
+    "description": "Element-wise less than comparison",
+    "inputs": [
+      { "name": "A", "type": "tensor" },
+      { "name": "B", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = ({{A}} < {{B}}).astype(np.float32)",
+    "imports": ["import numpy as np"],
+    "color": "#f38181"
+  },
+  {
+    "name": "Equal",
+    "id": "equal",
+    "category": "comparison",
+    "description": "Element-wise equality comparison",
+    "inputs": [
+      { "name": "A", "type": "tensor" },
+      { "name": "B", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = ({{A}} == {{B}}).astype(np.float32)",
+    "imports": ["import numpy as np"],
+    "color": "#f38181"
+  },
+  {
+    "name": "Where",
+    "id": "where",
+    "category": "comparison",
+    "description": "Conditional select: choose from A where condition is true, B otherwise",
+    "inputs": [
+      { "name": "condition", "type": "tensor" },
+      { "name": "A", "type": "tensor" },
+      { "name": "B", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = np.where({{condition}}, {{A}}, {{B}})",
+    "imports": ["import numpy as np"],
+    "color": "#f38181"
+  },
+  {
+    "name": "MaskedFill",
+    "id": "masked_fill",
+    "category": "comparison",
+    "description": "Fill tensor with a value where mask is true",
+    "inputs": [
+      { "name": "input", "type": "tensor" },
+      { "name": "mask", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "fill_value", "type": "float", "default": -1e9, "description": "Value to fill where mask is true" }
+    ],
+    "code": "{{result}} = np.where({{mask}}, {{fill_value}}, {{input}})",
+    "imports": ["import numpy as np"],
+    "color": "#f38181"
+  }
+]

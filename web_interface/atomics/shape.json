@@ -1,0 +1,169 @@
+[
+  {
+    "name": "Reshape",
+    "id": "reshape",
+    "category": "shape",
+    "description": "Reshape tensor to new dimensions",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "shape", "type": "string", "default": "-1", "description": "Target shape as comma-separated ints (e.g. '2,3,-1')" }
+    ],
+    "code": "{{result}} = {{input}}.reshape({{shape}})",
+    "imports": [],
+    "color": "#95e1d3"
+  },
+  {
+    "name": "Transpose",
+    "id": "transpose",
+    "category": "shape",
+    "description": "Permute tensor dimensions",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axes", "type": "string", "default": "", "description": "Axis order as comma-separated ints (e.g. '0,2,1,3'). Empty = reverse all." }
+    ],
+    "code": "{{result}} = np.transpose({{input}}, ({{axes}}))" ,
+    "imports": ["import numpy as np"],
+    "color": "#95e1d3"
+  },
+  {
+    "name": "Concat",
+    "id": "concat",
+    "category": "shape",
+    "description": "Concatenate two tensors along an axis",
+    "inputs": [
+      { "name": "A", "type": "tensor" },
+      { "name": "B", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": -1, "description": "Axis to concatenate along" }
+    ],
+    "code": "{{result}} = np.concatenate([{{A}}, {{B}}], axis={{axis}})",
+    "imports": ["import numpy as np"],
+    "color": "#95e1d3"
+  },
+  {
+    "name": "Split",
+    "id": "split",
+    "category": "shape",
+    "description": "Split tensor into two halves along an axis",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "first", "type": "tensor" },
+      { "name": "second", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": -1, "description": "Axis to split along" }
+    ],
+    "code": "{{first}}, {{second}} = np.split({{input}}, 2, axis={{axis}})",
+    "imports": ["import numpy as np"],
+    "color": "#95e1d3"
+  },
+  {
+    "name": "Slice",
+    "id": "slice",
+    "category": "shape",
+    "description": "Slice a range from a tensor along an axis",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": 0, "description": "Axis to slice along" },
+      { "name": "start", "type": "int", "default": 0, "description": "Start index" },
+      { "name": "end", "type": "string", "default": "None", "description": "End index (None for end)" }
+    ],
+    "code": "_sl{{_id}} = [slice(None)] * {{input}}.ndim\n_sl{{_id}}[{{axis}}] = slice({{start}}, {{end}})\n{{result}} = {{input}}[tuple(_sl{{_id}})]",
+    "imports": [],
+    "color": "#95e1d3"
+  },
+  {
+    "name": "Repeat",
+    "id": "repeat",
+    "category": "shape",
+    "description": "Repeat tensor along an axis",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "repeats", "type": "int", "default": 2, "description": "Number of repetitions" },
+      { "name": "axis", "type": "int", "default": 0, "description": "Axis to repeat along" }
+    ],
+    "code": "{{result}} = np.repeat({{input}}, {{repeats}}, axis={{axis}})",
+    "imports": ["import numpy as np"],
+    "color": "#95e1d3"
+  },
+  {
+    "name": "ExpandDims",
+    "id": "expand_dims",
+    "category": "shape",
+    "description": "Add a dimension at the specified axis",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": 0, "description": "Position for new axis" }
+    ],
+    "code": "{{result}} = np.expand_dims({{input}}, axis={{axis}})",
+    "imports": ["import numpy as np"],
+    "color": "#95e1d3"
+  },
+  {
+    "name": "Squeeze",
+    "id": "squeeze",
+    "category": "shape",
+    "description": "Remove dimensions of size 1",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "string", "default": "None", "description": "Axis to squeeze (None for all)" }
+    ],
+    "code": "{{result}} = np.squeeze({{input}}, axis={{axis}})",
+    "imports": ["import numpy as np"],
+    "color": "#95e1d3"
+  },
+  {
+    "name": "Broadcast",
+    "id": "broadcast",
+    "category": "shape",
+    "description": "Broadcast tensor to a target shape",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "shape", "type": "string", "default": "1,1,1", "description": "Target shape as comma-separated ints" }
+    ],
+    "code": "{{result}} = np.broadcast_to({{input}}, ({{shape}}))",
+    "imports": ["import numpy as np"],
+    "color": "#95e1d3"
+  }
+]

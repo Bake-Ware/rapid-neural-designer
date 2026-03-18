@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapid Neural Designer</title>
+
+    <!-- LiteGraph.js for node-based visual programming -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/build/litegraph.min.js"></script>
+
+    <!-- Monaco Editor for code display -->
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/editor/editor.main.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            color: #ffffff;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #header {
+            background: #2d2d30;
+            padding: 10px 20px;
+            border-bottom: 2px solid #007acc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            height: 50px;
+        }
+
+        #header h1 { font-size: 18px; color: #007acc; }
+        #header-right { display: flex; gap: 10px; align-items: center; }
+        #tabs { display: flex; gap: 3px; }
+
+        .tab {
+            background: transparent;
+            border: none;
+            color: #cccccc;
+            padding: 6px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab:hover { color: #ffffff; background: rgba(255,255,255,0.05); }
+        .tab.active { color: #007acc; border-bottom-color: #007acc; }
+
+        #controls { display: flex; gap: 8px; }
+
+        button {
+            background: #007acc;
+            border: none;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+
+        button:hover { background: #005a9e; }
+        button:active { background: #004578; }
+
+        #container {
+            height: calc(100vh - 50px);
+            position: relative;
+            display: flex;
+        }
+
+        .tab-content { display: none; height: 100%; width: 100%; }
+        .tab-content.active { display: flex; }
+
+        /* === Node Palette === */
+        #node-palette {
+            width: 260px;
+            background: #252526;
+            border-right: 1px solid #3e3e42;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .palette-category { border-bottom: 1px solid #3e3e42; }
+
+        .palette-category-header {
+            background: #2d2d30;
+            padding: 10px 14px;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .palette-category-header:hover { background: #3e3e42; }
+        .palette-category-content { padding: 6px 8px; display: none; }
+        .palette-category.expanded .palette-category-content { display: block; }
+        .palette-category.expanded .palette-arrow { transform: rotate(90deg); }
+
+        .palette-arrow {
+            font-size: 10px;
+            transition: transform 0.2s;
+            color: #888;
+        }
+
+        .palette-node {
+            background: #3e3e42;
+            padding: 7px 10px;
+            margin: 3px 0;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.15s;
+            border-left: 3px solid transparent;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .palette-node:hover {
+            background: #4e4e52;
+            transform: translateX(2px);
+        }
+
+        .palette-node-desc {
+            font-size: 10px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .palette-section-header {
+            background: #1e3a5f;
+            padding: 8px 14px;
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #6bb5ff;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        .palette-section-header:hover { background: #254a6f; }
+
+        .palette-section-header .section-arrow {
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+
+        .palette-section.collapsed .palette-section-content { display: none; }
+        .palette-section.collapsed .section-arrow { transform: rotate(-90deg); }
+
+        /* === Graph Canvas === */
+        #graph-canvas-wrapper { flex: 1; position: relative; }
+        #graph-canvas { width: 100%; height: 100%; }
+
+        /* === Code Tab === */
+        #code-container {
+            width: 100%;
+            height: 100%;
+            background: #1e1e1e;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #code-header {
+            background: #2d2d30;
+            padding: 8px 20px;
+            border-bottom: 1px solid #3e3e42;
+            font-weight: 600;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #code-actions { display: flex; gap: 8px; }
+
+        .run-button { background: #0e7a0d; }
+        .run-button:hover { background: #0c6b0b; }
+        .run-button:disabled { background: #555; cursor: not-allowed; }
+        .running { background: #cca700 !important; }
+
+        #code-output { flex: 1; overflow: hidden; position: relative; }
+        #monaco-editor { width: 100%; height: 100%; }
+
+        #execution-output {
+            background: #1e1e1e;
+            border-top: 2px solid #007acc;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        #execution-output.visible { display: block; }
+
+        #execution-header {
+            background: #2d2d30;
+            padding: 8px 20px;
+            border-bottom: 1px solid #3e3e42;
+            font-weight: 600;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #execution-content {
+            padding: 12px 20px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .exec-stdout { color: #d4d4d4; white-space: pre-wrap; }
+        .exec-stderr { color: #f48771; white-space: pre-wrap; }
+        .exec-info { color: #4ec9b0; padding: 3px 0; }
+        .exec-error { color: #f48771; padding: 3px 0; }
+
+        /* === Status bar === */
+        #status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #007acc;
+            padding: 3px 20px;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            z-index: 1000;
+        }
+
+        /* Custom LiteGraph dark theme */
+        .litegraph { background-color: #1e1e1e !important; }
+        .litecontextmenu { background: #252526 !important; border: 1px solid #3e3e42 !important; }
+        .litecontextmenu .litemenu-entry { color: #cccccc !important; }
+        .litecontextmenu .litemenu-entry:hover { background: #007acc !important; color: white !important; }
+        .litecontextmenu .litemenu-entry.disabled { color: #666 !important; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>Rapid Neural Designer</h1>
+        <div id="header-right">
+            <div id="tabs">
+                <button class="tab active" onclick="switchTab('graph')">Designer</button>
+                <button class="tab" onclick="switchTab('code')">Code</button>
+            </div>
+            <div id="controls">
+                <button onclick="saveGraph()">Save</button>
+                <button onclick="loadGraph()">Load</button>
+                <button onclick="clearGraph()">Clear</button>
+                <button onclick="copyCode()">Copy Code</button>
+                <button onclick="downloadCode()">Download .py</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="container">
+        <!-- Graph Designer Tab -->
+        <div id="graph-tab" class="tab-content active">
+            <div style="display:flex;width:100%;height:100%;">
+                <div id="node-palette">
+                    <div class="palette-section">
+                        <div class="palette-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <span>Primitives</span>
+                            <span class="section-arrow">▼</span>
+                        </div>
+                        <div class="palette-section-content" id="atomic-palette"></div>
+                    </div>
+                    <div class="palette-section">
+                        <div class="palette-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <span>Components</span>
+                            <span class="section-arrow">▼</span>
+                        </div>
+                        <div class="palette-section-content" id="molecular-palette">
+                            <div style="padding:12px;color:#888;font-size:11px;">
+                                No components loaded.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="palette-section">
+                        <div class="palette-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <span>Models</span>
+                            <span class="section-arrow">▼</span>
+                        </div>
+                        <div class="palette-section-content" id="model-palette">
+                            <div style="padding:12px;color:#888;font-size:11px;">
+                                No saved models found.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="graph-canvas-wrapper">
+                    <canvas id="graph-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Code Tab -->
+        <div id="code-tab" class="tab-content">
+            <div id="code-container">
+                <div id="code-header">
+                    <span>Generated Python Code</span>
+                    <div id="code-actions">
+                        <button id="run-button" class="run-button" onclick="runCode()">Run Code</button>
+                    </div>
+                </div>
+                <div id="code-output">
+                    <div id="monaco-editor"></div>
+                </div>
+                <div id="execution-output">
+                    <div id="execution-header">
+                        <span>Execution Output</span>
+                        <button onclick="clearExecutionOutput()" style="background:transparent;padding:2px 8px;">X</button>
+                    </div>
+                    <div id="execution-content"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="status-bar">
+        <span id="status-nodes">Nodes: 0</span>
+        <span id="status-info">Loading...</span>
+    </div>
+
+    <script>
+    // =========================================================================
+    // Rapid Neural Designer - Graph Editor
+    // Dynamically loads atomic components from JSON, compiles to Python
+    // via handlebars-style template substitution
+    // =========================================================================
+
+    let monacoEditor = null;
+    const atomicRegistry = {};   // id -> atomic definition
+    const molecularRegistry = {}; // id -> molecular definition
+
+    // ---- Monaco Editor Setup ----
+    require.config({
+        paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }
+    });
+
+    require(['vs/editor/editor.main'], function() {
+        monacoEditor = monaco.editor.create(document.getElementById('monaco-editor'), {
+            value: '# Build a graph in the Designer tab to generate code',
+            language: 'python',
+            theme: 'vs-dark',
+            automaticLayout: true,
+            readOnly: false,
+            minimap: { enabled: true },
+            fontSize: 13,
+            lineNumbers: 'on',
+            scrollBeyondLastLine: false,
+            renderWhitespace: 'selection'
+        });
+    });
+
+    // ---- LiteGraph Setup ----
+    LiteGraph.NODE_TITLE_HEIGHT = 26;
+    LiteGraph.NODE_SLOT_HEIGHT = 20;
+    LiteGraph.NODE_WIDTH = 200;
+    LiteGraph.NODE_TITLE_COLOR = "#2d2d30";
+    LiteGraph.NODE_DEFAULT_COLOR = "#3e3e42";
+    LiteGraph.DEFAULT_BACKGROUND_COLOR = "#1e1e1e";
+    LiteGraph.LINK_COLOR = "#5a9fd4";
+
+    const graph = new LGraph();
+    const canvasElement = document.getElementById("graph-canvas");
+    const graphCanvas = new LGraphCanvas(canvasElement, graph);
+
+    graphCanvas.allow_searchbox = true;
+    graphCanvas.allow_dragnodes = true;
+    graphCanvas.allow_interaction = true;
+    graphCanvas.render_shadows = false;
+    graphCanvas.background_image = null;
+
+    // Link rendering - thicker, more visible cables
+    graphCanvas.connections_width = 3;
+    graphCanvas.render_connections_border = true;
+    graphCanvas.render_curved_connections = true;
+    graphCanvas.render_connection_arrows = false;
+    graphCanvas.default_connection_color = { input_off: "#5a9fd488", input_on: "#7ab8e8", output_off: "#5a9fd488", output_on: "#7ab8e8" };
+    graphCanvas.highquality_render = true;
+
+    // Selection - multi-select with shift+click, box select with left-drag on empty
+    graphCanvas.multi_select = true;
+
+    function resizeCanvas() {
+        const wrapper = document.getElementById('graph-canvas-wrapper');
+        if (!wrapper) return;
+        const dpr = window.devicePixelRatio || 1;
+        canvasElement.width = wrapper.clientWidth * dpr;
+        canvasElement.height = wrapper.clientHeight * dpr;
+        canvasElement.style.width = wrapper.clientWidth + 'px';
+        canvasElement.style.height = wrapper.clientHeight + 'px';
+        if (graphCanvas) graphCanvas.resize();
+    }
+
+    setTimeout(resizeCanvas, 100);
+    window.addEventListener('resize', resizeCanvas);
+
+    // ---- Utility ----
+
+    function darkenColor(hex, factor) {
+        const r = parseInt(hex.slice(1,3), 16);
+        const g = parseInt(hex.slice(3,5), 16);
+        const b = parseInt(hex.slice(5,7), 16);
+        return '#' +
+            Math.round(r * factor).toString(16).padStart(2,'0') +
+            Math.round(g * factor).toString(16).padStart(2,'0') +
+            Math.round(b * factor).toString(16).padStart(2,'0');
+    }
+
+    function sanitizeName(name) {
+        return name.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[0-9]/, '_$&');
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ---- Dynamic Atomic Node Registration ----
+
+    function registerAtomic(atomic) {
+        atomicRegistry[atomic.id] = atomic;
+        const typeName = `atomic/${atomic.category}/${atomic.id}`;
+
+        function AtomicNode() {
+            const def = atomicRegistry[atomic.id];
+
+            for (const inp of def.inputs) {
+                this.addInput(inp.name, inp.type);
+            }
+            for (const out of def.outputs) {
+                this.addOutput(out.name, out.type);
+            }
+
+            this.properties = {};
+            if (def.properties) {
+                for (const prop of def.properties) {
+                    this.properties[prop.name] = prop.default;
+                    if (prop.type === 'bool') {
+                        this.addWidget("toggle", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); });
+                    } else if (prop.type === 'choice' && prop.options) {
+                        this.addWidget("combo", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); }, { values: prop.options });
+                    } else if (prop.type === 'int' || prop.type === 'float') {
+                        this.addWidget("number", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); }, { precision: prop.type === 'int' ? 0 : 3 });
+                    } else {
+                        this.addWidget("text", prop.name, String(prop.default), (v) => { this.properties[prop.name] = v; scheduleCompile(); });
+                    }
+                }
+            }
+
+            this._atomicDef = def;
+
+            if (def.color) {
+                this.color = def.color;
+                this.bgcolor = darkenColor(def.color, 0.35);
+            }
+        }
+
+        AtomicNode.title = atomic.name;
+        AtomicNode.desc = atomic.description || '';
+        AtomicNode.prototype.onExecute = function() {};
+        AtomicNode.prototype.onPropertyChanged = function() { scheduleCompile(); };
+
+        LiteGraph.registerNodeType(typeName, AtomicNode);
+        return typeName;
+    }
+
+    // ---- Load Atomics from JSON ----
+
+    async function loadAtomics() {
+        try {
+            const indexResp = await fetch('atomics/index.json');
+            const index = await indexResp.json();
+            const paletteEl = document.getElementById('atomic-palette');
+            paletteEl.innerHTML = '';
+
+            for (const [catId, catDef] of Object.entries(index.categories)) {
+                const catEl = document.createElement('div');
+                catEl.className = 'palette-category';
+                catEl.innerHTML = `
+                    <div class="palette-category-header">
+                        <span>${catDef.icon} ${catDef.label}</span>
+                        <span class="palette-arrow">&#9654;</span>
+                    </div>
+                    <div class="palette-category-content"></div>
+                `;
+                paletteEl.appendChild(catEl);
+
+                const headerEl = catEl.querySelector('.palette-category-header');
+                const contentEl = catEl.querySelector('.palette-category-content');
+                headerEl.addEventListener('click', () => catEl.classList.toggle('expanded'));
+
+                for (const file of catDef.files) {
+                    const resp = await fetch(`atomics/${file}`);
+                    const atomics = await resp.json();
+
+                    for (const atomic of atomics) {
+                        const typeName = registerAtomic(atomic);
+
+                        const nodeEl = document.createElement('div');
+                        nodeEl.className = 'palette-node';
+                        nodeEl.style.borderLeftColor = atomic.color || '#888';
+                        nodeEl.innerHTML = `<div>${atomic.name}</div>` +
+                            (atomic.description ? `<div class="palette-node-desc">${atomic.description}</div>` : '');
+                        nodeEl.addEventListener('click', () => addNodeToGraph(typeName));
+                        contentEl.appendChild(nodeEl);
+                    }
+                }
+            }
+
+            updateStatus(`Loaded ${Object.keys(atomicRegistry).length} atomics`);
+        } catch (err) {
+            console.error('Failed to load atomics:', err);
+            updateStatus('Error loading atomics: ' + err.message);
+        }
+    }
+
+    // ---- Add Node to Graph ----
+
+    function addNodeToGraph(typeName) {
+        const node = LiteGraph.createNode(typeName);
+        if (!node) { console.error('Failed to create node:', typeName); return; }
+
+        const area = graphCanvas.visible_area;
+        if (area) {
+            node.pos = [
+                area[0] + area[2] * 0.3 + (Math.random() - 0.5) * 150,
+                area[1] + area[3] * 0.3 + (Math.random() - 0.5) * 150
+            ];
+        } else {
+            node.pos = [300 + Math.random() * 200, 100 + Math.random() * 300];
+        }
+
+        graph.add(node);
+        scheduleCompile();
+    }
+
+    // ---- Graph-to-Code Compiler (Handlebars) ----
+
+    let compileTimer = null;
+
+    function scheduleCompile() {
+        clearTimeout(compileTimer);
+        compileTimer = setTimeout(compileGraph, 150);
+    }
+
+    function compileGraph() {
+        const nodes = graph._nodes;
+        if (!nodes || nodes.length === 0) {
+            setCode('# Build a graph in the Designer tab to generate code');
+            updateNodeCount(0);
+            return;
+        }
+        updateNodeCount(nodes.length);
+
+        try {
+            const code = compile(nodes, graph.links);
+            setCode(code);
+        } catch (err) {
+            setCode(`# Compilation error: ${err.message}\n# ${err.stack}`);
+        }
+    }
+
+    function compile(nodes, linksMap) {
+        // 1. Topological sort
+        const sorted = topologicalSort(nodes, linksMap);
+
+        // 2. Assign variable names to each output port
+        const varNames = {};  // "nodeId:slotIndex" -> variable name
+        const usedNames = new Set();
+
+        for (const node of sorted) {
+            const def = node._atomicDef || node._molecularDef;
+            if (!def) continue;
+
+            for (let i = 0; i < def.outputs.length; i++) {
+                const defId = def.id || def.name?.toLowerCase().replace(/\s+/g, '_') || 'node';
+                const baseName = sanitizeName(`${defId}_${node.id}_${def.outputs[i].name}`);
+                let name = baseName;
+                let c = 2;
+                while (usedNames.has(name)) { name = `${baseName}_${c++}`; }
+                usedNames.add(name);
+                varNames[`${node.id}:${i}`] = name;
+            }
+        }
+
+        // 3. Resolve inputs via wires, substitute into code templates
+        const codeLines = [];
+        const allImports = new Set();
+
+        for (const node of sorted) {
+            const def = node._atomicDef || node._molecularDef;
+            if (!def) continue;
+
+            if (def.imports) {
+                for (const imp of def.imports) allImports.add(imp);
+            }
+
+            const subs = {};
+
+            // Special: {{_id}} for unique temp variable scoping
+            subs['_id'] = String(node.id);
+
+            // Output variables
+            for (let i = 0; i < def.outputs.length; i++) {
+                subs[def.outputs[i].name] = varNames[`${node.id}:${i}`];
+            }
+
+            // Input variables (trace wires)
+            for (let i = 0; i < def.inputs.length; i++) {
+                const inputName = def.inputs[i].name;
+                const linkId = (node.inputs[i] && node.inputs[i].link != null) ? node.inputs[i].link : null;
+
+                if (linkId !== null && linksMap[linkId]) {
+                    const link = linksMap[linkId];
+                    const sourceVar = varNames[`${link.origin_id}:${link.origin_slot}`];
+                    subs[inputName] = sourceVar || `None  # unresolved: ${inputName}`;
+                } else {
+                    subs[inputName] = `None  # disconnected: ${inputName}`;
+                }
+            }
+
+            // Properties
+            if (def.properties) {
+                for (const prop of def.properties) {
+                    let val = node.properties[prop.name];
+                    if (val === undefined) val = prop.default;
+                    subs[prop.name] = (prop.type === 'bool') ? (val ? 'True' : 'False') : String(val);
+                }
+            }
+
+            // Handlebars substitution
+            let code = def.code;
+            for (const [key, value] of Object.entries(subs)) {
+                code = code.replace(new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, 'g'), value);
+            }
+
+            const label = node._molecularMeta ? node._molecularMeta.name : def.name;
+            codeLines.push(`# [${label}] node:${node.id}`);
+            codeLines.push(code);
+            codeLines.push('');
+        }
+
+        // 4. Assemble
+        let script = `# Generated by Rapid Neural Designer\n`;
+        script += `# ${new Date().toISOString()}\n\n`;
+
+        const sortedImports = Array.from(allImports).sort();
+        if (sortedImports.length > 0) {
+            script += sortedImports.join('\n') + '\n\n';
+        }
+
+        script += codeLines.join('\n');
+        script += `\nprint("Model execution complete.")`;
+
+        return script;
+    }
+
+    function escapeRegex(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function topologicalSort(nodes, linksMap) {
+        const inDegree = {};
+        const adjList = {};
+        const nodeMap = {};
+
+        for (const node of nodes) {
+            nodeMap[node.id] = node;
+            inDegree[node.id] = 0;
+            adjList[node.id] = [];
+        }
+
+        if (linksMap) {
+            for (const linkId in linksMap) {
+                const link = linksMap[linkId];
+                if (!link || !nodeMap[link.origin_id] || !nodeMap[link.target_id]) continue;
+                inDegree[link.target_id]++;
+                adjList[link.origin_id].push(link.target_id);
+            }
+        }
+
+        // Kahn's algorithm
+        const queue = [];
+        for (const id in inDegree) {
+            if (inDegree[id] === 0) queue.push(parseInt(id));
+        }
+
+        const sorted = [];
+        while (queue.length > 0) {
+            const id = queue.shift();
+            if (nodeMap[id]) sorted.push(nodeMap[id]);
+            for (const depId of adjList[id]) {
+                inDegree[depId]--;
+                if (inDegree[depId] === 0) queue.push(depId);
+            }
+        }
+
+        // Append any remaining (cycle or disconnected)
+        for (const node of nodes) {
+            if (!sorted.includes(node)) sorted.push(node);
+        }
+
+        return sorted;
+    }
+
+    // ---- UI Helpers ----
+
+    function setCode(code) { if (monacoEditor) monacoEditor.setValue(code); }
+    function updateNodeCount(n) { document.getElementById('status-nodes').textContent = `Nodes: ${n}`; }
+    function updateStatus(msg) { document.getElementById('status-info').textContent = msg; }
+
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        event.target.classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById(tabName + '-tab').classList.add('active');
+        if (tabName === 'graph') setTimeout(resizeCanvas, 50);
+        if (tabName === 'code') compileGraph();
+    }
+
+    // ---- File Operations ----
+
+    function saveGraph() {
+        const data = JSON.stringify(graph.serialize(), null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'rnd_graph.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function loadGraph() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = e => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = event => {
+                try {
+                    graph.configure(JSON.parse(event.target.result));
+                    scheduleCompile();
+                    updateStatus('Loaded: ' + file.name);
+                } catch (err) {
+                    alert('Error loading graph: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    }
+
+    function clearGraph() {
+        if (confirm('Clear entire graph?')) {
+            graph.clear();
+            scheduleCompile();
+        }
+    }
+
+    function copyCode() {
+        const code = monacoEditor ? monacoEditor.getValue() : '';
+        navigator.clipboard.writeText(code).then(() => updateStatus('Code copied'));
+    }
+
+    function downloadCode() {
+        const code = monacoEditor ? monacoEditor.getValue() : '';
+        const blob = new Blob([code], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'rnd_model.py';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // ---- Backend Execution ----
+
+    const BACKEND_URL = 'http://localhost:5000';
+
+    async function runCode() {
+        const code = monacoEditor ? monacoEditor.getValue() : '';
+        const btn = document.getElementById('run-button');
+        const outEl = document.getElementById('execution-output');
+        const contentEl = document.getElementById('execution-content');
+
+        if (!code.trim()) { alert('No code to run'); return; }
+
+        btn.disabled = true;
+        btn.classList.add('running');
+        btn.textContent = 'Running...';
+        outEl.classList.add('visible');
+        contentEl.innerHTML = '<div class="exec-info">Executing...</div>';
+
+        try {
+            const resp = await fetch(`${BACKEND_URL}/execute`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+            const result = await resp.json();
+            let html = '';
+            if (result.success) {
+                html += `<div class="exec-info">Completed in ${result.execution_time}s</div>`;
+                if (result.stdout) html += `<div class="exec-stdout">${escapeHtml(result.stdout)}</div>`;
+                if (result.stderr) html += `<div class="exec-stderr">${escapeHtml(result.stderr)}</div>`;
+            } else {
+                html += `<div class="exec-error">Failed</div>`;
+                if (result.error) html += `<div class="exec-error">${escapeHtml(result.error)}</div>`;
+                if (result.stderr) html += `<div class="exec-stderr">${escapeHtml(result.stderr)}</div>`;
+            }
+            contentEl.innerHTML = html;
+        } catch (err) {
+            contentEl.innerHTML = `<div class="exec-error">Cannot connect to backend</div><div class="exec-info">Run: python backend.py</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.classList.remove('running');
+            btn.textContent = 'Run Code';
+        }
+    }
+
+    function clearExecutionOutput() {
+        document.getElementById('execution-output').classList.remove('visible');
+    }
+
+    // ---- Molecular Components ----
+
+    async function loadMolecularComponents() {
+        try {
+            const resp = await fetch('components/index.json');
+            if (!resp.ok) return;
+
+            const index = await resp.json();
+            const paletteEl = document.getElementById('molecular-palette');
+            paletteEl.innerHTML = '';
+
+            for (const comp of index.components) {
+                const compResp = await fetch(`components/${comp.file}`);
+                const compDef = await compResp.json();
+                molecularRegistry[comp.id] = compDef;
+                registerMolecular(comp, compDef);
+
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'palette-node';
+                nodeEl.style.borderLeftColor = comp.color || '#6bb5ff';
+                nodeEl.innerHTML = `<div>${comp.name}</div><div class="palette-node-desc">${comp.description || ''}</div>`;
+                nodeEl.addEventListener('click', () => addNodeToGraph(`molecular/${comp.id}`));
+                paletteEl.appendChild(nodeEl);
+            }
+
+            updateStatus(`Loaded ${index.components.length} molecular components`);
+        } catch (err) {
+            console.log('No molecular components found (components/index.json missing)');
+        }
+    }
+
+    function registerMolecular(meta, compDef) {
+        const typeName = `molecular/${meta.id}`;
+
+        function MolecularNode() {
+            if (compDef.inputs) {
+                for (const inp of compDef.inputs) this.addInput(inp.name, inp.type);
+            }
+            if (compDef.outputs) {
+                for (const out of compDef.outputs) this.addOutput(out.name, out.type);
+            }
+            this.properties = {};
+            if (compDef.properties) {
+                for (const prop of compDef.properties) {
+                    this.properties[prop.name] = prop.default;
+                    if (prop.type === 'bool') {
+                        this.addWidget("toggle", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); });
+                    } else if (prop.type === 'choice' && prop.options) {
+                        this.addWidget("combo", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); }, { values: prop.options });
+                    } else if (prop.type === 'int' || prop.type === 'float') {
+                        this.addWidget("number", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); }, { precision: prop.type === 'int' ? 0 : 3 });
+                    } else {
+                        this.addWidget("text", prop.name, String(prop.default), (v) => { this.properties[prop.name] = v; scheduleCompile(); });
+                    }
+                }
+            }
+            this._molecularDef = compDef;
+            this._molecularMeta = meta;
+            this.color = meta.color || '#6bb5ff';
+            this.bgcolor = darkenColor(this.color, 0.35);
+        }
+
+        MolecularNode.title = meta.name;
+        MolecularNode.desc = meta.description || '';
+        MolecularNode.prototype.onExecute = function() {};
+        MolecularNode.prototype.onPropertyChanged = function() { scheduleCompile(); };
+
+        LiteGraph.registerNodeType(typeName, MolecularNode);
+    }
+
+    // ---- Model Library ----
+
+    async function loadModels() {
+        try {
+            const resp = await fetch('models/index.json');
+            if (!resp.ok) return;
+
+            const index = await resp.json();
+            const paletteEl = document.getElementById('model-palette');
+            paletteEl.innerHTML = '';
+
+            for (const model of index.models) {
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'palette-node';
+                nodeEl.style.borderLeftColor = model.color || '#e056a0';
+                nodeEl.innerHTML = `<div>${model.name}</div><div class="palette-node-desc">${model.description || ''}</div>`;
+                nodeEl.addEventListener('click', async () => {
+                    if (graph._nodes.length > 0 && !confirm(`Load "${model.name}"? This will replace the current graph.`)) return;
+                    try {
+                        const r = await fetch(`models/${model.file}`);
+                        const data = await r.json();
+                        graph.configure(data);
+                        scheduleCompile();
+                        updateStatus(`Loaded model: ${model.name}`);
+                    } catch (err) {
+                        alert('Error loading model: ' + err.message);
+                    }
+                });
+                paletteEl.appendChild(nodeEl);
+            }
+        } catch (err) {
+            console.log('No models found (models/index.json missing)');
+        }
+    }
+
+    // ---- Explode Molecular into Atomics ----
+
+    function explodeMolecular(node) {
+        const def = node._molecularDef;
+        if (!def || !def.graph) {
+            updateStatus('This molecular has no expandable graph definition');
+            return;
+        }
+
+        const subNodes = def.graph.nodes;
+        const subLinks = def.graph.links;
+        const rawInputMap = def.graph.input_map || {};
+        const rawOutputMap = def.graph.output_map || {};
+
+        // Normalize maps: ensure values are always arrays of {node_id, slot}
+        const inputMap = {};
+        for (const [k, v] of Object.entries(rawInputMap)) {
+            inputMap[k] = Array.isArray(v) ? v : [v];
+        }
+        const outputMap = {};
+        for (const [k, v] of Object.entries(rawOutputMap)) {
+            outputMap[k] = Array.isArray(v) ? v : [v];
+        }
+
+        const baseX = node.pos[0];
+        const baseY = node.pos[1];
+        const idRemap = {};
+
+        // Create all internal nodes
+        for (const sn of subNodes) {
+            const newNode = LiteGraph.createNode(sn.type);
+            if (!newNode) { console.warn('Cannot create node type:', sn.type); continue; }
+
+            newNode.pos = [baseX + (sn.pos?.[0] || 0), baseY + (sn.pos?.[1] || 0)];
+            if (sn.properties) {
+                for (const [k, v] of Object.entries(sn.properties)) {
+                    newNode.properties[k] = v;
+                    // Update widget values to match
+                    if (newNode.widgets) {
+                        const w = newNode.widgets.find(w => w.name === k);
+                        if (w) w.value = v;
+                    }
+                }
+            }
+            if (sn.title) newNode.title = sn.title;
+            graph.add(newNode);
+            idRemap[sn.id] = newNode.id;
+        }
+
+        // Create internal links
+        if (subLinks) {
+            for (const sl of subLinks) {
+                const fromNode = graph.getNodeById(idRemap[sl[1]]);
+                const toNode = graph.getNodeById(idRemap[sl[3]]);
+                if (fromNode && toNode) {
+                    fromNode.connect(sl[2], toNode, sl[4]);
+                }
+            }
+        }
+
+        // Reconnect external inputs (supports one-to-many via array maps)
+        if (node.inputs) {
+            for (let i = 0; i < node.inputs.length; i++) {
+                const inp = node.inputs[i];
+                if (inp.link == null) continue;
+                const link = graph.links[inp.link];
+                if (!link) continue;
+
+                const mappings = inputMap[inp.name];
+                if (!mappings) continue;
+
+                const srcNode = graph.getNodeById(link.origin_id);
+                if (!srcNode) continue;
+
+                for (const mapping of mappings) {
+                    const dstNode = graph.getNodeById(idRemap[mapping.node_id]);
+                    if (dstNode) {
+                        srcNode.connect(link.origin_slot, dstNode, mapping.slot);
+                    }
+                }
+            }
+        }
+
+        // Reconnect external outputs (supports many-from-one)
+        if (node.outputs) {
+            for (let i = 0; i < node.outputs.length; i++) {
+                const out = node.outputs[i];
+                if (!out.links || out.links.length === 0) continue;
+
+                const mappings = outputMap[out.name];
+                if (!mappings || mappings.length === 0) continue;
+                const mapping = mappings[0]; // output comes from one internal node
+
+                const srcNode = graph.getNodeById(idRemap[mapping.node_id]);
+                if (!srcNode) continue;
+
+                for (const linkId of [...out.links]) {
+                    const link = graph.links[linkId];
+                    if (!link) continue;
+                    const dstNode = graph.getNodeById(link.target_id);
+                    if (dstNode) {
+                        srcNode.connect(mapping.slot, dstNode, link.target_slot);
+                    }
+                }
+            }
+        }
+
+        // Remove the original molecular node
+        graph.remove(node);
+        scheduleCompile();
+        updateStatus(`Exploded "${node.title || def.name}" → ${subNodes.length} nodes`);
+    }
+
+    // ---- Context Menu Cleanup ----
+
+    function getSelectedNodes() {
+        return graph._nodes.filter(n => n.is_selected);
+    }
+
+    // Override canvas menu (right-click on empty space)
+    graphCanvas.getCanvasMenuOptions = function() {
+        const options = [];
+        const selected = getSelectedNodes();
+
+        // Add Atomics submenu (grouped by category)
+        const catGroups = {};
+        for (const [id, def] of Object.entries(atomicRegistry)) {
+            const cat = def.category;
+            if (!catGroups[cat]) catGroups[cat] = [];
+            catGroups[cat].push({ content: def.name, callback: () => addNodeToGraph(`atomic/${def.category}/${def.id}`) });
+        }
+        const atomicSubs = [];
+        for (const [cat, items] of Object.entries(catGroups)) {
+            atomicSubs.push({ content: cat.charAt(0).toUpperCase() + cat.slice(1), has_submenu: true, submenu: { options: items } });
+        }
+        options.push({ content: 'Add Primitive', has_submenu: true, submenu: { options: atomicSubs } });
+
+        // Add Moleculars submenu
+        const molSubs = [];
+        for (const [id, def] of Object.entries(molecularRegistry)) {
+            molSubs.push({ content: def.name, callback: () => addNodeToGraph(`molecular/${id}`) });
+        }
+        if (molSubs.length > 0) {
+            options.push({ content: 'Add Component', has_submenu: true, submenu: { options: molSubs } });
+        }
+
+        // Selection operations
+        if (selected.length > 1) {
+            options.push(null);
+            options.push({ content: `Condense (${selected.length} nodes)`, callback: () => createMolecularFromSelection(selected) });
+            options.push({ content: `Delete Selected (${selected.length})`, callback: () => {
+                for (const n of selected) graph.remove(n);
+                scheduleCompile();
+            }});
+        }
+
+        options.push(null);
+        options.push({ content: 'Select All', callback: () => {
+            for (const n of graph._nodes) n.is_selected = true;
+            graphCanvas.setDirty(true, true);
+        }});
+        options.push({ content: 'Deselect All', callback: () => {
+            for (const n of graph._nodes) n.is_selected = false;
+            graphCanvas.setDirty(true, true);
+        }});
+        options.push({ content: 'Clear Graph', callback: () => clearGraph() });
+
+        return options;
+    };
+
+    // Override node menu (right-click on a node)
+    graphCanvas.getNodeMenuOptions = function(node) {
+        const options = [];
+        const selected = getSelectedNodes();
+
+        // If multiple selected and this node is one of them, show group options
+        if (selected.length > 1 && node.is_selected) {
+            options.push({ content: `Condense (${selected.length} nodes)`, callback: () => createMolecularFromSelection(selected) });
+            options.push(null);
+        }
+
+        options.push({ content: 'Clone', callback: () => {
+            const clone = LiteGraph.createNode(node.type);
+            if (clone) {
+                clone.pos = [node.pos[0] + 30, node.pos[1] + 30];
+                if (node.properties) {
+                    for (const [k, v] of Object.entries(node.properties)) clone.properties[k] = v;
+                }
+                graph.add(clone);
+                scheduleCompile();
+            }
+        }});
+
+        // Explode option for molecular nodes
+        if (node._molecularDef) {
+            const hasDef = node._molecularDef.graph;
+            options.push({
+                content: hasDef ? 'Explode' : 'Explode (no definition)',
+                disabled: !hasDef,
+                callback: () => explodeMolecular(node)
+            });
+            options.push({ content: 'Save to File', callback: () => saveMolecularToFile(node) });
+        }
+
+        options.push(null);
+
+        options.push({ content: 'Rename', callback: () => {
+            const name = prompt('Node title:', node.title || '');
+            if (name !== null) { node.title = name; graphCanvas.setDirty(true, true); }
+        }});
+
+        options.push({ content: 'Delete', callback: () => {
+            graph.remove(node);
+            scheduleCompile();
+        }});
+
+        return options;
+    };
+
+    // Disable default LiteGraph search box (it shows built-in types)
+    graphCanvas.allow_searchbox = false;
+
+    // ---- Create Molecular from Selection ----
+
+    function createMolecularFromSelection(selectedNodes) {
+        const name = prompt('Component name:');
+        if (!name || !name.trim()) return;
+
+        const cleanName = name.trim();
+        const id = cleanName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        const selectedIds = new Set(selectedNodes.map(n => n.id));
+
+        // Bounding box for relative positioning
+        let minX = Infinity, minY = Infinity, cx = 0, cy = 0;
+        for (const n of selectedNodes) {
+            if (n.pos[0] < minX) minX = n.pos[0];
+            if (n.pos[1] < minY) minY = n.pos[1];
+            cx += n.pos[0]; cy += n.pos[1];
+        }
+        cx /= selectedNodes.length;
+        cy /= selectedNodes.length;
+
+        // Build internal node list
+        const internalNodes = [];
+        const idMap = {};
+        let seqId = 1;
+
+        for (const n of selectedNodes) {
+            idMap[n.id] = seqId;
+            const nodeDef = {
+                id: seqId,
+                type: n.type,
+                pos: [Math.round(n.pos[0] - minX), Math.round(n.pos[1] - minY)],
+                properties: { ...n.properties }
+            };
+            if (n.title) nodeDef.title = n.title;
+            internalNodes.push(nodeDef);
+            seqId++;
+        }
+
+        // Scan wires to find internal links, external inputs, external outputs
+        const internalLinks = [];
+        let linkSeq = 1;
+        const externalInputs = {};     // inputName -> [{node_id, slot}]
+        const externalOutputs = {};    // outputName -> {node_id, slot}
+        const incomingWires = [];      // [{srcNodeId, srcSlot, inputName}]
+        const outgoingWires = [];      // [{outputName, dstNodeId, dstSlot}]
+        const inputNameCount = {};
+
+        for (const n of selectedNodes) {
+            if (n.inputs) {
+                for (let i = 0; i < n.inputs.length; i++) {
+                    const inp = n.inputs[i];
+                    if (inp.link == null) continue;
+                    const link = graph.links[inp.link];
+                    if (!link) continue;
+
+                    if (selectedIds.has(link.origin_id)) {
+                        internalLinks.push([linkSeq++, idMap[link.origin_id], link.origin_slot, idMap[n.id], i, inp.type || 'tensor']);
+                    } else {
+                        // Deduplicate input names if multiple nodes have same-named inputs
+                        let inputName = inp.name || 'input';
+                        if (inputNameCount[inputName]) {
+                            inputNameCount[inputName]++;
+                            inputName = `${inputName}_${inputNameCount[inputName]}`;
+                        } else {
+                            inputNameCount[inputName] = 1;
+                        }
+                        if (!externalInputs[inputName]) externalInputs[inputName] = [];
+                        externalInputs[inputName].push({ node_id: idMap[n.id], slot: i });
+                        incomingWires.push({ srcNodeId: link.origin_id, srcSlot: link.origin_slot, inputName });
+                    }
+                }
+            }
+            if (n.outputs) {
+                for (let i = 0; i < n.outputs.length; i++) {
+                    const out = n.outputs[i];
+                    if (!out.links || out.links.length === 0) continue;
+                    for (const linkId of out.links) {
+                        const link = graph.links[linkId];
+                        if (link && !selectedIds.has(link.target_id)) {
+                            const outputName = out.name || 'output';
+                            if (!externalOutputs[outputName]) {
+                                externalOutputs[outputName] = { node_id: idMap[n.id], slot: i };
+                            }
+                            outgoingWires.push({ outputName, dstNodeId: link.target_id, dstSlot: link.target_slot });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Build code template by mini-compiling the sub-graph
+        const inputs = Object.keys(externalInputs).map(n => ({ name: n, type: 'tensor' }));
+        const outputs = Object.keys(externalOutputs).map(n => ({ name: n, type: 'tensor' }));
+        const codeResult = compileMolecularCode(selectedNodes, selectedIds, inputs, outputs);
+
+        const molecularDef = {
+            name: cleanName,
+            id: id,
+            description: `Custom molecular: ${cleanName}`,
+            inputs: inputs,
+            outputs: outputs,
+            properties: [],
+            code: codeResult.code,
+            imports: codeResult.imports,
+            graph: {
+                nodes: internalNodes,
+                links: internalLinks,
+                input_map: externalInputs,
+                output_map: externalOutputs
+            }
+        };
+
+        // Register the new molecular type dynamically
+        const meta = { id, name: cleanName, description: molecularDef.description, color: '#c678dd' };
+        molecularRegistry[id] = molecularDef;
+        registerMolecular(meta, molecularDef);
+
+        // Add to palette
+        const paletteEl = document.getElementById('molecular-palette');
+        // Clear placeholder text if present
+        if (paletteEl.querySelector('div[style]')) {
+            const placeholder = paletteEl.querySelector('div[style*="color:#888"]');
+            if (placeholder) placeholder.remove();
+        }
+        const nodeEl = document.createElement('div');
+        nodeEl.className = 'palette-node';
+        nodeEl.style.borderLeftColor = meta.color;
+        nodeEl.innerHTML = `<div>${cleanName}</div><div class="palette-node-desc">${molecularDef.description}</div>`;
+        nodeEl.addEventListener('click', () => addNodeToGraph(`molecular/${id}`));
+        paletteEl.appendChild(nodeEl);
+
+        // Create the new molecular node at the center of the selection
+        const newNode = LiteGraph.createNode(`molecular/${id}`);
+        if (!newNode) { updateStatus('Error: could not create molecular node'); return; }
+        newNode.pos = [cx - 100, cy - 30];
+        graph.add(newNode);
+
+        // Reconnect incoming wires to the new node's input ports
+        const inputNames = inputs.map(i => i.name);
+        for (const wire of incomingWires) {
+            const srcNode = graph.getNodeById(wire.srcNodeId);
+            const slotIdx = inputNames.indexOf(wire.inputName);
+            if (srcNode && slotIdx >= 0) {
+                srcNode.connect(wire.srcSlot, newNode, slotIdx);
+            }
+        }
+
+        // Reconnect outgoing wires from the new node's output ports
+        const outputNames = outputs.map(o => o.name);
+        for (const wire of outgoingWires) {
+            const dstNode = graph.getNodeById(wire.dstNodeId);
+            const slotIdx = outputNames.indexOf(wire.outputName);
+            if (dstNode && slotIdx >= 0) {
+                newNode.connect(slotIdx, dstNode, wire.dstSlot);
+            }
+        }
+
+        // Remove original selected nodes
+        for (const n of selectedNodes) {
+            graph.remove(n);
+        }
+
+        scheduleCompile();
+        updateStatus(`Condensed ${internalNodes.length} nodes → "${cleanName}"`);
+    }
+
+    function compileMolecularCode(nodes, nodeIds, extInputs, extOutputs) {
+        // Mini-compile a sub-graph into a code template with handlebars
+        const sorted = [];
+        const visited = new Set();
+
+        // Simple topo sort within selection
+        function visit(n) {
+            if (visited.has(n.id)) return;
+            visited.add(n.id);
+            if (n.inputs) {
+                for (const inp of n.inputs) {
+                    if (inp.link == null) continue;
+                    const link = graph.links[inp.link];
+                    if (link && nodeIds.has(link.origin_id)) {
+                        const srcNode = graph.getNodeById(link.origin_id);
+                        if (srcNode) visit(srcNode);
+                    }
+                }
+            }
+            sorted.push(n);
+        }
+        for (const n of nodes) visit(n);
+
+        // Assign internal variable names
+        const varNames = {};
+        const usedNames = new Set();
+        for (const n of sorted) {
+            const def = n._atomicDef || n._molecularDef;
+            if (!def || !def.outputs) continue;
+            for (let i = 0; i < def.outputs.length; i++) {
+                const defId = def.id || 'n';
+                const base = sanitizeName(`_m{{_id}}_${defId}_${def.outputs[i].name}`);
+                let vn = base;
+                let c = 2;
+                while (usedNames.has(vn)) vn = `${base}_${c++}`;
+                usedNames.add(vn);
+                varNames[`${n.id}:${i}`] = vn;
+            }
+        }
+
+        // Check which outputs are the molecular's external outputs and remap to handlebars
+        const outputNodeSlots = {};
+        for (const n of sorted) {
+            const def = n._atomicDef || n._molecularDef;
+            if (!def || !n.outputs) continue;
+            for (let i = 0; i < n.outputs.length; i++) {
+                const out = n.outputs[i];
+                if (!out.links) continue;
+                for (const linkId of out.links) {
+                    const link = graph.links[linkId];
+                    if (link && !nodeIds.has(link.target_id)) {
+                        // This output goes external — find matching extOutput name
+                        for (const eo of extOutputs) {
+                            varNames[`${n.id}:${i}`] = `{{${eo.name}}}`;
+                        }
+                    }
+                }
+            }
+        }
+
+        const codeLines = [];
+        const allImports = new Set();
+
+        for (const n of sorted) {
+            const def = n._atomicDef || n._molecularDef;
+            if (!def) continue;
+            if (def.imports) def.imports.forEach(i => allImports.add(i));
+
+            const subs = { '_id': '{{_id}}' };
+
+            // Outputs
+            if (def.outputs) {
+                for (let i = 0; i < def.outputs.length; i++) {
+                    subs[def.outputs[i].name] = varNames[`${n.id}:${i}`] || `_unknown_${i}`;
+                }
+            }
+
+            // Inputs
+            if (def.inputs) {
+                for (let i = 0; i < def.inputs.length; i++) {
+                    const inputName = def.inputs[i].name;
+                    const linkId = (n.inputs[i] && n.inputs[i].link != null) ? n.inputs[i].link : null;
+                    if (linkId !== null && graph.links[linkId]) {
+                        const link = graph.links[linkId];
+                        if (nodeIds.has(link.origin_id)) {
+                            subs[inputName] = varNames[`${link.origin_id}:${link.origin_slot}`] || 'None';
+                        } else {
+                            // External input — use handlebars for the matching ext input
+                            for (const ei of extInputs) {
+                                if (ei.name === inputName || extInputs.length === 1) {
+                                    subs[inputName] = `{{${ei.name}}}`;
+                                    break;
+                                }
+                            }
+                            if (!subs[inputName]) subs[inputName] = `{{${inputName}}}`;
+                        }
+                    } else {
+                        subs[inputName] = `None`;
+                    }
+                }
+            }
+
+            // Properties
+            if (def.properties) {
+                for (const prop of def.properties) {
+                    let val = n.properties[prop.name];
+                    if (val === undefined) val = prop.default;
+                    subs[prop.name] = (prop.type === 'bool') ? (val ? 'True' : 'False') : String(val);
+                }
+            }
+
+            let code = def.code;
+            for (const [key, value] of Object.entries(subs)) {
+                code = code.replace(new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, 'g'), value);
+            }
+            codeLines.push(code);
+        }
+
+        return { code: codeLines.join('\n'), imports: Array.from(allImports) };
+    }
+
+    // ---- Save Molecular to File ----
+
+    function saveMolecularToFile(node) {
+        const def = node._molecularDef;
+        const meta = node._molecularMeta;
+        if (!def) return;
+
+        const exportDef = { ...def };
+        if (meta) {
+            exportDef.name = meta.name;
+            exportDef.id = meta.id;
+            exportDef.description = meta.description;
+        }
+
+        const json = JSON.stringify(exportDef, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${exportDef.id || 'molecular'}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        updateStatus(`Saved "${exportDef.name}" to file`);
+    }
+
+    // ---- Graph Change Listeners ----
+    graph.onNodeAdded = () => scheduleCompile();
+    graph.onNodeRemoved = () => scheduleCompile();
+    graph.onConnectionChange = () => scheduleCompile();
+
+    // ---- Initialize ----
+    async function init() {
+        await loadAtomics();
+        await loadMolecularComponents();
+        await loadModels();
+        graph.start();
+        compileGraph();
+        updateStatus('Ready');
+    }
+
+    init();
+    </script>
+</body>
+</html>

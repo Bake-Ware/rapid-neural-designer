@@ -1,0 +1,207 @@
+[
+  {
+    "name": "MatMul",
+    "id": "matmul",
+    "category": "math",
+    "description": "Matrix multiplication of two tensors",
+    "inputs": [
+      { "name": "A", "type": "tensor" },
+      { "name": "B", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = np.matmul({{A}}, {{B}})",
+    "imports": ["import numpy as np"],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Add",
+    "id": "add",
+    "category": "math",
+    "description": "Element-wise addition of two tensors",
+    "inputs": [
+      { "name": "A", "type": "tensor" },
+      { "name": "B", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = {{A}} + {{B}}",
+    "imports": [],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Subtract",
+    "id": "subtract",
+    "category": "math",
+    "description": "Element-wise subtraction of two tensors",
+    "inputs": [
+      { "name": "A", "type": "tensor" },
+      { "name": "B", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = {{A}} - {{B}}",
+    "imports": [],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Multiply",
+    "id": "multiply",
+    "category": "math",
+    "description": "Element-wise multiplication of two tensors",
+    "inputs": [
+      { "name": "A", "type": "tensor" },
+      { "name": "B", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = {{A}} * {{B}}",
+    "imports": [],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Divide",
+    "id": "divide",
+    "category": "math",
+    "description": "Element-wise division of two tensors",
+    "inputs": [
+      { "name": "A", "type": "tensor" },
+      { "name": "B", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = {{A}} / {{B}}",
+    "imports": [],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Power",
+    "id": "power",
+    "category": "math",
+    "description": "Raise tensor to a power",
+    "inputs": [
+      { "name": "base", "type": "tensor" },
+      { "name": "exponent", "type": "scalar" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = np.power({{base}}, {{exponent}})",
+    "imports": ["import numpy as np"],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Sqrt",
+    "id": "sqrt",
+    "category": "math",
+    "description": "Element-wise square root",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = np.sqrt({{input}})",
+    "imports": ["import numpy as np"],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Exp",
+    "id": "exp",
+    "category": "math",
+    "description": "Element-wise exponential (e^x)",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = np.exp({{input}})",
+    "imports": ["import numpy as np"],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Log",
+    "id": "log",
+    "category": "math",
+    "description": "Element-wise natural logarithm",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = np.log({{input}})",
+    "imports": ["import numpy as np"],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Abs",
+    "id": "abs",
+    "category": "math",
+    "description": "Element-wise absolute value",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = np.abs({{input}})",
+    "imports": ["import numpy as np"],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Negate",
+    "id": "negate",
+    "category": "math",
+    "description": "Element-wise negation (-x)",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = -{{input}}",
+    "imports": [],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Reciprocal",
+    "id": "reciprocal",
+    "category": "math",
+    "description": "Element-wise reciprocal (1/x)",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = 1.0 / {{input}}",
+    "imports": [],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "Clamp",
+    "id": "clamp",
+    "category": "math",
+    "description": "Clamp tensor values to a range",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "min_val", "type": "float", "default": 0.0, "description": "Minimum value" },
+      { "name": "max_val", "type": "float", "default": 1.0, "description": "Maximum value" }
+    ],
+    "code": "{{result}} = np.clip({{input}}, {{min_val}}, {{max_val}})",
+    "imports": ["import numpy as np"],
+    "color": "#4ecdc4"
+  }
+]

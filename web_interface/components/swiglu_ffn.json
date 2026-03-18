@@ -1,0 +1,40 @@
+{
+  "name": "SwiGLU FFN",
+  "id": "swiglu_ffn",
+  "description": "SwiGLU Feed-Forward Network: gate(x) * up(x) projected back down",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "dim", "type": "int", "default": 512, "description": "Model dimension" },
+    { "name": "hidden_dim", "type": "int", "default": 1376, "description": "Hidden dimension (typically 8/3 * dim, rounded)" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight initialization std" }
+  ],
+  "code": "_ffn{{_id}}_w_gate = np.random.randn({{hidden_dim}}, {{dim}}).astype(np.float32) * {{init_std}}\n_ffn{{_id}}_w_up = np.random.randn({{hidden_dim}}, {{dim}}).astype(np.float32) * {{init_std}}\n_ffn{{_id}}_w_down = np.random.randn({{dim}}, {{hidden_dim}}).astype(np.float32) * {{init_std}}\n_ffn{{_id}}_gate = np.matmul({{input}}, _ffn{{_id}}_w_gate.T)\n_ffn{{_id}}_up = np.matmul({{input}}, _ffn{{_id}}_w_up.T)\n_ffn{{_id}}_activated = _ffn{{_id}}_gate * (1.0 / (1.0 + np.exp(-_ffn{{_id}}_gate)))  # SiLU\n{{output}} = np.matmul(_ffn{{_id}}_activated * _ffn{{_id}}_up, _ffn{{_id}}_w_down.T)",
+  "imports": ["import numpy as np"],
+  "graph": {
+    "nodes": [
+      { "id": 1, "type": "molecular/linear", "title": "Gate Projection", "pos": [0, 0], "properties": { "in_features": 512, "out_features": 1376, "use_bias": false, "init_std": 0.02 } },
+      { "id": 2, "type": "molecular/linear", "title": "Up Projection", "pos": [0, 180], "properties": { "in_features": 512, "out_features": 1376, "use_bias": false, "init_std": 0.02 } },
+      { "id": 3, "type": "atomic/trig/silu", "title": "SiLU", "pos": [300, 0], "properties": {} },
+      { "id": 4, "type": "atomic/math/multiply", "title": "gate * up", "pos": [500, 80], "properties": {} },
+      { "id": 5, "type": "molecular/linear", "title": "Down Projection", "pos": [700, 80], "properties": { "in_features": 1376, "out_features": 512, "use_bias": false, "init_std": 0.02 } }
+    ],
+    "links": [
+      [1, 1, 0, 3, 0, "tensor"],
+      [2, 3, 0, 4, 0, "tensor"],
+      [3, 2, 0, 4, 1, "tensor"],
+      [4, 4, 0, 5, 0, "tensor"]
+    ],
+    "input_map": {
+      "input": [
+        { "node_id": 1, "slot": 0 },
+        { "node_id": 2, "slot": 0 }
+      ]
+    },
+    "output_map": { "output": { "node_id": 5, "slot": 0 } }
+  }
+}

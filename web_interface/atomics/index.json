@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "description": "Rapid Neural Designer - Atomic Component Registry",
+  "categories": {
+    "math": { "label": "Math", "icon": "➕", "files": ["math.json"] },
+    "trig": { "label": "Activations & Trig", "icon": "〰️", "files": ["trig.json"] },
+    "reduction": { "label": "Reduction", "icon": "📉", "files": ["reduction.json"] },
+    "shape": { "label": "Shape & Layout", "icon": "📐", "files": ["shape.json"] },
+    "comparison": { "label": "Comparison & Logic", "icon": "⚖️", "files": ["comparison.json"] },
+    "init": { "label": "Initialization", "icon": "🎲", "files": ["init.json"] },
+    "data": { "label": "Data I/O", "icon": "📊", "files": ["data.json"] }
+  }
+}

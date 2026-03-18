@@ -1,0 +1,134 @@
+[
+  {
+    "name": "Sum",
+    "id": "sum",
+    "category": "reduction",
+    "description": "Sum along an axis",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": -1, "description": "Axis to sum along (-1 for last)" },
+      { "name": "keepdims", "type": "bool", "default": true, "description": "Keep reduced dimension" }
+    ],
+    "code": "{{result}} = np.sum({{input}}, axis={{axis}}, keepdims={{keepdims}})",
+    "imports": ["import numpy as np"],
+    "color": "#aa96da"
+  },
+  {
+    "name": "Mean",
+    "id": "mean",
+    "category": "reduction",
+    "description": "Mean along an axis",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": -1, "description": "Axis to average along" },
+      { "name": "keepdims", "type": "bool", "default": true, "description": "Keep reduced dimension" }
+    ],
+    "code": "{{result}} = np.mean({{input}}, axis={{axis}}, keepdims={{keepdims}})",
+    "imports": ["import numpy as np"],
+    "color": "#aa96da"
+  },
+  {
+    "name": "Max",
+    "id": "max",
+    "category": "reduction",
+    "description": "Max along an axis",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": -1, "description": "Axis to find max along" },
+      { "name": "keepdims", "type": "bool", "default": true, "description": "Keep reduced dimension" }
+    ],
+    "code": "{{result}} = np.max({{input}}, axis={{axis}}, keepdims={{keepdims}})",
+    "imports": ["import numpy as np"],
+    "color": "#aa96da"
+  },
+  {
+    "name": "Min",
+    "id": "min",
+    "category": "reduction",
+    "description": "Min along an axis",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": -1, "description": "Axis to find min along" },
+      { "name": "keepdims", "type": "bool", "default": true, "description": "Keep reduced dimension" }
+    ],
+    "code": "{{result}} = np.min({{input}}, axis={{axis}}, keepdims={{keepdims}})",
+    "imports": ["import numpy as np"],
+    "color": "#aa96da"
+  },
+  {
+    "name": "ArgMax",
+    "id": "argmax",
+    "category": "reduction",
+    "description": "Index of maximum value along an axis",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": -1, "description": "Axis to find argmax along" }
+    ],
+    "code": "{{result}} = np.argmax({{input}}, axis={{axis}})",
+    "imports": ["import numpy as np"],
+    "color": "#aa96da"
+  },
+  {
+    "name": "Norm",
+    "id": "norm",
+    "category": "reduction",
+    "description": "L2 norm along an axis",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": -1, "description": "Axis to compute norm along" },
+      { "name": "keepdims", "type": "bool", "default": true, "description": "Keep reduced dimension" }
+    ],
+    "code": "{{result}} = np.linalg.norm({{input}}, axis={{axis}}, keepdims={{keepdims}})",
+    "imports": ["import numpy as np"],
+    "color": "#aa96da"
+  },
+  {
+    "name": "Variance",
+    "id": "variance",
+    "category": "reduction",
+    "description": "Variance along an axis",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "axis", "type": "int", "default": -1, "description": "Axis to compute variance along" },
+      { "name": "keepdims", "type": "bool", "default": true, "description": "Keep reduced dimension" }
+    ],
+    "code": "{{result}} = np.var({{input}}, axis={{axis}}, keepdims={{keepdims}})",
+    "imports": ["import numpy as np"],
+    "color": "#aa96da"
+  }
+]

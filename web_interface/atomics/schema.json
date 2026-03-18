@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RND Atomic Component",
+  "description": "Defines a fundamental atomic operation for the Rapid Neural Designer graph editor",
+  "type": "object",
+  "required": ["name", "category", "inputs", "outputs", "code"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Display name of the atomic"
+    },
+    "id": {
+      "type": "string",
+      "description": "Unique identifier (snake_case), auto-derived from name if omitted"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["math", "trig", "reduction", "shape", "comparison", "init", "data"],
+      "description": "Category for palette grouping"
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description shown on hover"
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "enum": ["tensor", "scalar", "int", "bool", "string", "any"] }
+        }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "enum": ["tensor", "scalar", "int", "bool", "string", "any"] }
+        }
+      }
+    },
+    "properties": {
+      "type": "array",
+      "description": "Configurable properties shown as widgets on the node",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "default"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "enum": ["int", "float", "bool", "string", "choice"] },
+          "default": {},
+          "options": { "type": "array", "items": { "type": "string" } },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "code": {
+      "type": "string",
+      "description": "Python code template with {{handlebars}} for inputs, outputs, and properties"
+    },
+    "imports": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Python import statements needed by this atomic"
+    },
+    "color": {
+      "type": "string",
+      "description": "Node border/accent color (hex)"
+    }
+  }
+}

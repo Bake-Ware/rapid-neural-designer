@@ -1,0 +1,71 @@
+[
+  {
+    "name": "InputTensor",
+    "id": "input_tensor",
+    "category": "data",
+    "description": "Model input placeholder (random data for testing)",
+    "inputs": [],
+    "outputs": [
+      { "name": "tensor", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "batch_size", "type": "int", "default": 1, "description": "Batch dimension" },
+      { "name": "seq_len", "type": "int", "default": 128, "description": "Sequence length" },
+      { "name": "dtype", "type": "choice", "default": "int", "options": ["int", "float"], "description": "Data type (int for token IDs, float for embeddings)" },
+      { "name": "vocab_size", "type": "int", "default": 32000, "description": "Vocab size (only used when dtype=int)" }
+    ],
+    "code": "{{tensor}} = np.random.randint(0, {{vocab_size}}, ({{batch_size}}, {{seq_len}})) if '{{dtype}}' == 'int' else np.random.randn({{batch_size}}, {{seq_len}}).astype(np.float32)",
+    "imports": ["import numpy as np"],
+    "color": "#ff6b6b"
+  },
+  {
+    "name": "EmbeddingLookup",
+    "id": "embedding_lookup",
+    "category": "data",
+    "description": "Look up embeddings from a weight matrix using integer indices",
+    "inputs": [
+      { "name": "indices", "type": "tensor" },
+      { "name": "weight", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "result", "type": "tensor" }
+    ],
+    "code": "{{result}} = {{weight}}[{{indices}}]",
+    "imports": [],
+    "color": "#ff6b6b"
+  },
+  {
+    "name": "Output",
+    "id": "output",
+    "category": "data",
+    "description": "Mark a tensor as a model output and print its shape",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [],
+    "properties": [
+      { "name": "label", "type": "string", "default": "output", "description": "Name for this output" }
+    ],
+    "code": "{{label}} = {{input}}\nprint(f'{{label}} shape: { {{input}}.shape}')",
+    "imports": [],
+    "color": "#ff6b6b"
+  },
+  {
+    "name": "PrintShape",
+    "id": "print_shape",
+    "category": "data",
+    "description": "Print the shape of a tensor (passthrough)",
+    "inputs": [
+      { "name": "input", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "output", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "label", "type": "string", "default": "tensor", "description": "Label for the print" }
+    ],
+    "code": "print(f'{{label}}: { {{input}}.shape}')\n{{output}} = {{input}}",
+    "imports": [],
+    "color": "#ff6b6b"
+  }
+]

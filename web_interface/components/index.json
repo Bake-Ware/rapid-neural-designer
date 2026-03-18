@@ -1,0 +1,62 @@
+{
+  "version": "1.0",
+  "description": "Rapid Neural Designer - Molecular Component Library",
+  "components": [
+    {
+      "id": "embedding",
+      "name": "Embedding",
+      "description": "Token embedding lookup table",
+      "file": "embedding.json",
+      "color": "#ff6b6b"
+    },
+    {
+      "id": "linear",
+      "name": "Linear",
+      "description": "Learnable linear transformation: y = xW^T + b",
+      "file": "linear.json",
+      "color": "#4ecdc4"
+    },
+    {
+      "id": "rmsnorm",
+      "name": "RMSNorm",
+      "description": "Root Mean Square Layer Normalization",
+      "file": "rmsnorm.json",
+      "color": "#aa96da"
+    },
+    {
+      "id": "rope",
+      "name": "RoPE",
+      "description": "Rotary Positional Encoding",
+      "file": "rope.json",
+      "color": "#f0a500"
+    },
+    {
+      "id": "swiglu_ffn",
+      "name": "SwiGLU FFN",
+      "description": "SwiGLU gated feed-forward network",
+      "file": "swiglu_ffn.json",
+      "color": "#95e1d3"
+    },
+    {
+      "id": "multi_head_attention",
+      "name": "Multi-Head Attention",
+      "description": "Multi-head self-attention with QKV projections",
+      "file": "multi_head_attention.json",
+      "color": "#6bb5ff"
+    },
+    {
+      "id": "rope_attention",
+      "name": "RoPE Attention",
+      "description": "Multi-head attention with Rotary Positional Encoding",
+      "file": "rope_attention.json",
+      "color": "#6bb5ff"
+    },
+    {
+      "id": "transformer_block",
+      "name": "Transformer Block",
+      "description": "LLaMA-style: RMSNorm -> RoPE Attn -> Residual -> RMSNorm -> SwiGLU -> Residual",
+      "file": "transformer_block.json",
+      "color": "#e056a0"
+    }
+  ]
+}

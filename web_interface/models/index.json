@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "description": "Rapid Neural Designer - Saved Model Library",
+  "models": [
+    {
+      "id": "llama_mini",
+      "name": "Mini LLaMA",
+      "description": "4-layer LLaMA (dim=288, 6 heads, 32k vocab)",
+      "file": "llama_mini.json",
+      "color": "#e056a0"
+    }
+  ]
+}
