@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neural VM Builder - Scratch-like Interface</title>
-    <script src="https://unpkg.com/blockly/blockly.min.js"></script>
-    <script src="https://unpkg.com/blockly/python_compressed.js"></script>
-    <!-- Monaco Editor for syntax highlighting and IDE features -->
+    <title>Rapid Neural Designer</title>
+
+    <!-- LiteGraph.js for node-based visual programming -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/build/litegraph.min.js"></script>
+
+    <!-- Monaco Editor for code display -->
     <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/editor/editor.main.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -26,94 +26,148 @@
 
         #header {
             background: #2d2d30;
-            padding: 15px 20px;
+            padding: 10px 20px;
             border-bottom: 2px solid #007acc;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            z-index: 1000;
+            height: 50px;
         }
 
-        #header h1 {
-            font-size: 20px;
-            color: #007acc;
-        }
-
-        #header-right {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-
-        #tabs {
-            display: flex;
-            gap: 5px;
-        }
+        #header h1 { font-size: 18px; color: #007acc; }
+        #header-right { display: flex; gap: 10px; align-items: center; }
+        #tabs { display: flex; gap: 3px; }
 
         .tab {
             background: transparent;
             border: none;
             color: #cccccc;
-            padding: 8px 20px;
+            padding: 6px 16px;
             cursor: pointer;
-            font-size: 14px;
-            transition: all 0.2s;
+            font-size: 13px;
             border-bottom: 2px solid transparent;
+            transition: all 0.2s;
         }
 
-        .tab:hover {
-            color: #ffffff;
-            background: rgba(255, 255, 255, 0.05);
-        }
+        .tab:hover { color: #ffffff; background: rgba(255,255,255,0.05); }
+        .tab.active { color: #007acc; border-bottom-color: #007acc; }
 
-        .tab.active {
-            color: #007acc;
-            border-bottom-color: #007acc;
-        }
-
-        #controls {
-            display: flex;
-            gap: 10px;
-        }
+        #controls { display: flex; gap: 8px; }
 
         button {
             background: #007acc;
             border: none;
             color: white;
-            padding: 8px 16px;
+            padding: 6px 14px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13px;
             transition: background 0.2s;
         }
 
-        button:hover {
-            background: #005a9e;
-        }
-
-        button:active {
-            background: #004578;
-        }
+        button:hover { background: #005a9e; }
+        button:active { background: #004578; }
 
         #container {
-            height: calc(100vh - 60px);
+            height: calc(100vh - 50px);
             position: relative;
+            display: flex;
         }
 
-        .tab-content {
-            display: none;
-            height: 100%;
+        .tab-content { display: none; height: 100%; width: 100%; }
+        .tab-content.active { display: flex; }
+
+        /* === Node Palette === */
+        #node-palette {
+            width: 260px;
+            background: #252526;
+            border-right: 1px solid #3e3e42;
+            overflow-y: auto;
+            flex-shrink: 0;
         }
 
-        .tab-content.active {
-            display: block;
+        .palette-category { border-bottom: 1px solid #3e3e42; }
+
+        .palette-category-header {
+            background: #2d2d30;
+            padding: 10px 14px;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: background 0.2s;
         }
 
-        #blockly-container {
-            width: 100%;
-            height: 100%;
-            position: relative;
+        .palette-category-header:hover { background: #3e3e42; }
+        .palette-category-content { padding: 6px 8px; display: none; }
+        .palette-category.expanded .palette-category-content { display: block; }
+        .palette-category.expanded .palette-arrow { transform: rotate(90deg); }
+
+        .palette-arrow {
+            font-size: 10px;
+            transition: transform 0.2s;
+            color: #888;
         }
 
+        .palette-node {
+            background: #3e3e42;
+            padding: 7px 10px;
+            margin: 3px 0;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.15s;
+            border-left: 3px solid transparent;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .palette-node:hover {
+            background: #4e4e52;
+            transform: translateX(2px);
+        }
+
+        .palette-node-desc {
+            font-size: 10px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .palette-section-header {
+            background: #1e3a5f;
+            padding: 8px 14px;
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #6bb5ff;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        .palette-section-header:hover { background: #254a6f; }
+
+        .palette-section-header .section-arrow {
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+
+        .palette-section.collapsed .palette-section-content { display: none; }
+        .palette-section.collapsed .section-arrow { transform: rotate(-90deg); }
+
+        /* === Graph Canvas === */
+        #graph-canvas-wrapper { flex: 1; position: relative; }
+        #graph-canvas { width: 100%; height: 100%; }
+
+        /* === Code Tab === */
         #code-container {
             width: 100%;
             height: 100%;
@@ -124,73 +178,24 @@
 
         #code-header {
             background: #2d2d30;
-            padding: 10px 20px;
+            padding: 8px 20px;
             border-bottom: 1px solid #3e3e42;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
-        #code-actions {
-            display: flex;
-            gap: 10px;
-        }
+        #code-actions { display: flex; gap: 8px; }
 
-        .run-button {
-            background: #0e7a0d;
-        }
+        .run-button { background: #0e7a0d; }
+        .run-button:hover { background: #0c6b0b; }
+        .run-button:disabled { background: #555; cursor: not-allowed; }
+        .running { background: #cca700 !important; }
 
-        .run-button:hover {
-            background: #0c6b0b;
-        }
-
-        .run-button:disabled {
-            background: #555;
-            cursor: not-allowed;
-        }
-
-        .running {
-            background: #cca700 !important;
-        }
-
-        #code-output {
-            flex: 1;
-            overflow: hidden;
-            position: relative;
-        }
-
-        #monaco-editor {
-            width: 100%;
-            height: 100%;
-        }
-
-        #validation-messages {
-            background: #252526;
-            border-top: 1px solid #3e3e42;
-            padding: 10px 20px;
-            max-height: 150px;
-            overflow-y: auto;
-        }
-
-        .validation-error {
-            color: #f48771;
-            padding: 5px 0;
-            font-size: 12px;
-        }
-
-        .validation-warning {
-            color: #cca700;
-            padding: 5px 0;
-            font-size: 12px;
-        }
-
-        .validation-success {
-            color: #4ec9b0;
-            padding: 5px 0;
-            font-size: 12px;
-        }
+        #code-output { flex: 1; overflow: hidden; position: relative; }
+        #monaco-editor { width: 100%; height: 100%; }
 
         #execution-output {
             background: #1e1e1e;
@@ -200,91 +205,128 @@
             display: none;
         }
 
-        #execution-output.visible {
-            display: block;
-        }
+        #execution-output.visible { display: block; }
 
         #execution-header {
             background: #2d2d30;
-            padding: 10px 20px;
+            padding: 8px 20px;
             border-bottom: 1px solid #3e3e42;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
         #execution-content {
-            padding: 15px 20px;
+            padding: 12px 20px;
             font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 13px;
-            line-height: 1.6;
+            font-size: 12px;
+            line-height: 1.5;
         }
 
-        .exec-stdout {
-            color: #d4d4d4;
-            white-space: pre-wrap;
+        .exec-stdout { color: #d4d4d4; white-space: pre-wrap; }
+        .exec-stderr { color: #f48771; white-space: pre-wrap; }
+        .exec-info { color: #4ec9b0; padding: 3px 0; }
+        .exec-error { color: #f48771; padding: 3px 0; }
+
+        /* === Status bar === */
+        #status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #007acc;
+            padding: 3px 20px;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            z-index: 1000;
         }
 
-        .exec-stderr {
-            color: #f48771;
-            white-space: pre-wrap;
-        }
-
-        .exec-info {
-            color: #4ec9b0;
-            padding: 5px 0;
-        }
-
-        .exec-error {
-            color: #f48771;
-            padding: 5px 0;
-        }
+        /* Custom LiteGraph dark theme */
+        .litegraph { background-color: #1e1e1e !important; }
+        .litecontextmenu { background: #252526 !important; border: 1px solid #3e3e42 !important; }
+        .litecontextmenu .litemenu-entry { color: #cccccc !important; }
+        .litecontextmenu .litemenu-entry:hover { background: #007acc !important; color: white !important; }
+        .litecontextmenu .litemenu-entry.disabled { color: #666 !important; pointer-events: none; }
     </style>
 </head>
 <body>
     <div id="header">
-        <h1>🧠 Neural VM Builder</h1>
+        <h1>Rapid Neural Designer</h1>
         <div id="header-right">
             <div id="tabs">
-                <button class="tab active" onclick="switchTab('designer')">Designer</button>
+                <button class="tab active" onclick="switchTab('graph')">Designer</button>
                 <button class="tab" onclick="switchTab('code')">Code</button>
             </div>
             <div id="controls">
-                <button onclick="saveWorkspace()">💾 Save</button>
-                <button onclick="loadWorkspace()">📁 Load</button>
-                <button onclick="clearWorkspace()">🗑️ Clear</button>
-                <button onclick="copyCode()">📋 Copy Code</button>
-                <button onclick="downloadCode()">⬇️ Download</button>
+                <button onclick="saveGraph()">Save</button>
+                <button onclick="loadGraph()">Load</button>
+                <button onclick="clearGraph()">Clear</button>
+                <button onclick="copyCode()">Copy Code</button>
+                <button onclick="downloadCode()">Download .py</button>
             </div>
         </div>
     </div>
 
     <div id="container">
-        <div id="designer-tab" class="tab-content active">
-            <div id="blockly-container"></div>
+        <!-- Graph Designer Tab -->
+        <div id="graph-tab" class="tab-content active">
+            <div style="display:flex;width:100%;height:100%;">
+                <div id="node-palette">
+                    <div class="palette-section">
+                        <div class="palette-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <span>Primitives</span>
+                            <span class="section-arrow">▼</span>
+                        </div>
+                        <div class="palette-section-content" id="atomic-palette"></div>
+                    </div>
+                    <div class="palette-section">
+                        <div class="palette-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <span>Components</span>
+                            <span class="section-arrow">▼</span>
+                        </div>
+                        <div class="palette-section-content" id="molecular-palette">
+                            <div style="padding:12px;color:#888;font-size:11px;">
+                                No components loaded.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="palette-section">
+                        <div class="palette-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <span>Models</span>
+                            <span class="section-arrow">▼</span>
+                        </div>
+                        <div class="palette-section-content" id="model-palette">
+                            <div style="padding:12px;color:#888;font-size:11px;">
+                                No saved models found.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="graph-canvas-wrapper">
+                    <canvas id="graph-canvas"></canvas>
+                </div>
+            </div>
         </div>
+
+        <!-- Code Tab -->
         <div id="code-tab" class="tab-content">
             <div id="code-container">
                 <div id="code-header">
-                    <span id="code-header-title">Generated Python Code</span>
+                    <span>Generated Python Code</span>
                     <div id="code-actions">
-                        <select id="language-selector" onchange="updateCodeLanguage()" style="margin-right: 10px; padding: 5px; background: #2d2d30; color: #ccc; border: 1px solid #3e3e42; border-radius: 4px;">
-                            <option value="python">Python</option>
-                            <option value="csharp">C#</option>
-                        </select>
-                        <button id="run-button" class="run-button" onclick="runCode()">▶️ Run Code</button>
+                        <button id="run-button" class="run-button" onclick="runCode()">Run Code</button>
                     </div>
                 </div>
                 <div id="code-output">
                     <div id="monaco-editor"></div>
                 </div>
-                <div id="validation-messages"></div>
                 <div id="execution-output">
                     <div id="execution-header">
                         <span>Execution Output</span>
-                        <button onclick="clearExecutionOutput()" style="background: transparent; padding: 2px 8px;">✕</button>
+                        <button onclick="clearExecutionOutput()" style="background:transparent;padding:2px 8px;">X</button>
                     </div>
                     <div id="execution-content"></div>
                 </div>
@@ -292,1828 +334,1172 @@
         </div>
     </div>
 
+    <div id="status-bar">
+        <span id="status-nodes">Nodes: 0</span>
+        <span id="status-info">Loading...</span>
+    </div>
+
     <script>
-        // Initialize Monaco Editor
-        let monacoEditor = null;
+    // =========================================================================
+    // Rapid Neural Designer - Graph Editor
+    // Dynamically loads atomic components from JSON, compiles to Python
+    // via handlebars-style template substitution
+    // =========================================================================
 
-        require.config({
-            paths: {
-                'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs'
-            }
+    let monacoEditor = null;
+    const atomicRegistry = {};   // id -> atomic definition
+    const molecularRegistry = {}; // id -> molecular definition
+
+    // ---- Monaco Editor Setup ----
+    require.config({
+        paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }
+    });
+
+    require(['vs/editor/editor.main'], function() {
+        monacoEditor = monaco.editor.create(document.getElementById('monaco-editor'), {
+            value: '# Build a graph in the Designer tab to generate code',
+            language: 'python',
+            theme: 'vs-dark',
+            automaticLayout: true,
+            readOnly: false,
+            minimap: { enabled: true },
+            fontSize: 13,
+            lineNumbers: 'on',
+            scrollBeyondLastLine: false,
+            renderWhitespace: 'selection'
         });
+    });
 
-        require(['vs/editor/editor.main'], function() {
-            monacoEditor = monaco.editor.create(document.getElementById('monaco-editor'), {
-                value: '# Drag blocks to build your Neural VM experiment\n# Code will appear here automatically',
-                language: 'python',
-                theme: 'vs-dark',
-                automaticLayout: true,
-                readOnly: false,
-                minimap: { enabled: true },
-                fontSize: 14,
-                lineNumbers: 'on',
-                roundedSelection: false,
-                scrollBeyondLastLine: false,
-                renderWhitespace: 'selection',
-                contextmenu: true,
-                formatOnPaste: true,
-                formatOnType: true,
-                suggestOnTriggerCharacters: true,
-                acceptSuggestionOnEnter: 'on',
-                tabCompletion: 'on',
-                wordBasedSuggestions: true,
-                parameterHints: { enabled: true },
-                quickSuggestions: {
-                    other: true,
-                    comments: false,
-                    strings: false
-                }
-            });
+    // ---- LiteGraph Setup ----
+    LiteGraph.NODE_TITLE_HEIGHT = 26;
+    LiteGraph.NODE_SLOT_HEIGHT = 20;
+    LiteGraph.NODE_WIDTH = 200;
+    LiteGraph.NODE_TITLE_COLOR = "#2d2d30";
+    LiteGraph.NODE_DEFAULT_COLOR = "#3e3e42";
+    LiteGraph.DEFAULT_BACKGROUND_COLOR = "#1e1e1e";
+    LiteGraph.LINK_COLOR = "#5a9fd4";
 
-            // Add Python linting markers
-            window.validatePythonCode = function(code) {
-                const markers = [];
-                const lines = code.split('\n');
+    const graph = new LGraph();
+    const canvasElement = document.getElementById("graph-canvas");
+    const graphCanvas = new LGraphCanvas(canvasElement, graph);
 
-                lines.forEach((line, index) => {
-                    // Check for common issues
-                    if (line.trim().startsWith('import') && index > 10) {
-                        markers.push({
-                            severity: monaco.MarkerSeverity.Warning,
-                            startLineNumber: index + 1,
-                            startColumn: 1,
-                            endLineNumber: index + 1,
-                            endColumn: line.length + 1,
-                            message: 'Imports should be at the top of the file'
-                        });
-                    }
+    graphCanvas.allow_searchbox = true;
+    graphCanvas.allow_dragnodes = true;
+    graphCanvas.allow_interaction = true;
+    graphCanvas.render_shadows = false;
+    graphCanvas.background_image = null;
 
-                    // Check for undefined variables in forward passes
-                    if (line.includes('.forward(') && !line.includes('=')) {
-                        markers.push({
-                            severity: monaco.MarkerSeverity.Warning,
-                            startLineNumber: index + 1,
-                            startColumn: 1,
-                            endLineNumber: index + 1,
-                            endColumn: line.length + 1,
-                            message: 'Forward pass result is not assigned to a variable'
-                        });
-                    }
+    // Link rendering - thicker, more visible cables
+    graphCanvas.connections_width = 3;
+    graphCanvas.render_connections_border = true;
+    graphCanvas.render_curved_connections = true;
+    graphCanvas.render_connection_arrows = false;
+    graphCanvas.default_connection_color = { input_off: "#5a9fd488", input_on: "#7ab8e8", output_off: "#5a9fd488", output_on: "#7ab8e8" };
+    graphCanvas.highquality_render = true;
 
-                    // Check for tensor dimension mismatches (basic heuristic)
-                    const dimMatch = line.match(/SimpleLinearAtom\((\d+),\s*(\d+)/);
-                    if (dimMatch && index > 0) {
-                        const inDim = parseInt(dimMatch[1]);
-                        const outDim = parseInt(dimMatch[2]);
+    // Selection - multi-select with shift+click, box select with left-drag on empty
+    graphCanvas.multi_select = true;
 
-                        // Look at previous line for potential mismatch
-                        const prevLine = lines[index - 1];
-                        const prevDimMatch = prevLine.match(/SimpleLinearAtom\(\d+,\s*(\d+)/);
-                        if (prevDimMatch) {
-                            const prevOutDim = parseInt(prevDimMatch[1]);
-                            if (prevOutDim !== inDim) {
-                                markers.push({
-                                    severity: monaco.MarkerSeverity.Error,
-                                    startLineNumber: index + 1,
-                                    startColumn: 1,
-                                    endLineNumber: index + 1,
-                                    endColumn: line.length + 1,
-                                    message: `Dimension mismatch: expected input ${prevOutDim}, got ${inDim}`
-                                });
-                            }
-                        }
-                    }
-                });
+    function resizeCanvas() {
+        const wrapper = document.getElementById('graph-canvas-wrapper');
+        if (!wrapper) return;
+        const dpr = window.devicePixelRatio || 1;
+        canvasElement.width = wrapper.clientWidth * dpr;
+        canvasElement.height = wrapper.clientHeight * dpr;
+        canvasElement.style.width = wrapper.clientWidth + 'px';
+        canvasElement.style.height = wrapper.clientHeight + 'px';
+        if (graphCanvas) graphCanvas.resize();
+    }
 
-                monaco.editor.setModelMarkers(monacoEditor.getModel(), 'python', markers);
-                return markers;
-            };
-        });
+    setTimeout(resizeCanvas, 100);
+    window.addEventListener('resize', resizeCanvas);
 
-        // Define custom blocks for Neural VM atomic components
-        Blockly.Blocks['nvm_linear'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Linear Layer")
-                    .appendField("in:")
-                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "IN_FEATURES")
-                    .appendField("out:")
-                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "OUT_FEATURES")
-                    .appendField("bias:")
-                    .appendField(new Blockly.FieldCheckbox("TRUE"), "USE_BIAS");
-                this.appendValueInput("INPUT")
-                    .setCheck("Tensor")
-                    .appendField("input");
-                this.setOutput(true, "Tensor");
-                this.setColour(230);
-                this.setTooltip("Linear transformation layer with full state capture");
-                this.setHelpUrl("");
+    // ---- Utility ----
+
+    function darkenColor(hex, factor) {
+        const r = parseInt(hex.slice(1,3), 16);
+        const g = parseInt(hex.slice(3,5), 16);
+        const b = parseInt(hex.slice(5,7), 16);
+        return '#' +
+            Math.round(r * factor).toString(16).padStart(2,'0') +
+            Math.round(g * factor).toString(16).padStart(2,'0') +
+            Math.round(b * factor).toString(16).padStart(2,'0');
+    }
+
+    function sanitizeName(name) {
+        return name.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[0-9]/, '_$&');
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ---- Dynamic Atomic Node Registration ----
+
+    function registerAtomic(atomic) {
+        atomicRegistry[atomic.id] = atomic;
+        const typeName = `atomic/${atomic.category}/${atomic.id}`;
+
+        function AtomicNode() {
+            const def = atomicRegistry[atomic.id];
+
+            for (const inp of def.inputs) {
+                this.addInput(inp.name, inp.type);
             }
-        };
-
-        Blockly.Blocks['nvm_attention'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Multi-Head Attention")
-                    .appendField("embed_dim:")
-                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "EMBED_DIM")
-                    .appendField("heads:")
-                    .appendField(new Blockly.FieldNumber(8, 1, 64), "NUM_HEADS");
-                this.appendValueInput("INPUT")
-                    .setCheck("Tensor")
-                    .appendField("input");
-                this.setOutput(true, "Tensor");
-                this.setColour(160);
-                this.setTooltip("Multi-head attention mechanism with QKV state capture");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_input'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Input Tensor")
-                    .appendField("batch:")
-                    .appendField(new Blockly.FieldNumber(1, 1, 1000), "BATCH_SIZE")
-                    .appendField("seq:")
-                    .appendField(new Blockly.FieldNumber(10, 1, 10000), "SEQ_LEN")
-                    .appendField("dim:")
-                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "EMBED_DIM");
-                this.setOutput(true, "Tensor");
-                this.setColour(290);
-                this.setTooltip("Create random input tensor");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_experiment'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("🧪 Neural VM Experiment")
-                    .appendField(new Blockly.FieldTextInput("my_experiment"), "EXP_NAME");
-                this.appendStatementInput("SETUP")
-                    .appendField("Setup");
-                this.appendStatementInput("COMPONENTS")
-                    .appendField("Components");
-                this.appendStatementInput("EXECUTE")
-                    .appendField("Execute");
-                this.setColour(20);
-                this.setTooltip("Main experiment container");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_create_component'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Create")
-                    .appendField(new Blockly.FieldTextInput("layer1"), "VAR_NAME")
-                    .appendField("=");
-                this.appendValueInput("COMPONENT")
-                    .setCheck(null);
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(60);
-                this.setTooltip("Create and name a component");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_forward'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Forward Pass")
-                    .appendField(new Blockly.FieldVariable("output"), "OUTPUT_VAR")
-                    .appendField("=")
-                    .appendField(new Blockly.FieldVariable("layer1"), "COMPONENT_VAR")
-                    .appendField("(");
-                this.appendValueInput("INPUT")
-                    .setCheck("Tensor");
-                this.appendDummyInput()
-                    .appendField(")");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(120);
-                this.setTooltip("Execute forward pass through component");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_print_state'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Print State")
-                    .appendField(new Blockly.FieldVariable("state"), "STATE_VAR");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(180);
-                this.setTooltip("Print captured computational state");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_variable'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField(new Blockly.FieldVariable("x"), "VAR");
-                this.setOutput(true, "Tensor");
-                this.setColour(330);
-                this.setTooltip("Reference a variable");
-                this.setHelpUrl("");
-            }
-        };
-
-        // New blocks for GPT
-        Blockly.Blocks['nvm_layernorm'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Layer Norm")
-                    .appendField("dims:")
-                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "NORMALIZED_SHAPE");
-                this.appendValueInput("INPUT")
-                    .setCheck("Tensor")
-                    .appendField("input");
-                this.setOutput(true, "Tensor");
-                this.setColour(230);
-                this.setTooltip("Layer normalization");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_activation'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Activation")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["ReLU", "relu"],
-                        ["GELU", "gelu"],
-                        ["Tanh", "tanh"],
-                        ["Sigmoid", "sigmoid"]
-                    ]), "ACTIVATION_TYPE");
-                this.appendValueInput("INPUT")
-                    .setCheck("Tensor")
-                    .appendField("input");
-                this.setOutput(true, "Tensor");
-                this.setColour(230);
-                this.setTooltip("Apply activation function");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_add'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Add (Residual)");
-                this.appendValueInput("INPUT_A")
-                    .setCheck("Tensor")
-                    .appendField("a:");
-                this.appendValueInput("INPUT_B")
-                    .setCheck("Tensor")
-                    .appendField("b:");
-                this.setOutput(true, "Tensor");
-                this.setColour(230);
-                this.setTooltip("Add two tensors (for residual connections)");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_embedding'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Embedding")
-                    .appendField("vocab:")
-                    .appendField(new Blockly.FieldNumber(50257, 1, 1000000), "VOCAB_SIZE")
-                    .appendField("dim:")
-                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "EMBED_DIM");
-                this.setOutput(true, "Tensor");
-                this.setColour(290);
-                this.setTooltip("Token embedding layer");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_positional_encoding'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Positional Encoding")
-                    .appendField("max_len:")
-                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "MAX_LEN")
-                    .appendField("dim:")
-                    .appendField(new Blockly.FieldNumber(512, 1, 10000), "EMBED_DIM");
-                this.appendValueInput("INPUT")
-                    .setCheck("Tensor")
-                    .appendField("input");
-                this.setOutput(true, "Tensor");
-                this.setColour(290);
-                this.setTooltip("Add positional encoding to embeddings");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_dropout'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Dropout")
-                    .appendField("rate:")
-                    .appendField(new Blockly.FieldNumber(0.1, 0, 1, 0.01), "DROPOUT_RATE");
-                this.appendValueInput("INPUT")
-                    .setCheck("Tensor")
-                    .appendField("input");
-                this.setOutput(true, "Tensor");
-                this.setColour(230);
-                this.setTooltip("Dropout for regularization");
-                this.setHelpUrl("");
-            }
-        };
-
-        // File I/O and Data Loading blocks
-        Blockly.Blocks['nvm_load_dataset'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Load Dataset")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["HuggingFace", "huggingface"],
-                        ["CSV File", "csv"],
-                        ["NumPy File", "numpy"],
-                        ["Text File", "text"],
-                        ["JSON File", "json"]
-                    ]), "SOURCE_TYPE")
-                    .appendField("path:")
-                    .appendField(new Blockly.FieldTextInput("dataset_name"), "PATH");
-                this.setOutput(true, null);
-                this.setColour(290);
-                this.setTooltip("Load dataset from various sources");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_save_data'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Save Data")
-                    .appendField("path:")
-                    .appendField(new Blockly.FieldTextInput("output.npy"), "PATH");
-                this.appendValueInput("DATA")
-                    .setCheck(null)
-                    .appendField("data:");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(290);
-                this.setTooltip("Save data to file");
-                this.setHelpUrl("");
-            }
-        };
-
-        // Model checkpoint blocks
-        Blockly.Blocks['nvm_load_pretrained'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Load Pretrained")
-                    .appendField("model:")
-                    .appendField(new Blockly.FieldTextInput("gpt2"), "MODEL_NAME")
-                    .appendField("from:")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["HuggingFace", "huggingface"],
-                        ["Local Path", "local"]
-                    ]), "SOURCE");
-                this.setOutput(true, null);
-                this.setColour(290);
-                this.setTooltip("Load pretrained model weights");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_save_checkpoint'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Save Checkpoint")
-                    .appendField("path:")
-                    .appendField(new Blockly.FieldTextInput("checkpoint.pth"), "PATH");
-                this.appendValueInput("MODEL")
-                    .setCheck(null)
-                    .appendField("model:");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(290);
-                this.setTooltip("Save model checkpoint");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_load_checkpoint'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Load Checkpoint")
-                    .appendField("path:")
-                    .appendField(new Blockly.FieldTextInput("checkpoint.pth"), "PATH");
-                this.setOutput(true, null);
-                this.setColour(290);
-                this.setTooltip("Load model checkpoint");
-                this.setHelpUrl("");
-            }
-        };
-
-        // Training blocks
-        Blockly.Blocks['nvm_optimizer'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Optimizer")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["Adam", "Adam"],
-                        ["AdamW", "AdamW"],
-                        ["SGD", "SGD"],
-                        ["RMSprop", "RMSprop"]
-                    ]), "OPTIMIZER_TYPE")
-                    .appendField("lr:")
-                    .appendField(new Blockly.FieldNumber(0.001, 0, 1, 0.0001), "LEARNING_RATE");
-                this.appendValueInput("PARAMS")
-                    .setCheck(null)
-                    .appendField("params:");
-                this.setOutput(true, null);
-                this.setColour(120);
-                this.setTooltip("Create optimizer");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_loss_function'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Loss Function")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["CrossEntropyLoss", "CrossEntropyLoss"],
-                        ["MSELoss", "MSELoss"],
-                        ["L1Loss", "L1Loss"],
-                        ["BCELoss", "BCELoss"]
-                    ]), "LOSS_TYPE");
-                this.setOutput(true, null);
-                this.setColour(120);
-                this.setTooltip("Create loss function");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_compute_loss'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Compute Loss");
-                this.appendValueInput("PREDICTIONS")
-                    .setCheck(null)
-                    .appendField("predictions:");
-                this.appendValueInput("TARGETS")
-                    .setCheck(null)
-                    .appendField("targets:");
-                this.appendValueInput("LOSS_FN")
-                    .setCheck(null)
-                    .appendField("loss_fn:");
-                this.setOutput(true, null);
-                this.setColour(120);
-                this.setTooltip("Compute loss between predictions and targets");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_backward'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Backward Pass");
-                this.appendValueInput("LOSS")
-                    .setCheck(null)
-                    .appendField("loss:");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(120);
-                this.setTooltip("Compute gradients via backpropagation");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_optimizer_step'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Optimizer Step");
-                this.appendValueInput("OPTIMIZER")
-                    .setCheck(null)
-                    .appendField("optimizer:");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(120);
-                this.setTooltip("Update model parameters");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_zero_grad'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Zero Gradients");
-                this.appendValueInput("OPTIMIZER")
-                    .setCheck(null)
-                    .appendField("optimizer:");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(120);
-                this.setTooltip("Clear gradients");
-                this.setHelpUrl("");
-            }
-        };
-
-        // Utility blocks
-        Blockly.Blocks['nvm_print_shape'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Print Shape")
-                    .appendField("label:")
-                    .appendField(new Blockly.FieldTextInput("tensor"), "LABEL");
-                this.appendValueInput("TENSOR")
-                    .setCheck(null)
-                    .appendField("tensor:");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(180);
-                this.setTooltip("Print tensor shape for debugging");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_set_seed'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Set Random Seed")
-                    .appendField("seed:")
-                    .appendField(new Blockly.FieldNumber(42, 0, 999999), "SEED");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(180);
-                this.setTooltip("Set random seed for reproducibility");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_device'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Device")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["Auto (CUDA if available)", "auto"],
-                        ["CPU", "cpu"],
-                        ["CUDA", "cuda"],
-                        ["MPS", "mps"]
-                    ]), "DEVICE_TYPE");
-                this.setOutput(true, null);
-                this.setColour(180);
-                this.setTooltip("Specify compute device");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_to_device'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("To Device");
-                this.appendValueInput("TENSOR")
-                    .setCheck(null)
-                    .appendField("tensor:");
-                this.appendValueInput("DEVICE")
-                    .setCheck(null)
-                    .appendField("device:");
-                this.setOutput(true, null);
-                this.setColour(180);
-                this.setTooltip("Move tensor to device");
-                this.setHelpUrl("");
-            }
-        };
-
-        // Control flow blocks
-        Blockly.Blocks['nvm_for_range'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("For")
-                    .appendField(new Blockly.FieldVariable("i"), "VAR")
-                    .appendField("in range")
-                    .appendField(new Blockly.FieldNumber(10, 1, 1000000), "COUNT");
-                this.appendStatementInput("DO")
-                    .appendField("do:");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(210);
-                this.setTooltip("For loop over range");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_for_each'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("For each")
-                    .appendField(new Blockly.FieldVariable("item"), "VAR");
-                this.appendValueInput("LIST")
-                    .setCheck(null)
-                    .appendField("in:");
-                this.appendStatementInput("DO")
-                    .appendField("do:");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(210);
-                this.setTooltip("For each loop over iterable");
-                this.setHelpUrl("");
-            }
-        };
-
-        // Multimodal blocks for models like Qwen3-Omni
-        Blockly.Blocks['nvm_load_multimodal_model'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Load Multimodal Model")
-                    .appendField("name:")
-                    .appendField(new Blockly.FieldTextInput("Qwen/Qwen3-Omni-30B-A3B-Instruct"), "MODEL_NAME");
-                this.appendDummyInput()
-                    .appendField("dtype:")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["auto", "auto"],
-                        ["float32", "float32"],
-                        ["float16", "float16"],
-                        ["bfloat16", "bfloat16"]
-                    ]), "DTYPE")
-                    .appendField("attention:")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["flash_attention_2", "flash_attention_2"],
-                        ["sdpa", "sdpa"],
-                        ["eager", "eager"]
-                    ]), "ATTN_IMPL");
-                this.setOutput(true, null);
-                this.setColour(290);
-                this.setTooltip("Load multimodal model from HuggingFace");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_load_processor'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Load Processor")
-                    .appendField("name:")
-                    .appendField(new Blockly.FieldTextInput("Qwen/Qwen3-Omni-30B-A3B-Instruct"), "MODEL_NAME");
-                this.setOutput(true, null);
-                this.setColour(290);
-                this.setTooltip("Load multimodal processor/tokenizer");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_multimodal_input'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Multimodal Input")
-                    .appendField("type:")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["Text", "text"],
-                        ["Image URL", "image_url"],
-                        ["Image Path", "image_path"],
-                        ["Audio URL", "audio_url"],
-                        ["Audio Path", "audio_path"],
-                        ["Video URL", "video_url"],
-                        ["Video Path", "video_path"]
-                    ]), "INPUT_TYPE")
-                    .appendField("content:")
-                    .appendField(new Blockly.FieldTextInput("content"), "CONTENT");
-                this.setOutput(true, null);
-                this.setColour(290);
-                this.setTooltip("Create multimodal input (text, image, audio, video)");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_conversation'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Create Conversation");
-                this.appendDummyInput()
-                    .appendField("(add messages below)");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(290);
-                this.setTooltip("Initialize empty conversation list");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_message'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Add Message")
-                    .appendField("role:")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["user", "user"],
-                        ["assistant", "assistant"],
-                        ["system", "system"]
-                    ]), "ROLE")
-                    .appendField("text:")
-                    .appendField(new Blockly.FieldTextInput("Hello"), "TEXT");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(290);
-                this.setTooltip("Add text message to conversation");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_message_multimodal'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Add Multimodal Message")
-                    .appendField("role:")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["user", "user"],
-                        ["assistant", "assistant"]
-                    ]), "ROLE");
-                this.appendValueInput("IMAGE")
-                    .setCheck(null)
-                    .appendField("image (optional):");
-                this.appendValueInput("AUDIO")
-                    .setCheck(null)
-                    .appendField("audio (optional):");
-                this.appendValueInput("VIDEO")
-                    .setCheck(null)
-                    .appendField("video (optional):");
-                this.appendDummyInput()
-                    .appendField("text:")
-                    .appendField(new Blockly.FieldTextInput(""), "TEXT");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(290);
-                this.setTooltip("Add multimodal message with images/audio/video");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_process_multimodal'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Process Multimodal Inputs");
-                this.appendValueInput("PROCESSOR")
-                    .setCheck(null)
-                    .appendField("processor:");
-                this.appendValueInput("CONVERSATION")
-                    .setCheck(null)
-                    .appendField("conversation:");
-                this.setOutput(true, null);
-                this.setColour(290);
-                this.setTooltip("Process conversation with multimodal inputs");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_generate_multimodal'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Generate Multimodal Response")
-                    .appendField("max_tokens:")
-                    .appendField(new Blockly.FieldNumber(1024, 1, 8192), "MAX_TOKENS")
-                    .appendField("speaker:")
-                    .appendField(new Blockly.FieldTextInput("Ethan"), "SPEAKER");
-                this.appendValueInput("MODEL")
-                    .setCheck(null)
-                    .appendField("model:");
-                this.appendValueInput("INPUTS")
-                    .setCheck(null)
-                    .appendField("inputs:");
-                this.setOutput(true, null);
-                this.setColour(120);
-                this.setTooltip("Generate text/audio response from multimodal model");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_decode_response'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Decode Response")
-                    .appendField("type:")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["text", "text"],
-                        ["audio", "audio"],
-                        ["both", "both"]
-                    ]), "DECODE_TYPE");
-                this.appendValueInput("PROCESSOR")
-                    .setCheck(null)
-                    .appendField("processor:");
-                this.appendValueInput("OUTPUT")
-                    .setCheck(null)
-                    .appendField("output:");
-                this.setOutput(true, null);
-                this.setColour(120);
-                this.setTooltip("Decode model output to text/audio");
-                this.setHelpUrl("");
-            }
-        };
-
-        Blockly.Blocks['nvm_save_audio'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Save Audio")
-                    .appendField("path:")
-                    .appendField(new Blockly.FieldTextInput("output.wav"), "PATH")
-                    .appendField("rate:")
-                    .appendField(new Blockly.FieldNumber(16000, 8000, 48000), "SAMPLE_RATE");
-                this.appendValueInput("AUDIO")
-                    .setCheck(null)
-                    .appendField("audio:");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour(290);
-                this.setTooltip("Save audio to file");
-                this.setHelpUrl("");
-            }
-        };
-
-        // Code generators for each block
-        // Debug: Check what we have
-        console.log('Blockly.Python:', Blockly.Python);
-        console.log('Available generators:', Object.keys(Blockly.Python || {}));
-
-        const pythonGenerator = Blockly.Python;
-
-        // Create C# generator with proper initialization
-        const csharpGenerator = new Blockly.Generator('CSharp');
-        csharpGenerator.ORDER_ATOMIC = 0;
-        csharpGenerator.ORDER_FUNCTION_CALL = 2;
-        csharpGenerator.ORDER_NONE = 99;
-
-        // Initialize the scrub_ function to handle statement chaining
-        csharpGenerator.scrub_ = function(block, code, thisOnly) {
-            const nextBlock = block.nextConnection && block.nextConnection.targetBlock();
-            if (nextBlock && !thisOnly) {
-                return code + csharpGenerator.blockToCode(nextBlock);
-            }
-            return code;
-        };
-
-        // Use forBlock method for modern Blockly
-        pythonGenerator.forBlock['nvm_linear'] = function(block, generator) {
-            const inFeatures = block.getFieldValue('IN_FEATURES');
-            const outFeatures = block.getFieldValue('OUT_FEATURES');
-            const useBias = block.getFieldValue('USE_BIAS') === 'TRUE';
-
-            const code = `SimpleLinearAtom(${inFeatures}, ${outFeatures}, bias=${useBias ? 'True' : 'False'})`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_attention'] = function(block, generator) {
-            const embedDim = block.getFieldValue('EMBED_DIM');
-            const numHeads = block.getFieldValue('NUM_HEADS');
-
-            const code = `SimpleAttentionAtom(d_model=${embedDim}, num_heads=${numHeads})`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_input'] = function(block, generator) {
-            const batchSize = block.getFieldValue('BATCH_SIZE');
-            const seqLen = block.getFieldValue('SEQ_LEN');
-            const embedDim = block.getFieldValue('EMBED_DIM');
-
-            // Generate random float tensor for atomic components
-            const code = `np.random.randn(${batchSize}, ${seqLen}, ${embedDim}).astype(np.float32)`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_experiment'] = function(block, generator) {
-            const expName = block.getFieldValue('EXP_NAME');
-            let setup = generator.statementToCode(block, 'SETUP');
-            let components = generator.statementToCode(block, 'COMPONENTS');
-            let execution = generator.statementToCode(block, 'EXECUTE');
-
-            // Remove leading indentation from statementToCode
-            const removeIndent = (code) => {
-                return code.split('\n').map(line => line.replace(/^  /, '')).join('\n');
-            };
-
-            setup = removeIndent(setup);
-            components = removeIndent(components);
-            execution = removeIndent(execution);
-
-            let code = `# Neural VM Experiment: ${expName}\n`;
-            code += `# Generated by Rapid Neural Designer\n\n`;
-
-            // Add imports for real atomic components
-            code += `import sys\n`;
-            code += `import os\n`;
-            code += `# Add parent directory to path to import atomic components\n`;
-            code += `sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))\n\n`;
-
-            code += `import numpy as np\n`;
-            code += `from typing import Dict, Any, List, Optional, Tuple\n`;
-            code += `from dataclasses import dataclass, field\n`;
-            code += `import time\n\n`;
-
-            code += `# Import real atomic components with full state capture\n`;
-            code += `from neuralAtomLib import (\n`;
-            code += `    SimpleLinearAtom,\n`;
-            code += `    SimpleAttentionAtom,\n`;
-            code += `    ComputationalState\n`;
-            code += `)\n\n`;
-
-            if (setup.trim()) {
-                code += `# Setup\n${setup}\n`;
+            for (const out of def.outputs) {
+                this.addOutput(out.name, out.type);
             }
 
-            if (components.trim()) {
-                code += `# Component definitions\n${components}\n`;
-            }
-
-            if (execution.trim()) {
-                code += `# Execution\n${execution}\n`;
-            }
-
-            code += `print("Experiment '${expName}' completed successfully!")\n`;
-
-            return code;
-        };
-
-        pythonGenerator.forBlock['nvm_create_component'] = function(block, generator) {
-            const varName = block.getFieldValue('VAR_NAME');
-            const component = generator.valueToCode(block, 'COMPONENT', generator.ORDER_NONE) || 'None';
-
-            return `${varName} = ${component}\n`;
-        };
-
-        pythonGenerator.forBlock['nvm_forward'] = function(block, generator) {
-            const outputVar = generator.nameDB_.getName(block.getFieldValue('OUTPUT_VAR'), Blockly.Names.NameType.VARIABLE);
-            const componentVar = generator.nameDB_.getName(block.getFieldValue('COMPONENT_VAR'), Blockly.Names.NameType.VARIABLE);
-            const input = generator.valueToCode(block, 'INPUT', generator.ORDER_NONE) || 'x';
-
-            return `${outputVar}, state = ${componentVar}.forward(${input})\nprint(f"Captured {state.component_type} state: {state.get_full_state_size()} elements")\n`;
-        };
-
-        pythonGenerator.forBlock['nvm_print_state'] = function(block, generator) {
-            const stateVar = generator.nameDB_.getName(block.getFieldValue('STATE_VAR'), Blockly.Names.NameType.VARIABLE);
-
-            return `print(f"State: {${stateVar}}")\n`;
-        };
-
-        pythonGenerator.forBlock['nvm_variable'] = function(block, generator) {
-            const varName = generator.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
-            return [varName, generator.ORDER_ATOMIC];
-        };
-
-        pythonGenerator.forBlock['nvm_layernorm'] = function(block, generator) {
-            const normalizedShape = block.getFieldValue('NORMALIZED_SHAPE');
-            const code = `LayerNormAtom(${normalizedShape})`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_activation'] = function(block, generator) {
-            const activationType = block.getFieldValue('ACTIVATION_TYPE');
-            const code = `ActivationAtom('${activationType}')`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_add'] = function(block, generator) {
-            const code = `AddAtom()`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_embedding'] = function(block, generator) {
-            const vocabSize = block.getFieldValue('VOCAB_SIZE');
-            const embedDim = block.getFieldValue('EMBED_DIM');
-            const code = `EmbeddingAtom(${vocabSize}, ${embedDim})`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_positional_encoding'] = function(block, generator) {
-            const maxLen = block.getFieldValue('MAX_LEN');
-            const embedDim = block.getFieldValue('EMBED_DIM');
-            const code = `PositionalEncodingAtom(${maxLen}, ${embedDim})`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_dropout'] = function(block, generator) {
-            const dropoutRate = block.getFieldValue('DROPOUT_RATE');
-            const code = `DropoutAtom(${dropoutRate})`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        // File I/O generators
-        pythonGenerator.forBlock['nvm_load_dataset'] = function(block, generator) {
-            const sourceType = block.getFieldValue('SOURCE_TYPE');
-            const path = block.getFieldValue('PATH');
-            let code = '';
-
-            if (sourceType === 'huggingface') {
-                code = `load_dataset('${path}')`;
-            } else if (sourceType === 'numpy') {
-                code = `np.load('${path}')`;
-            } else if (sourceType === 'csv') {
-                code = `pd.read_csv('${path}')`;
-            } else if (sourceType === 'text') {
-                code = `open('${path}', 'r').read()`;
-            } else if (sourceType === 'json') {
-                code = `json.load(open('${path}', 'r'))`;
-            }
-
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_save_data'] = function(block, generator) {
-            const path = block.getFieldValue('PATH');
-            const data = generator.valueToCode(block, 'DATA', generator.ORDER_NONE) || 'data';
-            return `np.save('${path}', ${data})\n`;
-        };
-
-        pythonGenerator.forBlock['nvm_load_pretrained'] = function(block, generator) {
-            const modelName = block.getFieldValue('MODEL_NAME');
-            const source = block.getFieldValue('SOURCE');
-
-            if (source === 'huggingface') {
-                return [`AutoModel.from_pretrained('${modelName}')`, generator.ORDER_FUNCTION_CALL];
-            } else {
-                return [`load_model('${modelName}')`, generator.ORDER_FUNCTION_CALL];
-            }
-        };
-
-        pythonGenerator.forBlock['nvm_save_checkpoint'] = function(block, generator) {
-            const path = block.getFieldValue('PATH');
-            const model = generator.valueToCode(block, 'MODEL', generator.ORDER_NONE) || 'model';
-            return `torch.save(${model}.state_dict(), '${path}')\n`;
-        };
-
-        pythonGenerator.forBlock['nvm_load_checkpoint'] = function(block, generator) {
-            const path = block.getFieldValue('PATH');
-            return [`torch.load('${path}')`, generator.ORDER_FUNCTION_CALL];
-        };
-
-        // Training generators
-        pythonGenerator.forBlock['nvm_optimizer'] = function(block, generator) {
-            const optimizerType = block.getFieldValue('OPTIMIZER_TYPE');
-            const learningRate = block.getFieldValue('LEARNING_RATE');
-            const params = generator.valueToCode(block, 'PARAMS', generator.ORDER_NONE) || 'model.parameters()';
-            return [`torch.optim.${optimizerType}(${params}, lr=${learningRate})`, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_loss_function'] = function(block, generator) {
-            const lossType = block.getFieldValue('LOSS_TYPE');
-            return [`nn.${lossType}()`, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_compute_loss'] = function(block, generator) {
-            const predictions = generator.valueToCode(block, 'PREDICTIONS', generator.ORDER_NONE) || 'predictions';
-            const targets = generator.valueToCode(block, 'TARGETS', generator.ORDER_NONE) || 'targets';
-            const lossFn = generator.valueToCode(block, 'LOSS_FN', generator.ORDER_NONE) || 'loss_fn';
-            return [`${lossFn}(${predictions}, ${targets})`, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_backward'] = function(block, generator) {
-            const loss = generator.valueToCode(block, 'LOSS', generator.ORDER_NONE) || 'loss';
-            return `${loss}.backward()\n`;
-        };
-
-        pythonGenerator.forBlock['nvm_optimizer_step'] = function(block, generator) {
-            const optimizer = generator.valueToCode(block, 'OPTIMIZER', generator.ORDER_NONE) || 'optimizer';
-            return `${optimizer}.step()\n`;
-        };
-
-        pythonGenerator.forBlock['nvm_zero_grad'] = function(block, generator) {
-            const optimizer = generator.valueToCode(block, 'OPTIMIZER', generator.ORDER_NONE) || 'optimizer';
-            return `${optimizer}.zero_grad()\n`;
-        };
-
-        // Utility generators
-        pythonGenerator.forBlock['nvm_print_shape'] = function(block, generator) {
-            const label = block.getFieldValue('LABEL');
-            const tensor = generator.valueToCode(block, 'TENSOR', generator.ORDER_NONE) || 'tensor';
-            return `print(f"${label} shape: {${tensor}.shape}")\n`;
-        };
-
-        pythonGenerator.forBlock['nvm_set_seed'] = function(block, generator) {
-            const seed = block.getFieldValue('SEED');
-            return `np.random.seed(${seed})\ntorch.manual_seed(${seed})\n`;
-        };
-
-        pythonGenerator.forBlock['nvm_device'] = function(block, generator) {
-            const deviceType = block.getFieldValue('DEVICE_TYPE');
-            if (deviceType === 'auto') {
-                return [`torch.device('cuda' if torch.cuda.is_available() else 'cpu')`, generator.ORDER_FUNCTION_CALL];
-            } else {
-                return [`torch.device('${deviceType}')`, generator.ORDER_FUNCTION_CALL];
-            }
-        };
-
-        pythonGenerator.forBlock['nvm_to_device'] = function(block, generator) {
-            const tensor = generator.valueToCode(block, 'TENSOR', generator.ORDER_NONE) || 'tensor';
-            const device = generator.valueToCode(block, 'DEVICE', generator.ORDER_NONE) || 'device';
-            return [`${tensor}.to(${device})`, generator.ORDER_FUNCTION_CALL];
-        };
-
-        // Control flow generators
-        pythonGenerator.forBlock['nvm_for_range'] = function(block, generator) {
-            const varName = generator.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
-            const count = block.getFieldValue('COUNT');
-            const doCode = generator.statementToCode(block, 'DO');
-
-            return `for ${varName} in range(${count}):\n${doCode || '    pass\n'}`;
-        };
-
-        pythonGenerator.forBlock['nvm_for_each'] = function(block, generator) {
-            const varName = generator.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
-            const list = generator.valueToCode(block, 'LIST', generator.ORDER_NONE) || 'items';
-            const doCode = generator.statementToCode(block, 'DO');
-
-            return `for ${varName} in ${list}:\n${doCode || '    pass\n'}`;
-        };
-
-        // Multimodal generators
-        pythonGenerator.forBlock['nvm_load_multimodal_model'] = function(block, generator) {
-            const modelName = block.getFieldValue('MODEL_NAME');
-            const dtype = block.getFieldValue('DTYPE');
-            const attnImpl = block.getFieldValue('ATTN_IMPL');
-
-            return [`Qwen3OmniMoeForConditionalGeneration.from_pretrained("${modelName}", dtype="${dtype}", device_map="auto", attn_implementation="${attnImpl}")`, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_load_processor'] = function(block, generator) {
-            const modelName = block.getFieldValue('MODEL_NAME');
-            return [`Qwen3OmniMoeProcessor.from_pretrained("${modelName}")`, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_multimodal_input'] = function(block, generator) {
-            const inputType = block.getFieldValue('INPUT_TYPE');
-            const content = block.getFieldValue('CONTENT');
-
-            if (inputType === 'text') {
-                return [`{"type": "text", "text": "${content}"}`, generator.ORDER_ATOMIC];
-            } else if (inputType.includes('image')) {
-                return [`{"type": "image", "image": "${content}"}`, generator.ORDER_ATOMIC];
-            } else if (inputType.includes('audio')) {
-                return [`{"type": "audio", "audio": "${content}"}`, generator.ORDER_ATOMIC];
-            } else if (inputType.includes('video')) {
-                return [`{"type": "video", "video": "${content}"}`, generator.ORDER_ATOMIC];
-            }
-        };
-
-        pythonGenerator.forBlock['nvm_conversation'] = function(block, generator) {
-            return `conversation = []\n`;
-        };
-
-        pythonGenerator.forBlock['nvm_message'] = function(block, generator) {
-            const role = block.getFieldValue('ROLE');
-            const text = block.getFieldValue('TEXT');
-            return `conversation.append({"role": "${role}", "content": [{"type": "text", "text": "${text}"}]})\n`;
-        };
-
-        pythonGenerator.forBlock['nvm_message_multimodal'] = function(block, generator) {
-            const role = block.getFieldValue('ROLE');
-            const text = block.getFieldValue('TEXT');
-            const image = generator.valueToCode(block, 'IMAGE', generator.ORDER_NONE);
-            const audio = generator.valueToCode(block, 'AUDIO', generator.ORDER_NONE);
-            const video = generator.valueToCode(block, 'VIDEO', generator.ORDER_NONE);
-
-            let code = `content = []\n`;
-
-            if (image) {
-                code += `content.append(${image})\n`;
-            }
-            if (audio) {
-                code += `content.append(${audio})\n`;
-            }
-            if (video) {
-                code += `content.append(${video})\n`;
-            }
-            if (text) {
-                code += `content.append({"type": "text", "text": "${text}"})\n`;
-            }
-
-            code += `conversation.append({"role": "${role}", "content": content})\n`;
-            return code;
-        };
-
-        pythonGenerator.forBlock['nvm_process_multimodal'] = function(block, generator) {
-            const processor = generator.valueToCode(block, 'PROCESSOR', generator.ORDER_NONE) || 'processor';
-            const conversation = generator.valueToCode(block, 'CONVERSATION', generator.ORDER_NONE) || 'conversation';
-
-            const code = `
-# Apply chat template and process multimodal inputs
-text = ${processor}.apply_chat_template(${conversation}, add_generation_prompt=True, tokenize=False)
-from qwen_omni_utils import process_mm_info
-audios, images, videos = process_mm_info(${conversation}, use_audio_in_video=True)
-
-inputs = ${processor}(
-    text=text,
-    audio=audios,
-    images=images,
-    videos=videos,
-    return_tensors="pt",
-    padding=True,
-    use_audio_in_video=True
-)
-inputs = inputs.to(model.device).to(model.dtype)
-`;
-            return [code.trim(), generator.ORDER_ATOMIC];
-        };
-
-        pythonGenerator.forBlock['nvm_generate_multimodal'] = function(block, generator) {
-            const model = generator.valueToCode(block, 'MODEL', generator.ORDER_NONE) || 'model';
-            const inputs = generator.valueToCode(block, 'INPUTS', generator.ORDER_NONE) || 'inputs';
-            const maxTokens = block.getFieldValue('MAX_TOKENS');
-            const speaker = block.getFieldValue('SPEAKER');
-
-            return [`${model}.generate(**${inputs}, max_new_tokens=${maxTokens}, speaker="${speaker}", thinker_return_dict_in_generate=True, use_audio_in_video=True)`, generator.ORDER_FUNCTION_CALL];
-        };
-
-        pythonGenerator.forBlock['nvm_decode_response'] = function(block, generator) {
-            const processor = generator.valueToCode(block, 'PROCESSOR', generator.ORDER_NONE) || 'processor';
-            const output = generator.valueToCode(block, 'OUTPUT', generator.ORDER_NONE) || 'output';
-            const decodeType = block.getFieldValue('DECODE_TYPE');
-
-            if (decodeType === 'text') {
-                return [`${processor}.batch_decode(${output}[0], skip_special_tokens=True)[0]`, generator.ORDER_FUNCTION_CALL];
-            } else if (decodeType === 'audio') {
-                return [`${output}[1]`, generator.ORDER_ATOMIC];
-            } else {
-                return [`(${processor}.batch_decode(${output}[0], skip_special_tokens=True)[0], ${output}[1])`, generator.ORDER_ATOMIC];
-            }
-        };
-
-        pythonGenerator.forBlock['nvm_save_audio'] = function(block, generator) {
-            const path = block.getFieldValue('PATH');
-            const sampleRate = block.getFieldValue('SAMPLE_RATE');
-            const audio = generator.valueToCode(block, 'AUDIO', generator.ORDER_NONE) || 'audio';
-
-            return `import soundfile as sf\nsf.write("${path}", ${audio}.cpu().numpy(), ${sampleRate})\n`;
-        };
-
-        // C# code generators
-        csharpGenerator.forBlock['nvm_linear'] = function(block, generator) {
-            const inFeatures = block.getFieldValue('IN_FEATURES');
-            const outFeatures = block.getFieldValue('OUT_FEATURES');
-            const useBias = block.getFieldValue('USE_BIAS') === 'TRUE';
-
-            const code = `new SimpleLinearAtom(${inFeatures}, ${outFeatures}, bias: ${useBias ? 'true' : 'false'})`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        csharpGenerator.forBlock['nvm_attention'] = function(block, generator) {
-            const embedDim = block.getFieldValue('EMBED_DIM');
-            const numHeads = block.getFieldValue('NUM_HEADS');
-
-            const code = `new SimpleAttentionAtom(dModel: ${embedDim}, numHeads: ${numHeads})`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        csharpGenerator.forBlock['nvm_input'] = function(block, generator) {
-            const batchSize = block.getFieldValue('BATCH_SIZE');
-            const seqLen = block.getFieldValue('SEQ_LEN');
-            const embedDim = block.getFieldValue('EMBED_DIM');
-
-            const code = `torch.randn(new long[] {${batchSize}, ${seqLen}, ${embedDim}})`;
-            return [code, generator.ORDER_FUNCTION_CALL];
-        };
-
-        csharpGenerator.forBlock['nvm_create_component'] = function(block, generator) {
-            const varName = block.getFieldValue('VAR_NAME');
-            const component = generator.valueToCode(block, 'COMPONENT', generator.ORDER_NONE) || 'null';
-
-            return `            var ${varName} = ${component};\n`;
-        };
-
-        csharpGenerator.forBlock['nvm_forward'] = function(block, generator) {
-            const outputVar = generator.nameDB_.getName(block.getFieldValue('OUTPUT_VAR'), Blockly.Names.NameType.VARIABLE);
-            const componentVar = generator.nameDB_.getName(block.getFieldValue('COMPONENT_VAR'), Blockly.Names.NameType.VARIABLE);
-            const input = generator.valueToCode(block, 'INPUT', generator.ORDER_NONE) || 'x';
-
-            return `            var (${outputVar}, state) = ${componentVar}.forward(${input});\n            Console.WriteLine($"Captured {state.ComponentType} state: {state.GetFullStateSize()} elements");\n`;
-        };
-
-        csharpGenerator.forBlock['nvm_print_state'] = function(block, generator) {
-            const stateVar = generator.nameDB_.getName(block.getFieldValue('STATE_VAR'), Blockly.Names.NameType.VARIABLE);
-
-            return `            Console.WriteLine($"State: {${stateVar}}");\n`;
-        };
-
-        csharpGenerator.forBlock['nvm_variable'] = function(block, generator) {
-            const varName = generator.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
-            return [varName, generator.ORDER_ATOMIC];
-        };
-
-        csharpGenerator.forBlock['nvm_experiment'] = function(block, generator) {
-            const expName = block.getFieldValue('EXP_NAME');
-            let setup = generator.statementToCode(block, 'SETUP');
-            let components = generator.statementToCode(block, 'COMPONENTS');
-            let execution = generator.statementToCode(block, 'EXECUTE');
-
-            let code = `            // Neural VM Experiment: ${expName}\n`;
-            code += `            // Generated by Rapid Neural Designer\n\n`;
-
-            if (setup.trim()) {
-                code += `            // Setup\n${setup}\n`;
-            }
-
-            if (components.trim()) {
-                code += `            // Component definitions\n${components}\n`;
-            }
-
-            if (execution.trim()) {
-                code += `            // Execution\n${execution}\n`;
-            }
-
-            return code;
-        };
-
-        // Toolbox definition
-        const toolbox = {
-            "kind": "categoryToolbox",
-            "contents": [
-                {
-                    "kind": "category",
-                    "name": "🧪 Experiment",
-                    "colour": 20,
-                    "contents": [
-                        {"kind": "block", "type": "nvm_experiment"},
-                        {"kind": "block", "type": "nvm_create_component"},
-                        {"kind": "block", "type": "nvm_forward"},
-                        {"kind": "block", "type": "nvm_print_state"}
-                    ]
-                },
-                {
-                    "kind": "category",
-                    "name": "🔢 Atomic Components",
-                    "colour": 230,
-                    "contents": [
-                        {"kind": "block", "type": "nvm_linear"},
-                        {"kind": "block", "type": "nvm_attention"},
-                        {"kind": "block", "type": "nvm_layernorm"},
-                        {"kind": "block", "type": "nvm_activation"},
-                        {"kind": "block", "type": "nvm_add"},
-                        {"kind": "block", "type": "nvm_dropout"}
-                    ]
-                },
-                {
-                    "kind": "category",
-                    "name": "📊 Data",
-                    "colour": 290,
-                    "contents": [
-                        {"kind": "block", "type": "nvm_input"},
-                        {"kind": "block", "type": "nvm_embedding"},
-                        {"kind": "block", "type": "nvm_positional_encoding"},
-                        {"kind": "block", "type": "nvm_variable"}
-                    ]
-                },
-                {
-                    "kind": "category",
-                    "name": "💾 File I/O",
-                    "colour": 290,
-                    "contents": [
-                        {"kind": "block", "type": "nvm_load_dataset"},
-                        {"kind": "block", "type": "nvm_save_data"},
-                        {"kind": "block", "type": "nvm_load_pretrained"},
-                        {"kind": "block", "type": "nvm_save_checkpoint"},
-                        {"kind": "block", "type": "nvm_load_checkpoint"}
-                    ]
-                },
-                {
-                    "kind": "category",
-                    "name": "🎓 Training",
-                    "colour": 120,
-                    "contents": [
-                        {"kind": "block", "type": "nvm_optimizer"},
-                        {"kind": "block", "type": "nvm_loss_function"},
-                        {"kind": "block", "type": "nvm_compute_loss"},
-                        {"kind": "block", "type": "nvm_backward"},
-                        {"kind": "block", "type": "nvm_optimizer_step"},
-                        {"kind": "block", "type": "nvm_zero_grad"}
-                    ]
-                },
-                {
-                    "kind": "category",
-                    "name": "🔁 Control Flow",
-                    "colour": 210,
-                    "contents": [
-                        {"kind": "block", "type": "nvm_for_range"},
-                        {"kind": "block", "type": "nvm_for_each"}
-                    ]
-                },
-                {
-                    "kind": "category",
-                    "name": "🛠️ Utilities",
-                    "colour": 180,
-                    "contents": [
-                        {"kind": "block", "type": "nvm_print_shape"},
-                        {"kind": "block", "type": "nvm_set_seed"},
-                        {"kind": "block", "type": "nvm_device"},
-                        {"kind": "block", "type": "nvm_to_device"}
-                    ]
-                },
-                {
-                    "kind": "category",
-                    "name": "🎭 Multimodal",
-                    "colour": 270,
-                    "contents": [
-                        {"kind": "block", "type": "nvm_load_multimodal_model"},
-                        {"kind": "block", "type": "nvm_load_processor"},
-                        {"kind": "block", "type": "nvm_conversation"},
-                        {"kind": "block", "type": "nvm_message"},
-                        {"kind": "block", "type": "nvm_message_multimodal"},
-                        {"kind": "block", "type": "nvm_multimodal_input"},
-                        {"kind": "block", "type": "nvm_process_multimodal"},
-                        {"kind": "block", "type": "nvm_generate_multimodal"},
-                        {"kind": "block", "type": "nvm_decode_response"},
-                        {"kind": "block", "type": "nvm_save_audio"}
-                    ]
-                },
-                {
-                    "kind": "category",
-                    "name": "🔧 Variables",
-                    "colour": 330,
-                    "custom": "VARIABLE"
-                }
-            ]
-        };
-
-        // Tab switching function
-        function switchTab(tabName) {
-            // Update tab buttons
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            event.target.classList.add('active');
-
-            // Update tab content
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            document.getElementById(tabName + '-tab').classList.add('active');
-
-            // Resize Blockly when switching back to designer
-            if (tabName === 'designer') {
-                Blockly.svgResize(workspace);
-            }
-        }
-
-        // Initialize Blockly workspace
-        const workspace = Blockly.inject('blockly-container', {
-            toolbox: toolbox,
-            grid: {
-                spacing: 20,
-                length: 3,
-                colour: '#3e3e42',
-                snap: true
-            },
-            zoom: {
-                controls: true,
-                wheel: true,
-                startScale: 0.9,
-                maxScale: 3,
-                minScale: 0.3,
-                scaleSpeed: 1.2
-            },
-            trashcan: true,
-            theme: Blockly.Theme.defineTheme('dark', {
-                'base': Blockly.Themes.Classic,
-                'componentStyles': {
-                    'workspaceBackgroundColour': '#1e1e1e',
-                    'toolboxBackgroundColour': '#252526',
-                    'flyoutBackgroundColour': '#2d2d30',
-                    'flyoutForegroundColour': '#ccc',
-                    'flyoutOpacity': 0.95,
-                    'scrollbarColour': '#797979',
-                    'scrollbarOpacity': 0.4,
-                    'insertionMarkerColour': '#fff',
-                    'insertionMarkerOpacity': 0.3
-                }
-            })
-        });
-
-        // Update code display when workspace changes
-        function updateCodeLanguage() {
-            updateCode();
-            const lang = document.getElementById('language-selector').value;
-            const title = document.getElementById('code-header-title');
-            title.textContent = lang === 'python' ? 'Generated Python Code' : 'Generated C# Code';
-
-            // Update Monaco language
-            if (monacoEditor) {
-                monaco.editor.setModelLanguage(monacoEditor.getModel(), lang === 'python' ? 'python' : 'csharp');
-            }
-
-            // Disable run button for C# (only Python backend available)
-            const runButton = document.getElementById('run-button');
-            if (lang === 'csharp') {
-                runButton.disabled = true;
-                runButton.style.opacity = '0.5';
-                runButton.style.cursor = 'not-allowed';
-                runButton.title = 'C# execution not supported (Python backend only)';
-            } else {
-                runButton.disabled = false;
-                runButton.style.opacity = '1';
-                runButton.style.cursor = 'pointer';
-                runButton.title = 'Run code on backend';
-            }
-        }
-
-        function updateCode() {
-            try {
-                const lang = document.getElementById('language-selector').value;
-                let code;
-
-                if (lang === 'python') {
-                    code = pythonGenerator.workspaceToCode(workspace);
-
-                    // Add imports if there's actual code
-                    if (code.trim()) {
-                        const imports = `import numpy as np
-from typing import Dict, Any, List, Optional, Tuple
-from dataclasses import dataclass, field
-import time
-
-# Import atomic components from neuralAtomLib.py
-# (Assumes SimpleLinearAtom, SimpleAttentionAtom, ComputationalState are defined)
-
-`;
-                        code = imports + code;
+            this.properties = {};
+            if (def.properties) {
+                for (const prop of def.properties) {
+                    this.properties[prop.name] = prop.default;
+                    if (prop.type === 'bool') {
+                        this.addWidget("toggle", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); });
+                    } else if (prop.type === 'choice' && prop.options) {
+                        this.addWidget("combo", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); }, { values: prop.options });
+                    } else if (prop.type === 'int' || prop.type === 'float') {
+                        this.addWidget("number", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); }, { precision: prop.type === 'int' ? 0 : 3 });
                     } else {
-                        code = "# Drag blocks to build your Neural VM experiment\n# Code will appear here automatically";
+                        this.addWidget("text", prop.name, String(prop.default), (v) => { this.properties[prop.name] = v; scheduleCompile(); });
                     }
-                } else if (lang === 'csharp') {
-                    code = csharpGenerator.workspaceToCode(workspace);
+                }
+            }
 
-                    // Add C# usings and namespace if there's actual code
-                    if (code.trim()) {
-                        const usings = `using System;
-using System.Collections.Generic;
-using System.Linq;
-using TorchSharp;
-using static TorchSharp.torch;
-using static TorchSharp.torch.nn;
-using RapidNeuralDesigner;
+            this._atomicDef = def;
 
-namespace NeuralVMExperiment
-{
-    class Program
-    {
-        static void Main(string[] args)
-        {
-`;
-                        const footer = `
-            Console.WriteLine("Experiment completed successfully!");
+            if (def.color) {
+                this.color = def.color;
+                this.bgcolor = darkenColor(def.color, 0.35);
+            }
+        }
+
+        AtomicNode.title = atomic.name;
+        AtomicNode.desc = atomic.description || '';
+        AtomicNode.prototype.onExecute = function() {};
+        AtomicNode.prototype.onPropertyChanged = function() { scheduleCompile(); };
+
+        LiteGraph.registerNodeType(typeName, AtomicNode);
+        return typeName;
+    }
+
+    // ---- Load Atomics from JSON ----
+
+    async function loadAtomics() {
+        try {
+            const indexResp = await fetch('atomics/index.json');
+            const index = await indexResp.json();
+            const paletteEl = document.getElementById('atomic-palette');
+            paletteEl.innerHTML = '';
+
+            for (const [catId, catDef] of Object.entries(index.categories)) {
+                const catEl = document.createElement('div');
+                catEl.className = 'palette-category';
+                catEl.innerHTML = `
+                    <div class="palette-category-header">
+                        <span>${catDef.icon} ${catDef.label}</span>
+                        <span class="palette-arrow">&#9654;</span>
+                    </div>
+                    <div class="palette-category-content"></div>
+                `;
+                paletteEl.appendChild(catEl);
+
+                const headerEl = catEl.querySelector('.palette-category-header');
+                const contentEl = catEl.querySelector('.palette-category-content');
+                headerEl.addEventListener('click', () => catEl.classList.toggle('expanded'));
+
+                for (const file of catDef.files) {
+                    const resp = await fetch(`atomics/${file}`);
+                    const atomics = await resp.json();
+
+                    for (const atomic of atomics) {
+                        const typeName = registerAtomic(atomic);
+
+                        const nodeEl = document.createElement('div');
+                        nodeEl.className = 'palette-node';
+                        nodeEl.style.borderLeftColor = atomic.color || '#888';
+                        nodeEl.innerHTML = `<div>${atomic.name}</div>` +
+                            (atomic.description ? `<div class="palette-node-desc">${atomic.description}</div>` : '');
+                        nodeEl.addEventListener('click', () => addNodeToGraph(typeName));
+                        contentEl.appendChild(nodeEl);
+                    }
+                }
+            }
+
+            updateStatus(`Loaded ${Object.keys(atomicRegistry).length} atomics`);
+        } catch (err) {
+            console.error('Failed to load atomics:', err);
+            updateStatus('Error loading atomics: ' + err.message);
         }
     }
-}
-`;
-                        code = usings + code + footer;
-                    } else {
-                        code = "// Drag blocks to build your Neural VM experiment\n// Code will appear here automatically";
-                    }
-                }
 
-                // Update Monaco Editor if it's loaded
-                if (monacoEditor) {
-                    monacoEditor.setValue(code);
-                    // Run validation only for Python
-                    if (lang === 'python') {
-                        setTimeout(() => {
-                            const markers = window.validatePythonCode(code);
-                            updateValidationMessages(markers);
-                        }, 100);
-                    }
-                }
+    // ---- Add Node to Graph ----
 
-                validateWorkspace();
-            } catch (e) {
-                console.error('Code generation error:', e);
-                if (monacoEditor) {
-                    monacoEditor.setValue(`# Error generating code:\n# ${e.message}\n\n# Please check the console for details.`);
-                }
+    function addNodeToGraph(typeName) {
+        const node = LiteGraph.createNode(typeName);
+        if (!node) { console.error('Failed to create node:', typeName); return; }
+
+        const area = graphCanvas.visible_area;
+        if (area) {
+            node.pos = [
+                area[0] + area[2] * 0.3 + (Math.random() - 0.5) * 150,
+                area[1] + area[3] * 0.3 + (Math.random() - 0.5) * 150
+            ];
+        } else {
+            node.pos = [300 + Math.random() * 200, 100 + Math.random() * 300];
+        }
+
+        graph.add(node);
+        scheduleCompile();
+    }
+
+    // ---- Graph-to-Code Compiler (Handlebars) ----
+
+    let compileTimer = null;
+
+    function scheduleCompile() {
+        clearTimeout(compileTimer);
+        compileTimer = setTimeout(compileGraph, 150);
+    }
+
+    function compileGraph() {
+        const nodes = graph._nodes;
+        if (!nodes || nodes.length === 0) {
+            setCode('# Build a graph in the Designer tab to generate code');
+            updateNodeCount(0);
+            return;
+        }
+        updateNodeCount(nodes.length);
+
+        try {
+            const code = compile(nodes, graph.links);
+            setCode(code);
+        } catch (err) {
+            setCode(`# Compilation error: ${err.message}\n# ${err.stack}`);
+        }
+    }
+
+    function compile(nodes, linksMap) {
+        // 1. Topological sort
+        const sorted = topologicalSort(nodes, linksMap);
+
+        // 2. Assign variable names to each output port
+        const varNames = {};  // "nodeId:slotIndex" -> variable name
+        const usedNames = new Set();
+
+        for (const node of sorted) {
+            const def = node._atomicDef || node._molecularDef;
+            if (!def) continue;
+
+            for (let i = 0; i < def.outputs.length; i++) {
+                const defId = def.id || def.name?.toLowerCase().replace(/\s+/g, '_') || 'node';
+                const baseName = sanitizeName(`${defId}_${node.id}_${def.outputs[i].name}`);
+                let name = baseName;
+                let c = 2;
+                while (usedNames.has(name)) { name = `${baseName}_${c++}`; }
+                usedNames.add(name);
+                varNames[`${node.id}:${i}`] = name;
             }
         }
 
-        // Update validation messages display
-        function updateValidationMessages(markers) {
-            const validationDiv = document.getElementById('validation-messages');
-            if (!markers || markers.length === 0) {
-                return;
+        // 3. Resolve inputs via wires, substitute into code templates
+        const codeLines = [];
+        const allImports = new Set();
+
+        for (const node of sorted) {
+            const def = node._atomicDef || node._molecularDef;
+            if (!def) continue;
+
+            if (def.imports) {
+                for (const imp of def.imports) allImports.add(imp);
             }
 
-            let html = '';
-            markers.forEach(marker => {
-                const className = marker.severity === 8 ? 'validation-error' : 'validation-warning';
-                const icon = marker.severity === 8 ? '❌' : '⚠️';
-                html += `<div class="${className}">${icon} Line ${marker.startLineNumber}: ${marker.message}</div>`;
-            });
+            const subs = {};
 
-            if (html) {
-                validationDiv.innerHTML = html;
-            }
-        }
+            // Special: {{_id}} for unique temp variable scoping
+            subs['_id'] = String(node.id);
 
-        workspace.addChangeListener(updateCode);
-
-        // Validation function
-        function validateWorkspace() {
-            const messages = [];
-            const blocks = workspace.getAllBlocks(false);
-
-            // Basic validation
-            let hasExperiment = false;
-            let componentCount = 0;
-
-            blocks.forEach(block => {
-                if (block.type === 'nvm_experiment') {
-                    hasExperiment = true;
-                }
-                if (block.type === 'nvm_linear' || block.type === 'nvm_attention') {
-                    componentCount++;
-                }
-            });
-
-            const validationDiv = document.getElementById('validation-messages');
-            validationDiv.innerHTML = '';
-
-            if (blocks.length === 0) {
-                validationDiv.innerHTML = '<div class="validation-warning">⚠️ Workspace is empty. Start by dragging an Experiment block.</div>';
-                return;
+            // Output variables
+            for (let i = 0; i < def.outputs.length; i++) {
+                subs[def.outputs[i].name] = varNames[`${node.id}:${i}`];
             }
 
-            if (!hasExperiment) {
-                validationDiv.innerHTML += '<div class="validation-warning">⚠️ Add an Experiment block to structure your code.</div>';
-            }
+            // Input variables (trace wires)
+            for (let i = 0; i < def.inputs.length; i++) {
+                const inputName = def.inputs[i].name;
+                const linkId = (node.inputs[i] && node.inputs[i].link != null) ? node.inputs[i].link : null;
 
-            if (componentCount === 0) {
-                validationDiv.innerHTML += '<div class="validation-warning">⚠️ No atomic components added yet.</div>';
-            } else {
-                validationDiv.innerHTML += `<div class="validation-success">✓ ${componentCount} atomic component(s) defined.</div>`;
-            }
-
-            if (hasExperiment && componentCount > 0) {
-                validationDiv.innerHTML += '<div class="validation-success">✓ Experiment looks good! Ready to generate code.</div>';
-            }
-        }
-
-        // Workspace management functions
-        function saveWorkspace() {
-            const xml = Blockly.Xml.workspaceToDom(workspace);
-            const xmlText = Blockly.Xml.domToText(xml);
-            const blob = new Blob([xmlText], {type: 'text/xml'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'nvm_experiment.xml';
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        function loadWorkspace() {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.xml';
-            input.onchange = e => {
-                const file = e.target.files[0];
-                const reader = new FileReader();
-                reader.onload = event => {
-                    const xml = Blockly.utils.xml.textToDom(event.target.result);
-                    workspace.clear();
-                    Blockly.Xml.domToWorkspace(xml, workspace);
-                };
-                reader.readAsText(file);
-            };
-            input.click();
-        }
-
-        function clearWorkspace() {
-            if (confirm('Clear workspace? This cannot be undone.')) {
-                workspace.clear();
-            }
-        }
-
-        function copyCode() {
-            const code = monacoEditor ? monacoEditor.getValue() : '';
-            navigator.clipboard.writeText(code).then(() => {
-                alert('Code copied to clipboard!');
-            });
-        }
-
-        function downloadCode() {
-            const code = monacoEditor ? monacoEditor.getValue() : '';
-            const blob = new Blob([code], {type: 'text/plain'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'nvm_experiment.py';
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        // Backend execution functions
-        const BACKEND_URL = 'http://localhost:5000';
-
-        async function runCode() {
-            const lang = document.getElementById('language-selector').value;
-            if (lang !== 'python') {
-                alert('Only Python code can be executed. C# code generation is for download/copy only.');
-                return;
-            }
-
-            const code = monacoEditor ? monacoEditor.getValue() : '';
-            const runButton = document.getElementById('run-button');
-            const executionOutput = document.getElementById('execution-output');
-            const executionContent = document.getElementById('execution-content');
-
-            if (!code.trim()) {
-                alert('No code to run!');
-                return;
-            }
-
-            // Disable button and show loading
-            runButton.disabled = true;
-            runButton.classList.add('running');
-            runButton.textContent = '⏳ Running...';
-
-            executionOutput.classList.add('visible');
-            executionContent.innerHTML = '<div class="exec-info">⏳ Executing code...</div>';
-
-            try {
-                const response = await fetch(`${BACKEND_URL}/execute`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ code })
-                });
-
-                const result = await response.json();
-
-                let output = '';
-
-                if (result.success) {
-                    output += `<div class="exec-info">✓ Execution completed in ${result.execution_time}s</div>`;
-
-                    if (result.stdout) {
-                        output += `<div class="exec-stdout"><strong>Output:</strong>\n${escapeHtml(result.stdout)}</div>`;
-                    }
-
-                    if (result.stderr) {
-                        output += `<div class="exec-stderr"><strong>Warnings:</strong>\n${escapeHtml(result.stderr)}</div>`;
-                    }
-
-                    if (!result.stdout && !result.stderr) {
-                        output += `<div class="exec-info">No output produced</div>`;
-                    }
+                if (linkId !== null && linksMap[linkId]) {
+                    const link = linksMap[linkId];
+                    const sourceVar = varNames[`${link.origin_id}:${link.origin_slot}`];
+                    subs[inputName] = sourceVar || `None  # unresolved: ${inputName}`;
                 } else {
-                    output += `<div class="exec-error">✗ Execution failed</div>`;
+                    subs[inputName] = `None  # disconnected: ${inputName}`;
+                }
+            }
 
-                    if (result.error) {
-                        output += `<div class="exec-error"><strong>Error:</strong>\n${escapeHtml(result.error)}</div>`;
-                    }
+            // Properties
+            if (def.properties) {
+                for (const prop of def.properties) {
+                    let val = node.properties[prop.name];
+                    if (val === undefined) val = prop.default;
+                    subs[prop.name] = (prop.type === 'bool') ? (val ? 'True' : 'False') : String(val);
+                }
+            }
 
-                    if (result.stderr) {
-                        output += `<div class="exec-stderr"><strong>Details:</strong>\n${escapeHtml(result.stderr)}</div>`;
-                    }
+            // Handlebars substitution
+            let code = def.code;
+            for (const [key, value] of Object.entries(subs)) {
+                code = code.replace(new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, 'g'), value);
+            }
 
-                    if (result.stdout) {
-                        output += `<div class="exec-stdout"><strong>Partial output:</strong>\n${escapeHtml(result.stdout)}</div>`;
+            const label = node._molecularMeta ? node._molecularMeta.name : def.name;
+            codeLines.push(`# [${label}] node:${node.id}`);
+            codeLines.push(code);
+            codeLines.push('');
+        }
+
+        // 4. Assemble
+        let script = `# Generated by Rapid Neural Designer\n`;
+        script += `# ${new Date().toISOString()}\n\n`;
+
+        const sortedImports = Array.from(allImports).sort();
+        if (sortedImports.length > 0) {
+            script += sortedImports.join('\n') + '\n\n';
+        }
+
+        script += codeLines.join('\n');
+        script += `\nprint("Model execution complete.")`;
+
+        return script;
+    }
+
+    function escapeRegex(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function topologicalSort(nodes, linksMap) {
+        const inDegree = {};
+        const adjList = {};
+        const nodeMap = {};
+
+        for (const node of nodes) {
+            nodeMap[node.id] = node;
+            inDegree[node.id] = 0;
+            adjList[node.id] = [];
+        }
+
+        if (linksMap) {
+            for (const linkId in linksMap) {
+                const link = linksMap[linkId];
+                if (!link || !nodeMap[link.origin_id] || !nodeMap[link.target_id]) continue;
+                inDegree[link.target_id]++;
+                adjList[link.origin_id].push(link.target_id);
+            }
+        }
+
+        // Kahn's algorithm
+        const queue = [];
+        for (const id in inDegree) {
+            if (inDegree[id] === 0) queue.push(parseInt(id));
+        }
+
+        const sorted = [];
+        while (queue.length > 0) {
+            const id = queue.shift();
+            if (nodeMap[id]) sorted.push(nodeMap[id]);
+            for (const depId of adjList[id]) {
+                inDegree[depId]--;
+                if (inDegree[depId] === 0) queue.push(depId);
+            }
+        }
+
+        // Append any remaining (cycle or disconnected)
+        for (const node of nodes) {
+            if (!sorted.includes(node)) sorted.push(node);
+        }
+
+        return sorted;
+    }
+
+    // ---- UI Helpers ----
+
+    function setCode(code) { if (monacoEditor) monacoEditor.setValue(code); }
+    function updateNodeCount(n) { document.getElementById('status-nodes').textContent = `Nodes: ${n}`; }
+    function updateStatus(msg) { document.getElementById('status-info').textContent = msg; }
+
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        event.target.classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById(tabName + '-tab').classList.add('active');
+        if (tabName === 'graph') setTimeout(resizeCanvas, 50);
+        if (tabName === 'code') compileGraph();
+    }
+
+    // ---- File Operations ----
+
+    function saveGraph() {
+        const data = JSON.stringify(graph.serialize(), null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'rnd_graph.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function loadGraph() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = e => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = event => {
+                try {
+                    graph.configure(JSON.parse(event.target.result));
+                    scheduleCompile();
+                    updateStatus('Loaded: ' + file.name);
+                } catch (err) {
+                    alert('Error loading graph: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    }
+
+    function clearGraph() {
+        if (confirm('Clear entire graph?')) {
+            graph.clear();
+            scheduleCompile();
+        }
+    }
+
+    function copyCode() {
+        const code = monacoEditor ? monacoEditor.getValue() : '';
+        navigator.clipboard.writeText(code).then(() => updateStatus('Code copied'));
+    }
+
+    function downloadCode() {
+        const code = monacoEditor ? monacoEditor.getValue() : '';
+        const blob = new Blob([code], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'rnd_model.py';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // ---- Backend Execution ----
+
+    const BACKEND_URL = 'http://localhost:5000';
+
+    async function runCode() {
+        const code = monacoEditor ? monacoEditor.getValue() : '';
+        const btn = document.getElementById('run-button');
+        const outEl = document.getElementById('execution-output');
+        const contentEl = document.getElementById('execution-content');
+
+        if (!code.trim()) { alert('No code to run'); return; }
+
+        btn.disabled = true;
+        btn.classList.add('running');
+        btn.textContent = 'Running...';
+        outEl.classList.add('visible');
+        contentEl.innerHTML = '<div class="exec-info">Executing...</div>';
+
+        try {
+            const resp = await fetch(`${BACKEND_URL}/execute`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+            const result = await resp.json();
+            let html = '';
+            if (result.success) {
+                html += `<div class="exec-info">Completed in ${result.execution_time}s</div>`;
+                if (result.stdout) html += `<div class="exec-stdout">${escapeHtml(result.stdout)}</div>`;
+                if (result.stderr) html += `<div class="exec-stderr">${escapeHtml(result.stderr)}</div>`;
+            } else {
+                html += `<div class="exec-error">Failed</div>`;
+                if (result.error) html += `<div class="exec-error">${escapeHtml(result.error)}</div>`;
+                if (result.stderr) html += `<div class="exec-stderr">${escapeHtml(result.stderr)}</div>`;
+            }
+            contentEl.innerHTML = html;
+        } catch (err) {
+            contentEl.innerHTML = `<div class="exec-error">Cannot connect to backend</div><div class="exec-info">Run: python backend.py</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.classList.remove('running');
+            btn.textContent = 'Run Code';
+        }
+    }
+
+    function clearExecutionOutput() {
+        document.getElementById('execution-output').classList.remove('visible');
+    }
+
+    // ---- Molecular Components ----
+
+    async function loadMolecularComponents() {
+        try {
+            const resp = await fetch('components/index.json');
+            if (!resp.ok) return;
+
+            const index = await resp.json();
+            const paletteEl = document.getElementById('molecular-palette');
+            paletteEl.innerHTML = '';
+
+            for (const comp of index.components) {
+                const compResp = await fetch(`components/${comp.file}`);
+                const compDef = await compResp.json();
+                molecularRegistry[comp.id] = compDef;
+                registerMolecular(comp, compDef);
+
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'palette-node';
+                nodeEl.style.borderLeftColor = comp.color || '#6bb5ff';
+                nodeEl.innerHTML = `<div>${comp.name}</div><div class="palette-node-desc">${comp.description || ''}</div>`;
+                nodeEl.addEventListener('click', () => addNodeToGraph(`molecular/${comp.id}`));
+                paletteEl.appendChild(nodeEl);
+            }
+
+            updateStatus(`Loaded ${index.components.length} molecular components`);
+        } catch (err) {
+            console.log('No molecular components found (components/index.json missing)');
+        }
+    }
+
+    function registerMolecular(meta, compDef) {
+        const typeName = `molecular/${meta.id}`;
+
+        function MolecularNode() {
+            if (compDef.inputs) {
+                for (const inp of compDef.inputs) this.addInput(inp.name, inp.type);
+            }
+            if (compDef.outputs) {
+                for (const out of compDef.outputs) this.addOutput(out.name, out.type);
+            }
+            this.properties = {};
+            if (compDef.properties) {
+                for (const prop of compDef.properties) {
+                    this.properties[prop.name] = prop.default;
+                    if (prop.type === 'bool') {
+                        this.addWidget("toggle", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); });
+                    } else if (prop.type === 'choice' && prop.options) {
+                        this.addWidget("combo", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); }, { values: prop.options });
+                    } else if (prop.type === 'int' || prop.type === 'float') {
+                        this.addWidget("number", prop.name, prop.default, (v) => { this.properties[prop.name] = v; scheduleCompile(); }, { precision: prop.type === 'int' ? 0 : 3 });
+                    } else {
+                        this.addWidget("text", prop.name, String(prop.default), (v) => { this.properties[prop.name] = v; scheduleCompile(); });
                     }
                 }
+            }
+            this._molecularDef = compDef;
+            this._molecularMeta = meta;
+            this.color = meta.color || '#6bb5ff';
+            this.bgcolor = darkenColor(this.color, 0.35);
+        }
 
-                executionContent.innerHTML = output;
+        MolecularNode.title = meta.name;
+        MolecularNode.desc = meta.description || '';
+        MolecularNode.prototype.onExecute = function() {};
+        MolecularNode.prototype.onPropertyChanged = function() { scheduleCompile(); };
 
-            } catch (error) {
-                executionContent.innerHTML = `
-                    <div class="exec-error">✗ Failed to connect to backend</div>
-                    <div class="exec-error">Make sure the backend server is running:</div>
-                    <div class="exec-info">python backend.py</div>
-                    <div class="exec-stderr">Error: ${escapeHtml(error.message)}</div>
-                `;
-            } finally {
-                // Re-enable button
-                runButton.disabled = false;
-                runButton.classList.remove('running');
-                runButton.textContent = '▶️ Run Code';
+        LiteGraph.registerNodeType(typeName, MolecularNode);
+    }
+
+    // ---- Model Library ----
+
+    async function loadModels() {
+        try {
+            const resp = await fetch('models/index.json');
+            if (!resp.ok) return;
+
+            const index = await resp.json();
+            const paletteEl = document.getElementById('model-palette');
+            paletteEl.innerHTML = '';
+
+            for (const model of index.models) {
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'palette-node';
+                nodeEl.style.borderLeftColor = model.color || '#e056a0';
+                nodeEl.innerHTML = `<div>${model.name}</div><div class="palette-node-desc">${model.description || ''}</div>`;
+                nodeEl.addEventListener('click', async () => {
+                    if (graph._nodes.length > 0 && !confirm(`Load "${model.name}"? This will replace the current graph.`)) return;
+                    try {
+                        const r = await fetch(`models/${model.file}`);
+                        const data = await r.json();
+                        graph.configure(data);
+                        scheduleCompile();
+                        updateStatus(`Loaded model: ${model.name}`);
+                    } catch (err) {
+                        alert('Error loading model: ' + err.message);
+                    }
+                });
+                paletteEl.appendChild(nodeEl);
+            }
+        } catch (err) {
+            console.log('No models found (models/index.json missing)');
+        }
+    }
+
+    // ---- Explode Molecular into Atomics ----
+
+    function explodeMolecular(node) {
+        const def = node._molecularDef;
+        if (!def || !def.graph) {
+            updateStatus('This molecular has no expandable graph definition');
+            return;
+        }
+
+        const subNodes = def.graph.nodes;
+        const subLinks = def.graph.links;
+        const rawInputMap = def.graph.input_map || {};
+        const rawOutputMap = def.graph.output_map || {};
+
+        // Normalize maps: ensure values are always arrays of {node_id, slot}
+        const inputMap = {};
+        for (const [k, v] of Object.entries(rawInputMap)) {
+            inputMap[k] = Array.isArray(v) ? v : [v];
+        }
+        const outputMap = {};
+        for (const [k, v] of Object.entries(rawOutputMap)) {
+            outputMap[k] = Array.isArray(v) ? v : [v];
+        }
+
+        const baseX = node.pos[0];
+        const baseY = node.pos[1];
+        const idRemap = {};
+
+        // Create all internal nodes
+        for (const sn of subNodes) {
+            const newNode = LiteGraph.createNode(sn.type);
+            if (!newNode) { console.warn('Cannot create node type:', sn.type); continue; }
+
+            newNode.pos = [baseX + (sn.pos?.[0] || 0), baseY + (sn.pos?.[1] || 0)];
+            if (sn.properties) {
+                for (const [k, v] of Object.entries(sn.properties)) {
+                    newNode.properties[k] = v;
+                    // Update widget values to match
+                    if (newNode.widgets) {
+                        const w = newNode.widgets.find(w => w.name === k);
+                        if (w) w.value = v;
+                    }
+                }
+            }
+            if (sn.title) newNode.title = sn.title;
+            graph.add(newNode);
+            idRemap[sn.id] = newNode.id;
+        }
+
+        // Create internal links
+        if (subLinks) {
+            for (const sl of subLinks) {
+                const fromNode = graph.getNodeById(idRemap[sl[1]]);
+                const toNode = graph.getNodeById(idRemap[sl[3]]);
+                if (fromNode && toNode) {
+                    fromNode.connect(sl[2], toNode, sl[4]);
+                }
             }
         }
 
-        function clearExecutionOutput() {
-            document.getElementById('execution-output').classList.remove('visible');
-            document.getElementById('execution-content').innerHTML = '';
-        }
+        // Reconnect external inputs (supports one-to-many via array maps)
+        if (node.inputs) {
+            for (let i = 0; i < node.inputs.length; i++) {
+                const inp = node.inputs[i];
+                if (inp.link == null) continue;
+                const link = graph.links[inp.link];
+                if (!link) continue;
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+                const mappings = inputMap[inp.name];
+                if (!mappings) continue;
 
-        // Check backend health on load
-        async function checkBackendHealth() {
-            try {
-                const response = await fetch(`${BACKEND_URL}/health`);
-                const result = await response.json();
-                console.log('✓ Backend connected:', result.message);
-            } catch (error) {
-                console.warn('⚠️ Backend not connected. Run "python backend.py" to enable code execution.');
+                const srcNode = graph.getNodeById(link.origin_id);
+                if (!srcNode) continue;
+
+                for (const mapping of mappings) {
+                    const dstNode = graph.getNodeById(idRemap[mapping.node_id]);
+                    if (dstNode) {
+                        srcNode.connect(link.origin_slot, dstNode, mapping.slot);
+                    }
+                }
             }
         }
 
-        // Initialize with empty validation
-        updateCode();
-        checkBackendHealth();
+        // Reconnect external outputs (supports many-from-one)
+        if (node.outputs) {
+            for (let i = 0; i < node.outputs.length; i++) {
+                const out = node.outputs[i];
+                if (!out.links || out.links.length === 0) continue;
+
+                const mappings = outputMap[out.name];
+                if (!mappings || mappings.length === 0) continue;
+                const mapping = mappings[0]; // output comes from one internal node
+
+                const srcNode = graph.getNodeById(idRemap[mapping.node_id]);
+                if (!srcNode) continue;
+
+                for (const linkId of [...out.links]) {
+                    const link = graph.links[linkId];
+                    if (!link) continue;
+                    const dstNode = graph.getNodeById(link.target_id);
+                    if (dstNode) {
+                        srcNode.connect(mapping.slot, dstNode, link.target_slot);
+                    }
+                }
+            }
+        }
+
+        // Remove the original molecular node
+        graph.remove(node);
+        scheduleCompile();
+        updateStatus(`Exploded "${node.title || def.name}" → ${subNodes.length} nodes`);
+    }
+
+    // ---- Context Menu Cleanup ----
+
+    function getSelectedNodes() {
+        return graph._nodes.filter(n => n.is_selected);
+    }
+
+    // Override canvas menu (right-click on empty space)
+    graphCanvas.getCanvasMenuOptions = function() {
+        const options = [];
+        const selected = getSelectedNodes();
+
+        // Add Atomics submenu (grouped by category)
+        const catGroups = {};
+        for (const [id, def] of Object.entries(atomicRegistry)) {
+            const cat = def.category;
+            if (!catGroups[cat]) catGroups[cat] = [];
+            catGroups[cat].push({ content: def.name, callback: () => addNodeToGraph(`atomic/${def.category}/${def.id}`) });
+        }
+        const atomicSubs = [];
+        for (const [cat, items] of Object.entries(catGroups)) {
+            atomicSubs.push({ content: cat.charAt(0).toUpperCase() + cat.slice(1), has_submenu: true, submenu: { options: items } });
+        }
+        options.push({ content: 'Add Primitive', has_submenu: true, submenu: { options: atomicSubs } });
+
+        // Add Moleculars submenu
+        const molSubs = [];
+        for (const [id, def] of Object.entries(molecularRegistry)) {
+            molSubs.push({ content: def.name, callback: () => addNodeToGraph(`molecular/${id}`) });
+        }
+        if (molSubs.length > 0) {
+            options.push({ content: 'Add Component', has_submenu: true, submenu: { options: molSubs } });
+        }
+
+        // Selection operations
+        if (selected.length > 1) {
+            options.push(null);
+            options.push({ content: `Condense (${selected.length} nodes)`, callback: () => createMolecularFromSelection(selected) });
+            options.push({ content: `Delete Selected (${selected.length})`, callback: () => {
+                for (const n of selected) graph.remove(n);
+                scheduleCompile();
+            }});
+        }
+
+        options.push(null);
+        options.push({ content: 'Select All', callback: () => {
+            for (const n of graph._nodes) n.is_selected = true;
+            graphCanvas.setDirty(true, true);
+        }});
+        options.push({ content: 'Deselect All', callback: () => {
+            for (const n of graph._nodes) n.is_selected = false;
+            graphCanvas.setDirty(true, true);
+        }});
+        options.push({ content: 'Clear Graph', callback: () => clearGraph() });
+
+        return options;
+    };
+
+    // Override node menu (right-click on a node)
+    graphCanvas.getNodeMenuOptions = function(node) {
+        const options = [];
+        const selected = getSelectedNodes();
+
+        // If multiple selected and this node is one of them, show group options
+        if (selected.length > 1 && node.is_selected) {
+            options.push({ content: `Condense (${selected.length} nodes)`, callback: () => createMolecularFromSelection(selected) });
+            options.push(null);
+        }
+
+        options.push({ content: 'Clone', callback: () => {
+            const clone = LiteGraph.createNode(node.type);
+            if (clone) {
+                clone.pos = [node.pos[0] + 30, node.pos[1] + 30];
+                if (node.properties) {
+                    for (const [k, v] of Object.entries(node.properties)) clone.properties[k] = v;
+                }
+                graph.add(clone);
+                scheduleCompile();
+            }
+        }});
+
+        // Explode option for molecular nodes
+        if (node._molecularDef) {
+            const hasDef = node._molecularDef.graph;
+            options.push({
+                content: hasDef ? 'Explode' : 'Explode (no definition)',
+                disabled: !hasDef,
+                callback: () => explodeMolecular(node)
+            });
+            options.push({ content: 'Save to File', callback: () => saveMolecularToFile(node) });
+        }
+
+        options.push(null);
+
+        options.push({ content: 'Rename', callback: () => {
+            const name = prompt('Node title:', node.title || '');
+            if (name !== null) { node.title = name; graphCanvas.setDirty(true, true); }
+        }});
+
+        options.push({ content: 'Delete', callback: () => {
+            graph.remove(node);
+            scheduleCompile();
+        }});
+
+        return options;
+    };
+
+    // Disable default LiteGraph search box (it shows built-in types)
+    graphCanvas.allow_searchbox = false;
+
+    // ---- Create Molecular from Selection ----
+
+    function createMolecularFromSelection(selectedNodes) {
+        const name = prompt('Component name:');
+        if (!name || !name.trim()) return;
+
+        const cleanName = name.trim();
+        const id = cleanName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        const selectedIds = new Set(selectedNodes.map(n => n.id));
+
+        // Bounding box for relative positioning
+        let minX = Infinity, minY = Infinity, cx = 0, cy = 0;
+        for (const n of selectedNodes) {
+            if (n.pos[0] < minX) minX = n.pos[0];
+            if (n.pos[1] < minY) minY = n.pos[1];
+            cx += n.pos[0]; cy += n.pos[1];
+        }
+        cx /= selectedNodes.length;
+        cy /= selectedNodes.length;
+
+        // Build internal node list
+        const internalNodes = [];
+        const idMap = {};
+        let seqId = 1;
+
+        for (const n of selectedNodes) {
+            idMap[n.id] = seqId;
+            const nodeDef = {
+                id: seqId,
+                type: n.type,
+                pos: [Math.round(n.pos[0] - minX), Math.round(n.pos[1] - minY)],
+                properties: { ...n.properties }
+            };
+            if (n.title) nodeDef.title = n.title;
+            internalNodes.push(nodeDef);
+            seqId++;
+        }
+
+        // Scan wires to find internal links, external inputs, external outputs
+        const internalLinks = [];
+        let linkSeq = 1;
+        const externalInputs = {};     // inputName -> [{node_id, slot}]
+        const externalOutputs = {};    // outputName -> {node_id, slot}
+        const incomingWires = [];      // [{srcNodeId, srcSlot, inputName}]
+        const outgoingWires = [];      // [{outputName, dstNodeId, dstSlot}]
+        const inputNameCount = {};
+
+        for (const n of selectedNodes) {
+            if (n.inputs) {
+                for (let i = 0; i < n.inputs.length; i++) {
+                    const inp = n.inputs[i];
+                    if (inp.link == null) continue;
+                    const link = graph.links[inp.link];
+                    if (!link) continue;
+
+                    if (selectedIds.has(link.origin_id)) {
+                        internalLinks.push([linkSeq++, idMap[link.origin_id], link.origin_slot, idMap[n.id], i, inp.type || 'tensor']);
+                    } else {
+                        // Deduplicate input names if multiple nodes have same-named inputs
+                        let inputName = inp.name || 'input';
+                        if (inputNameCount[inputName]) {
+                            inputNameCount[inputName]++;
+                            inputName = `${inputName}_${inputNameCount[inputName]}`;
+                        } else {
+                            inputNameCount[inputName] = 1;
+                        }
+                        if (!externalInputs[inputName]) externalInputs[inputName] = [];
+                        externalInputs[inputName].push({ node_id: idMap[n.id], slot: i });
+                        incomingWires.push({ srcNodeId: link.origin_id, srcSlot: link.origin_slot, inputName });
+                    }
+                }
+            }
+            if (n.outputs) {
+                for (let i = 0; i < n.outputs.length; i++) {
+                    const out = n.outputs[i];
+                    if (!out.links || out.links.length === 0) continue;
+                    for (const linkId of out.links) {
+                        const link = graph.links[linkId];
+                        if (link && !selectedIds.has(link.target_id)) {
+                            const outputName = out.name || 'output';
+                            if (!externalOutputs[outputName]) {
+                                externalOutputs[outputName] = { node_id: idMap[n.id], slot: i };
+                            }
+                            outgoingWires.push({ outputName, dstNodeId: link.target_id, dstSlot: link.target_slot });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Build code template by mini-compiling the sub-graph
+        const inputs = Object.keys(externalInputs).map(n => ({ name: n, type: 'tensor' }));
+        const outputs = Object.keys(externalOutputs).map(n => ({ name: n, type: 'tensor' }));
+        const codeResult = compileMolecularCode(selectedNodes, selectedIds, inputs, outputs);
+
+        const molecularDef = {
+            name: cleanName,
+            id: id,
+            description: `Custom molecular: ${cleanName}`,
+            inputs: inputs,
+            outputs: outputs,
+            properties: [],
+            code: codeResult.code,
+            imports: codeResult.imports,
+            graph: {
+                nodes: internalNodes,
+                links: internalLinks,
+                input_map: externalInputs,
+                output_map: externalOutputs
+            }
+        };
+
+        // Register the new molecular type dynamically
+        const meta = { id, name: cleanName, description: molecularDef.description, color: '#c678dd' };
+        molecularRegistry[id] = molecularDef;
+        registerMolecular(meta, molecularDef);
+
+        // Add to palette
+        const paletteEl = document.getElementById('molecular-palette');
+        // Clear placeholder text if present
+        if (paletteEl.querySelector('div[style]')) {
+            const placeholder = paletteEl.querySelector('div[style*="color:#888"]');
+            if (placeholder) placeholder.remove();
+        }
+        const nodeEl = document.createElement('div');
+        nodeEl.className = 'palette-node';
+        nodeEl.style.borderLeftColor = meta.color;
+        nodeEl.innerHTML = `<div>${cleanName}</div><div class="palette-node-desc">${molecularDef.description}</div>`;
+        nodeEl.addEventListener('click', () => addNodeToGraph(`molecular/${id}`));
+        paletteEl.appendChild(nodeEl);
+
+        // Create the new molecular node at the center of the selection
+        const newNode = LiteGraph.createNode(`molecular/${id}`);
+        if (!newNode) { updateStatus('Error: could not create molecular node'); return; }
+        newNode.pos = [cx - 100, cy - 30];
+        graph.add(newNode);
+
+        // Reconnect incoming wires to the new node's input ports
+        const inputNames = inputs.map(i => i.name);
+        for (const wire of incomingWires) {
+            const srcNode = graph.getNodeById(wire.srcNodeId);
+            const slotIdx = inputNames.indexOf(wire.inputName);
+            if (srcNode && slotIdx >= 0) {
+                srcNode.connect(wire.srcSlot, newNode, slotIdx);
+            }
+        }
+
+        // Reconnect outgoing wires from the new node's output ports
+        const outputNames = outputs.map(o => o.name);
+        for (const wire of outgoingWires) {
+            const dstNode = graph.getNodeById(wire.dstNodeId);
+            const slotIdx = outputNames.indexOf(wire.outputName);
+            if (dstNode && slotIdx >= 0) {
+                newNode.connect(slotIdx, dstNode, wire.dstSlot);
+            }
+        }
+
+        // Remove original selected nodes
+        for (const n of selectedNodes) {
+            graph.remove(n);
+        }
+
+        scheduleCompile();
+        updateStatus(`Condensed ${internalNodes.length} nodes → "${cleanName}"`);
+    }
+
+    function compileMolecularCode(nodes, nodeIds, extInputs, extOutputs) {
+        // Mini-compile a sub-graph into a code template with handlebars
+        const sorted = [];
+        const visited = new Set();
+
+        // Simple topo sort within selection
+        function visit(n) {
+            if (visited.has(n.id)) return;
+            visited.add(n.id);
+            if (n.inputs) {
+                for (const inp of n.inputs) {
+                    if (inp.link == null) continue;
+                    const link = graph.links[inp.link];
+                    if (link && nodeIds.has(link.origin_id)) {
+                        const srcNode = graph.getNodeById(link.origin_id);
+                        if (srcNode) visit(srcNode);
+                    }
+                }
+            }
+            sorted.push(n);
+        }
+        for (const n of nodes) visit(n);
+
+        // Assign internal variable names
+        const varNames = {};
+        const usedNames = new Set();
+        for (const n of sorted) {
+            const def = n._atomicDef || n._molecularDef;
+            if (!def || !def.outputs) continue;
+            for (let i = 0; i < def.outputs.length; i++) {
+                const defId = def.id || 'n';
+                const base = sanitizeName(`_m{{_id}}_${defId}_${def.outputs[i].name}`);
+                let vn = base;
+                let c = 2;
+                while (usedNames.has(vn)) vn = `${base}_${c++}`;
+                usedNames.add(vn);
+                varNames[`${n.id}:${i}`] = vn;
+            }
+        }
+
+        // Check which outputs are the molecular's external outputs and remap to handlebars
+        const outputNodeSlots = {};
+        for (const n of sorted) {
+            const def = n._atomicDef || n._molecularDef;
+            if (!def || !n.outputs) continue;
+            for (let i = 0; i < n.outputs.length; i++) {
+                const out = n.outputs[i];
+                if (!out.links) continue;
+                for (const linkId of out.links) {
+                    const link = graph.links[linkId];
+                    if (link && !nodeIds.has(link.target_id)) {
+                        // This output goes external — find matching extOutput name
+                        for (const eo of extOutputs) {
+                            varNames[`${n.id}:${i}`] = `{{${eo.name}}}`;
+                        }
+                    }
+                }
+            }
+        }
+
+        const codeLines = [];
+        const allImports = new Set();
+
+        for (const n of sorted) {
+            const def = n._atomicDef || n._molecularDef;
+            if (!def) continue;
+            if (def.imports) def.imports.forEach(i => allImports.add(i));
+
+            const subs = { '_id': '{{_id}}' };
+
+            // Outputs
+            if (def.outputs) {
+                for (let i = 0; i < def.outputs.length; i++) {
+                    subs[def.outputs[i].name] = varNames[`${n.id}:${i}`] || `_unknown_${i}`;
+                }
+            }
+
+            // Inputs
+            if (def.inputs) {
+                for (let i = 0; i < def.inputs.length; i++) {
+                    const inputName = def.inputs[i].name;
+                    const linkId = (n.inputs[i] && n.inputs[i].link != null) ? n.inputs[i].link : null;
+                    if (linkId !== null && graph.links[linkId]) {
+                        const link = graph.links[linkId];
+                        if (nodeIds.has(link.origin_id)) {
+                            subs[inputName] = varNames[`${link.origin_id}:${link.origin_slot}`] || 'None';
+                        } else {
+                            // External input — use handlebars for the matching ext input
+                            for (const ei of extInputs) {
+                                if (ei.name === inputName || extInputs.length === 1) {
+                                    subs[inputName] = `{{${ei.name}}}`;
+                                    break;
+                                }
+                            }
+                            if (!subs[inputName]) subs[inputName] = `{{${inputName}}}`;
+                        }
+                    } else {
+                        subs[inputName] = `None`;
+                    }
+                }
+            }
+
+            // Properties
+            if (def.properties) {
+                for (const prop of def.properties) {
+                    let val = n.properties[prop.name];
+                    if (val === undefined) val = prop.default;
+                    subs[prop.name] = (prop.type === 'bool') ? (val ? 'True' : 'False') : String(val);
+                }
+            }
+
+            let code = def.code;
+            for (const [key, value] of Object.entries(subs)) {
+                code = code.replace(new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, 'g'), value);
+            }
+            codeLines.push(code);
+        }
+
+        return { code: codeLines.join('\n'), imports: Array.from(allImports) };
+    }
+
+    // ---- Save Molecular to File ----
+
+    function saveMolecularToFile(node) {
+        const def = node._molecularDef;
+        const meta = node._molecularMeta;
+        if (!def) return;
+
+        const exportDef = { ...def };
+        if (meta) {
+            exportDef.name = meta.name;
+            exportDef.id = meta.id;
+            exportDef.description = meta.description;
+        }
+
+        const json = JSON.stringify(exportDef, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${exportDef.id || 'molecular'}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        updateStatus(`Saved "${exportDef.name}" to file`);
+    }
+
+    // ---- Graph Change Listeners ----
+    graph.onNodeAdded = () => scheduleCompile();
+    graph.onNodeRemoved = () => scheduleCompile();
+    graph.onConnectionChange = () => scheduleCompile();
+
+    // ---- Initialize ----
+    async function init() {
+        await loadAtomics();
+        await loadMolecularComponents();
+        await loadModels();
+        graph.start();
+        compileGraph();
+        updateStatus('Ready');
+    }
+
+    init();
     </script>
 </body>
 </html>

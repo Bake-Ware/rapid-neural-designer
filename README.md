@@ -1,93 +1,104 @@
 # Rapid Neural Designer (RND)
 
-A Scratch-like visual programming interface for rapidly prototyping neural network experiments with drag-and-drop atomic components.
+A node graph editor for designing neural network architectures from composable primitives. Build, modify, and share architectures visually — from raw tensor operations up to complete models like LLaMA.
 
 ![RND Screenshot](docs/RND_screenshot.png)
-
-## Features
-
-- **🎨 Visual Block Programming**: Build neural networks like Scratch - no code required
-- **⚡ Real-time Code Generation**: See Python code generated as you build
-- **✓ Smart Validation**: Automatic linting for component connections and tensor dimensions
-- **💾 Save/Load**: Export and import experiments as XML
-- **📥 Export Code**: Download generated Python code to run locally
-- **🧪 Experiment-First**: Designed for rapid experimentation and iteration
 
 ## Quick Start
 
 1. Open `web_interface/index.html` in any modern browser
-2. Drag blocks from the toolbox to build your neural network
-3. Download the generated Python code
-4. Run it locally - no dependencies except numpy
+2. Wire together primitives or drop in pre-built components
+3. Switch to the Code tab to see generated Python
+4. Download and run — no dependencies except numpy
 
 **No installation, no server, no build tools required.**
 
-## Available Blocks
+## How It Works
 
-### 🧪 Experiment Structure
-- **Neural VM Experiment**: Main container for your experiment
-- **Create Component**: Define and name neural components
-- **Forward Pass**: Execute computation through components
-- **Print State**: Display captured computational state
+RND uses a three-layer architecture:
 
-### 🔢 Neural Components
-- **Linear Layer**: Linear transformation with configurable dimensions and bias
-- **Multi-Head Attention**: Attention mechanism with Q/K/V state capture
+**Primitives** — 54 fundamental tensor operations (matmul, add, softmax, reshape, etc.) defined as JSON code templates. These are the periodic table — they can't be broken down further.
 
-### 📊 Data & Variables
-- **Input Tensor**: Create random input tensors with configurable shapes
-- **Variable**: Reference variables from your experiment
+**Components** — Compositions of primitives saved as reusable building blocks. RND ships with: Linear, RMSNorm, RoPE, SwiGLU FFN, Multi-Head Attention, RoPE Attention, and Transformer Block.
 
-## Example: Simple Transformer Layer
+**Models** — Complete architectures built from components. RND ships with a Mini LLaMA (4-layer, dim=288, 6 heads, 32k vocab) as a reference.
 
-1. Drag **"🧪 Neural VM Experiment"** to workspace
-2. Add **Input Tensor** (batch=1, seq=10, dim=512)
-3. Create **Multi-Head Attention** component (embed_dim=512, heads=8)
-4. Create **Linear Layer** component (in=512, out=512)
-5. Add **Forward Pass** blocks to execute
-6. Click **"⬇️ Download"** for Python code
+### Condense & Explode
+
+Select multiple nodes and **Condense** them into a single reusable component. Right-click any component and **Explode** it to see and modify its internals. This works recursively — a Transformer Block explodes into RMSNorm + Attention + FFN + Residuals, and each of those can be exploded further down to raw primitives.
+
+### Code Generation
+
+The graph compiler traces wire connections, topologically sorts nodes, and substitutes variables into code templates using handlebars-style (`{{variable}}`) interpolation. The output is a single runnable Python script.
+
+## Adding New Primitives
+
+Primitives are JSON files in `web_interface/atomics/`. Add a new one:
+
+```json
+{
+  "name": "MyOp",
+  "id": "my_op",
+  "category": "math",
+  "inputs": [{"name": "input", "type": "tensor"}],
+  "outputs": [{"name": "result", "type": "tensor"}],
+  "code": "{{result}} = my_operation({{input}})",
+  "imports": ["import numpy as np"]
+}
+```
+
+Register it in `atomics/index.json` and it appears in the palette automatically.
+
+## Saving Components
+
+Build a component from primitives in the graph, select the nodes, right-click **Condense**, name it. Right-click the new component and **Save to File**. Drop the JSON into `web_interface/components/` and add it to `components/index.json` to make it permanent.
 
 ## Controls
 
-- **💾 Save**: Export workspace as XML
-- **📁 Load**: Import saved workspace
-- **🗑️ Clear**: Clear entire workspace
-- **📋 Copy Code**: Copy Python to clipboard
-- **⬇️ Download**: Download Python file
+| Action | How |
+|--------|-----|
+| Add nodes | Click in palette or right-click canvas |
+| Connect | Drag from output port to input port |
+| Select multiple | Drag box on empty canvas, or shift+click |
+| Condense | Select nodes → right-click → Condense |
+| Explode | Right-click component → Explode |
+| Save component | Right-click component → Save to File |
+| Pan | Middle-click drag |
+| Zoom | Scroll wheel |
 
-## Generated Code
+## Running Code
 
-Generates clean, runnable Python compatible with numpy:
-- Proper imports and structure
-- Component initialization
-- Forward passes with full state capture
-- State inspection and logging
+For local execution, start the backend:
 
-## What Makes RND Different?
+```bash
+pip install flask flask-cors
+cd web_interface
+python backend.py
+```
 
-Most visual neural network builders just create model architectures. **RND captures the full computational state** - all intermediate tensors, attention patterns, Q/K/V projections, and semantic metadata. This enables:
+Then click **Run Code** in the Code tab.
 
-- Deep introspection into what your network is actually doing
-- Research into cross-architecture neural computation
-- Building hybrid architectures that share semantic state
-- Educational tools that show every step of computation
+## File Structure
 
-## Future Enhancements
-
-- More atomic components (RNN, Mamba, CNN, GNN)
-- Tensor dimension mismatch detection
-- Visual state visualization
-- Context bus operations (Phase 2)
-- Control flow (loops, conditionals)
-- Live execution in browser
+```
+web_interface/
+  index.html              # Graph editor (single-file app)
+  atomics/                # Primitive definitions (JSON)
+    math.json, trig.json, reduction.json, shape.json,
+    comparison.json, init.json, data.json
+  components/             # Pre-built components (JSON)
+    linear.json, rmsnorm.json, rope.json, swiglu_ffn.json,
+    multi_head_attention.json, rope_attention.json,
+    transformer_block.json, embedding.json
+  models/                 # Saved model graphs (JSON)
+    llama_mini.json
+  backend.py              # Optional Flask execution server
+```
 
 ## Technical Details
 
-- Built with Google Blockly (web version of Scratch)
-- Pure JavaScript - runs entirely in browser
+- Built with [LiteGraph.js](https://github.com/jagenjo/litegraph.js) for the node graph
+- [Monaco Editor](https://microsoft.github.io/monaco-editor/) for code display
+- Pure JavaScript — runs entirely in browser, zero build step
 - Generates numpy-based Python code
-- XML workspace format for save/load
-
----
-
-**Built for rapid neural network R&D** 🚀
+- JSON format for primitives, components, and saved graphs
