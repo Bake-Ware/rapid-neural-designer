@@ -1585,18 +1585,15 @@
             }
         }});
 
-        // Explode option for subgraph or molecular nodes
+        // Expand/Explode for subgraph or molecular nodes
         if (node.subgraph) {
-            options.push({ content: 'Open Subgraph', callback: () => graphCanvas.openSubgraph(node.subgraph) });
+            options.push({ content: 'Expand', callback: () => graphCanvas.openSubgraph(node.subgraph) });
             options.push({ content: 'Explode', callback: () => explodeMolecular(node) });
             options.push({ content: 'Save to File', callback: () => saveMolecularToFile(node) });
-        } else if (node._molecularDef) {
-            const hasDef = node._molecularDef.graph;
-            options.push({
-                content: hasDef ? 'Explode' : 'Explode (no definition)',
-                disabled: !hasDef,
-                callback: () => explodeMolecular(node)
-            });
+        } else if (node._molecularDef && node._molecularDef.graph) {
+            // Convert legacy molecular to subgraph on first expand/explode
+            options.push({ content: 'Expand', callback: () => convertToSubgraphAndExpand(node) });
+            options.push({ content: 'Explode', callback: () => explodeMolecular(node) });
             options.push({ content: 'Save to File', callback: () => saveMolecularToFile(node) });
         }
 
@@ -1805,6 +1802,125 @@
     }
 
     // ---- Save Subgraph to File ----
+
+    // Convert a legacy molecular node to a native subgraph, replace it, and expand
+    function convertToSubgraphAndExpand(node) {
+        const def = node._molecularDef;
+        if (!def || !def.graph) return;
+
+        const currentGraph = activeGraph();
+        const graphDef = def.graph;
+
+        // Create subgraph node
+        const subNode = LiteGraph.createNode('graph/subgraph');
+        if (!subNode) return;
+        subNode.title = node.title || def.name;
+        subNode.pos = [...node.pos];
+        currentGraph.add(subNode);
+
+        const innerGraph = subNode.subgraph;
+        const idRemap = {};
+
+        // Create inner nodes from the molecular's graph definition
+        for (const sn of graphDef.nodes) {
+            const newNode = LiteGraph.createNode(sn.type);
+            if (!newNode) continue;
+            newNode.pos = [100 + (sn.pos?.[0] || 0), 100 + (sn.pos?.[1] || 0)];
+            if (sn.properties) {
+                for (const [k, v] of Object.entries(sn.properties)) {
+                    newNode.properties[k] = v;
+                    if (newNode.widgets) {
+                        const w = newNode.widgets.find(w => w.name === k);
+                        if (w) w.value = v;
+                    }
+                }
+            }
+            if (sn.title) newNode.title = sn.title;
+            innerGraph.add(newNode);
+            idRemap[sn.id] = newNode.id;
+        }
+
+        // Create inner links
+        for (const sl of (graphDef.links || [])) {
+            const f = innerGraph.getNodeById(idRemap[sl[1]]);
+            const t = innerGraph.getNodeById(idRemap[sl[3]]);
+            if (f && t) f.connect(sl[2], t, sl[4]);
+        }
+
+        // Create graph/input nodes from input_map
+        const rawInputMap = graphDef.input_map || {};
+        let inputY = 30;
+        const inputSlotMap = {};
+        for (const [name, targets] of Object.entries(rawInputMap)) {
+            const ginput = LiteGraph.createNode('graph/input');
+            ginput.pos = [10, inputY];
+            innerGraph.add(ginput);
+            ginput.setProperty('name', name);
+            ginput.setProperty('type', 'tensor');
+            inputSlotMap[name] = Object.keys(inputSlotMap).length;
+            const arr = Array.isArray(targets) ? targets : [targets];
+            for (const t of arr) {
+                const dst = innerGraph.getNodeById(idRemap[t.node_id]);
+                if (dst) ginput.connect(0, dst, t.slot);
+            }
+            inputY += 100;
+        }
+
+        // Create graph/output nodes from output_map
+        const rawOutputMap = graphDef.output_map || {};
+        let outputY = 30;
+        const maxX = Math.max(400, ...graphDef.nodes.map(n => (n.pos?.[0] || 0) + 300));
+        const outputSlotMap = {};
+        for (const [name, source] of Object.entries(rawOutputMap)) {
+            const goutput = LiteGraph.createNode('graph/output');
+            goutput.pos = [maxX, outputY];
+            innerGraph.add(goutput);
+            goutput.setProperty('name', name);
+            goutput.setProperty('type', 'tensor');
+            outputSlotMap[name] = Object.keys(outputSlotMap).length;
+            const src = Array.isArray(source) ? source[0] : source;
+            const srcNode = innerGraph.getNodeById(idRemap[src.node_id]);
+            if (srcNode) srcNode.connect(src.slot, goutput, 0);
+            outputY += 100;
+        }
+
+        // Reconnect external wires
+        if (node.inputs) {
+            for (let i = 0; i < node.inputs.length; i++) {
+                const inp = node.inputs[i];
+                if (inp.link == null) continue;
+                const link = currentGraph.links[inp.link];
+                if (!link) continue;
+                const srcNode = currentGraph.getNodeById(link.origin_id);
+                const slotIdx = inputSlotMap[inp.name];
+                if (srcNode && slotIdx !== undefined) {
+                    srcNode.connect(link.origin_slot, subNode, slotIdx);
+                }
+            }
+        }
+        if (node.outputs) {
+            for (let i = 0; i < node.outputs.length; i++) {
+                const out = node.outputs[i];
+                if (!out.links || !out.links.length) continue;
+                const slotIdx = outputSlotMap[out.name];
+                if (slotIdx === undefined) continue;
+                for (const linkId of [...out.links]) {
+                    const link = currentGraph.links[linkId];
+                    if (!link) continue;
+                    const dstNode = currentGraph.getNodeById(link.target_id);
+                    if (dstNode) subNode.connect(slotIdx, dstNode, link.target_slot);
+                }
+            }
+        }
+
+        // Remove original molecular node
+        currentGraph.remove(node);
+
+        // Open the new subgraph
+        graphCanvas.openSubgraph(subNode.subgraph);
+        scheduleCompile();
+        updateStatus(`Converted "${subNode.title}" to subgraph`);
+    }
 
     function saveMolecularToFile(node) {
         const data = node.serialize ? node.serialize() : {};
