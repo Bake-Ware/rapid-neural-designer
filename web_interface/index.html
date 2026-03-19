@@ -1447,7 +1447,7 @@
 
     // ---- Backend Execution ----
 
-    const BACKEND_URL = 'http://localhost:5000';
+    const BACKEND_URL = `http://${window.location.hostname}:5000`;
 
     async function runCode() {
         const code = monacoEditor ? monacoEditor.getValue() : '';
