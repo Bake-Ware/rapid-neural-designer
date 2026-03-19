@@ -2392,9 +2392,15 @@
 
     // ---- Initialize ----
     async function init() {
-        await loadAtomics();
-        await loadMolecularComponents();
-        await loadModels();
+        try {
+            await loadAtomics();
+        } catch(e) { console.error('Failed to load atomics:', e); }
+        try {
+            await loadMolecularComponents();
+        } catch(e) { console.error('Failed to load components:', e); }
+        try {
+            await loadModels();
+        } catch(e) { console.error('Failed to load models:', e); }
         graph.start();
         compileGraph();
         updateStatus('Ready');
