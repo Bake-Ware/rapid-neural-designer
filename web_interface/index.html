@@ -457,7 +457,22 @@
     graphCanvas.allow_dragnodes = true;
     graphCanvas.allow_interaction = true;
     graphCanvas.render_shadows = false;
-    graphCanvas.background_image = null;
+    // Grid background - create a small grid tile as a data URL
+    (function() {
+        const sz = 40;
+        const c = document.createElement('canvas');
+        c.width = sz; c.height = sz;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#1e1e1e';
+        ctx.fillRect(0, 0, sz, sz);
+        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sz, 0); ctx.lineTo(sz, sz);
+        ctx.moveTo(0, sz); ctx.lineTo(sz, sz);
+        ctx.stroke();
+        graphCanvas.background_image = c.toDataURL();
+    })();
 
     // Link rendering - thicker, more visible cables
     graphCanvas.connections_width = 3;
@@ -987,6 +1002,15 @@
 
         subNode._molecularDef = compDef;
         subNode._molecularMeta = { id: compId, name: compDef.name };
+
+        // Collapse all inner nodes by default
+        for (const n of innerGraph._nodes) {
+            if (n.type !== 'graph/input' && n.type !== 'graph/output') {
+                n.flags = n.flags || {};
+                n.flags.collapsed = true;
+            }
+        }
+
         return subNode;
     }
 
@@ -1582,6 +1606,14 @@
             const toNode = innerGraph.getNodeById(idRemap[lk[3]]);
             if (fromNode && toNode) {
                 fromNode.connect(lk[2], toNode, lk[4]);
+            }
+        }
+
+        // Collapse all inner nodes by default
+        for (const n of innerGraph._nodes) {
+            if (n.type !== 'graph/input' && n.type !== 'graph/output') {
+                n.flags = n.flags || {};
+                n.flags.collapsed = true;
             }
         }
 
