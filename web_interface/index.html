@@ -1010,7 +1010,7 @@
         for (const n of innerGraph._nodes) {
             if (n.type !== 'graph/input' && n.type !== 'graph/output') {
                 n.flags = n.flags || {};
-                n.flags.collapsed = true;
+                n.flags.collapsed = false;
             }
         }
 
@@ -1632,7 +1632,7 @@
         for (const n of innerGraph._nodes) {
             if (n.type !== 'graph/input' && n.type !== 'graph/output') {
                 n.flags = n.flags || {};
-                n.flags.collapsed = true;
+                n.flags.collapsed = false;
             }
         }
 
