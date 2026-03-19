@@ -258,6 +258,52 @@
             z-index: 1000;
         }
 
+        /* Breadcrumb navigation for subgraph depth */
+        #breadcrumb-bar {
+            display: none;
+            background: #252526;
+            border-bottom: 1px solid #3e3e42;
+        }
+
+        #breadcrumb-bar.visible {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .breadcrumb-level {
+            padding: 6px 16px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s;
+            border-left: 3px solid transparent;
+        }
+
+        .breadcrumb-level:hover {
+            background: #3e3e42;
+        }
+
+        .breadcrumb-level .crumb-color {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        .breadcrumb-level.current {
+            color: #ffffff;
+            background: #2d2d30;
+            border-left-color: #007acc;
+            cursor: default;
+        }
+
+        .breadcrumb-level:not(.current) {
+            color: #999;
+        }
+
         /* Custom LiteGraph dark theme */
         .litegraph { background-color: #1e1e1e !important; }
         .litecontextmenu { background: #252526 !important; border: 1px solid #3e3e42 !important; }
@@ -319,8 +365,11 @@
                         <div class="palette-section-content" id="atomic-palette"></div>
                     </div>
                 </div>
-                <div id="graph-canvas-wrapper">
-                    <canvas id="graph-canvas"></canvas>
+                <div style="flex:1;display:flex;flex-direction:column;">
+                    <div id="breadcrumb-bar"></div>
+                    <div id="graph-canvas-wrapper" style="flex:1;position:relative;">
+                        <canvas id="graph-canvas"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -492,6 +541,86 @@
     canvasElement.addEventListener('mousedown', function(e) {
         if (e.button === 1) e.preventDefault();
     });
+
+    // ---- Breadcrumb Navigation ----
+
+    function updateBreadcrumbs() {
+        const bar = document.getElementById('breadcrumb-bar');
+        const stack = graphCanvas._graph_stack || [];
+        const currentGraph = graphCanvas.graph;
+
+        if (stack.length === 0) {
+            bar.classList.remove('visible');
+            bar.innerHTML = '';
+            return;
+        }
+
+        bar.classList.add('visible');
+        bar.innerHTML = '';
+
+        // Build the path: root → each stacked graph → current
+        // stack[0] = root graph, stack[1] = first subgraph, etc.
+        // currentGraph = the deepest level we're viewing
+
+        // Root level
+        const rootEl = document.createElement('div');
+        rootEl.className = 'breadcrumb-level';
+        rootEl.innerHTML = '<span class="crumb-color" style="background:#007acc"></span> Root';
+        rootEl.addEventListener('click', () => {
+            // Close all subgraphs to get back to root
+            while (graphCanvas._graph_stack && graphCanvas._graph_stack.length > 0) {
+                graphCanvas.closeSubgraph();
+            }
+            updateBreadcrumbs();
+        });
+        bar.appendChild(rootEl);
+
+        // Each level in the stack represents a graph we navigated INTO
+        // The _subgraph_node on each graph tells us which node we entered
+        for (let i = 1; i < stack.length; i++) {
+            const g = stack[i];
+            const node = g._subgraph_node;
+            const name = node ? (node.title || 'Subgraph') : `Level ${i}`;
+            const color = node ? (node.color || '#6bb5ff') : '#6bb5ff';
+
+            const el = document.createElement('div');
+            el.className = 'breadcrumb-level';
+            el.innerHTML = `<span class="crumb-color" style="background:${color}"></span> ${name}`;
+            el.addEventListener('click', ((targetDepth) => () => {
+                // Close subgraphs until we reach this depth
+                while (graphCanvas._graph_stack && graphCanvas._graph_stack.length > targetDepth) {
+                    graphCanvas.closeSubgraph();
+                }
+                updateBreadcrumbs();
+            })(i));
+            bar.appendChild(el);
+        }
+
+        // Current level (the one we're viewing)
+        const curNode = currentGraph._subgraph_node;
+        const curName = curNode ? (curNode.title || 'Subgraph') : 'Current';
+        const curColor = curNode ? (curNode.color || '#6bb5ff') : '#6bb5ff';
+
+        const curEl = document.createElement('div');
+        curEl.className = 'breadcrumb-level current';
+        curEl.innerHTML = `<span class="crumb-color" style="background:${curColor}"></span> ${curName}`;
+        bar.appendChild(curEl);
+    }
+
+    // Hook into openSubgraph/closeSubgraph to update breadcrumbs
+    const _origOpen = LGraphCanvas.prototype.openSubgraph;
+    LGraphCanvas.prototype.openSubgraph = function(g) {
+        _origOpen.call(this, g);
+        updateBreadcrumbs();
+        setTimeout(resizeCanvas, 50);
+    };
+
+    const _origClose = LGraphCanvas.prototype.closeSubgraph;
+    LGraphCanvas.prototype.closeSubgraph = function() {
+        _origClose.call(this);
+        updateBreadcrumbs();
+        setTimeout(resizeCanvas, 50);
+    };
 
     function resizeCanvas() {
         const wrapper = document.getElementById('graph-canvas-wrapper');
