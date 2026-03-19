@@ -633,39 +633,6 @@
     // Subgraph default: lighter so title text is readable
     LiteGraph.Subgraph.title_color = "#4a6a8a";
 
-    // Draw expand icon on any node that can be expanded (subgraph or molecular with graph def).
-    // onDrawForeground uses local coords: (0,0) = top-left of node body, title is at negative y.
-    function drawExpandIcon(ctx) {
-        if (this.flags.collapsed) return;
-        const w = this.size[0];
-        const th = LiteGraph.NODE_TITLE_HEIGHT;
-        ctx.fillStyle = "rgba(255,255,255,0.8)";
-        ctx.font = "12px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("\u25B6", w - th * 0.5, -th * 0.5);
-    }
-
-    // Apply to native subgraph nodes
-    LiteGraph.Subgraph.prototype.onDrawForeground = drawExpandIcon;
-
-    // Apply to molecular nodes that have expandable graph definitions
-    const _origRegisterMolecular = registerMolecular;
-    registerMolecular = function(meta, compDef) {
-        _origRegisterMolecular(meta, compDef);
-        if (compDef.graph) {
-            const typeName = `molecular/${meta.id}`;
-            const nodeType = LiteGraph.registered_node_types[typeName];
-            if (nodeType) {
-                nodeType.prototype.onDrawForeground = drawExpandIcon;
-                // Double-click molecular node with graph → convert to subgraph and expand
-                nodeType.prototype.onDblClick = function() {
-                    convertToSubgraphAndExpand(this);
-                };
-            }
-        }
-    };
-
     function addNodeToGraph(typeName) {
         // If it's a molecular component with a graph definition,
         // create a native subgraph node instead so it gets the expand button
@@ -695,44 +662,55 @@
         scheduleCompile();
     }
 
-    function addComponentAsSubgraph(compDef, compId) {
+    // Create a graph/subgraph node from a component definition and add it to targetGraph.
+    // Returns the subgraph node. If targetGraph is null, uses activeGraph().
+    function createSubgraphFromComponent(compDef, compId, targetGraph, pos) {
         const subNode = LiteGraph.createNode('graph/subgraph');
-        if (!subNode) return;
+        if (!subNode) return null;
         subNode.title = compDef.name;
-        // Use the component's palette color
         const nodeColor = compDef._paletteColor || '#6bb5ff';
         subNode.color = nodeColor;
         subNode.bgcolor = darkenColor(nodeColor, 0.35);
+        subNode.pos = pos || [300, 200];
 
-        const area = graphCanvas.visible_area;
-        if (area) {
-            subNode.pos = [
-                area[0] + area[2] * 0.3 + (Math.random() - 0.5) * 150,
-                area[1] + area[3] * 0.3 + (Math.random() - 0.5) * 150
-            ];
-        } else {
-            subNode.pos = [300 + Math.random() * 200, 100 + Math.random() * 300];
-        }
-
-        activeGraph().add(subNode);
+        (targetGraph || activeGraph()).add(subNode);
         const innerGraph = subNode.subgraph;
         const graphDef = compDef.graph;
         const idRemap = {};
 
-        // Create inner nodes
+        // Create inner nodes — recursively create subgraphs for nested components
         for (const sn of graphDef.nodes) {
-            const newNode = LiteGraph.createNode(sn.type);
-            if (!newNode) continue;
-            newNode.pos = [100 + (sn.pos?.[0] || 0), 100 + (sn.pos?.[1] || 0)];
-            if (sn.properties) {
-                for (const [k, v] of Object.entries(sn.properties)) {
-                    newNode.properties[k] = v;
-                    if (newNode.widgets) { const w = newNode.widgets.find(w => w.name === k); if (w) w.value = v; }
-                }
+            const innerPos = [100 + (sn.pos?.[0] || 0), 100 + (sn.pos?.[1] || 0)];
+
+            // Check if this inner node is a molecular component with its own graph
+            let innerNodeType = sn.type;
+            let innerCompId = null;
+            if (innerNodeType.startsWith('molecular/')) {
+                innerCompId = innerNodeType.replace('molecular/', '');
             }
-            if (sn.title) newNode.title = sn.title;
-            innerGraph.add(newNode);
-            idRemap[sn.id] = newNode.id;
+            const innerCompDef = innerCompId ? molecularRegistry[innerCompId] : null;
+
+            if (innerCompDef && innerCompDef.graph) {
+                // Recursively create as subgraph
+                const nested = createSubgraphFromComponent(innerCompDef, innerCompId, innerGraph, innerPos);
+                if (nested) {
+                    if (sn.title) nested.title = sn.title;
+                    idRemap[sn.id] = nested.id;
+                }
+            } else {
+                const newNode = LiteGraph.createNode(sn.type);
+                if (!newNode) continue;
+                newNode.pos = innerPos;
+                if (sn.properties) {
+                    for (const [k, v] of Object.entries(sn.properties)) {
+                        newNode.properties[k] = v;
+                        if (newNode.widgets) { const w = newNode.widgets.find(w => w.name === k); if (w) w.value = v; }
+                    }
+                }
+                if (sn.title) newNode.title = sn.title;
+                innerGraph.add(newNode);
+                idRemap[sn.id] = newNode.id;
+            }
         }
 
         // Inner links
@@ -775,10 +753,21 @@
             outputY += 100;
         }
 
-        // Store reference to component def for the compiler
         subNode._molecularDef = compDef;
         subNode._molecularMeta = { id: compId, name: compDef.name };
+        return subNode;
+    }
 
+    function addComponentAsSubgraph(compDef, compId) {
+        const area = graphCanvas.visible_area;
+        let pos;
+        if (area) {
+            pos = [area[0] + area[2] * 0.3 + (Math.random() - 0.5) * 150,
+                   area[1] + area[3] * 0.3 + (Math.random() - 0.5) * 150];
+        } else {
+            pos = [300 + Math.random() * 200, 100 + Math.random() * 300];
+        }
+        createSubgraphFromComponent(compDef, compId, null, pos);
         scheduleCompile();
     }
 
@@ -1317,29 +1306,42 @@
 
         const idRemap = {};
 
-        // Create all nodes inside the subgraph
+        // Create all nodes inside the subgraph.
+        // Molecular components with graph defs become nested subgraphs.
         for (const nd of (data.nodes || [])) {
-            const newNode = LiteGraph.createNode(nd.type);
-            if (!newNode) { console.warn('Cannot create node type:', nd.type); continue; }
+            const innerPos = [100 + (nd.pos[0] - srcMinX), 100 + (nd.pos[1] - srcMinY)];
 
-            newNode.pos = [
-                100 + (nd.pos[0] - srcMinX),
-                100 + (nd.pos[1] - srcMinY)
-            ];
+            // Check if this is a molecular component with a graph definition
+            let compId = null;
+            if (nd.type.startsWith('molecular/')) {
+                compId = nd.type.replace('molecular/', '');
+            }
+            const compDef = compId ? molecularRegistry[compId] : null;
 
-            if (nd.properties) {
-                for (const [k, v] of Object.entries(nd.properties)) {
-                    newNode.properties[k] = v;
-                    if (newNode.widgets) {
-                        const w = newNode.widgets.find(w => w.name === k);
-                        if (w) w.value = v;
+            if (compDef && compDef.graph) {
+                // Create as a nested subgraph
+                const nested = createSubgraphFromComponent(compDef, compId, innerGraph, innerPos);
+                if (nested) {
+                    if (nd.title) nested.title = nd.title;
+                    idRemap[nd.id] = nested.id;
+                }
+            } else {
+                const newNode = LiteGraph.createNode(nd.type);
+                if (!newNode) { console.warn('Cannot create node type:', nd.type); continue; }
+                newNode.pos = innerPos;
+                if (nd.properties) {
+                    for (const [k, v] of Object.entries(nd.properties)) {
+                        newNode.properties[k] = v;
+                        if (newNode.widgets) {
+                            const w = newNode.widgets.find(w => w.name === k);
+                            if (w) w.value = v;
+                        }
                     }
                 }
+                if (nd.title) newNode.title = nd.title;
+                innerGraph.add(newNode);
+                idRemap[nd.id] = newNode.id;
             }
-            if (nd.title) newNode.title = nd.title;
-
-            innerGraph.add(newNode);
-            idRemap[nd.id] = newNode.id;
         }
 
         // Create internal links
