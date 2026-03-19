@@ -761,6 +761,9 @@
 
     // Subgraph default: lighter so title text is readable
     LiteGraph.Subgraph.title_color = "#4a6a8a";
+    // Remove the + buttons for manually adding inputs/outputs on subgraph nodes
+    LiteGraph.Subgraph.prototype.onGetInputs = null;
+    LiteGraph.Subgraph.prototype.onGetOutputs = null;
 
     function addNodeToGraph(typeName) {
         // If it's a molecular component with a graph definition,
