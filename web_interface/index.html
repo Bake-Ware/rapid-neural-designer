@@ -970,62 +970,30 @@
             if (f && t) f.connect(sl[2], t, sl[4]);
         }
 
-        // Collect deferred connections — connect after all nodes exist
-        const deferredConnections = [];
-
-        // graph/input nodes
+        // Add external ports directly to the subgraph node (no graph/input or graph/output nodes)
         const rawInputMap = graphDef.input_map || {};
-        let inputY = 30;
-        for (const [name, targets] of Object.entries(rawInputMap)) {
-            const gi = LiteGraph.createNode('graph/input');
-            gi.pos = [10, inputY];
-            innerGraph.add(gi);
-            gi.setProperty('name', name);
-            gi.setProperty('type', '');
-            const arr = Array.isArray(targets) ? targets : [targets];
-            for (const t of arr) {
-                deferredConnections.push({ fromId: gi.id, fromSlot: 0, toOldId: t.node_id, toSlot: t.slot });
-            }
-            inputY += 100;
-        }
-
-        // graph/output nodes
         const rawOutputMap = graphDef.output_map || {};
-        let outputY = 30;
-        const maxX = Math.max(400, ...graphDef.nodes.map(n => (n.pos?.[0] || 0) + 300));
-        for (const [name, source] of Object.entries(rawOutputMap)) {
-            const go = LiteGraph.createNode('graph/output');
-            go.pos = [maxX, outputY];
-            innerGraph.add(go);
-            go.setProperty('name', name);
-            go.setProperty('type', '');
-            const src = Array.isArray(source) ? source[0] : source;
-            deferredConnections.push({ fromOldId: src.node_id, fromSlot: src.slot, toId: go.id, toSlot: 0 });
-            outputY += 100;
-        }
 
-        // Execute deferred connections
-        for (const dc of deferredConnections) {
-            const fromNode = dc.fromId ? innerGraph.getNodeById(dc.fromId) : innerGraph.getNodeById(idRemap[dc.fromOldId]);
-            const toNode = dc.toId ? innerGraph.getNodeById(dc.toId) : innerGraph.getNodeById(idRemap[dc.toOldId]);
-            if (fromNode && toNode) {
-                const link = fromNode.connect(dc.fromSlot, toNode, dc.toSlot);
-                if (!link) console.warn('Connection failed:', fromNode.title || fromNode.type, 'slot', dc.fromSlot, '->', toNode.title || toNode.type, 'slot', dc.toSlot);
-            } else {
-                console.warn('Deferred connection: node not found', dc);
-            }
+        // Build port map: maps subgraph slot index → inner node targets
+        const portMap = { inputs: {}, outputs: {} };
+        let inputIdx = 0;
+        for (const [name, targets] of Object.entries(rawInputMap)) {
+            subNode.addInput(name, '');
+            const arr = Array.isArray(targets) ? targets : [targets];
+            portMap.inputs[inputIdx] = arr.map(t => ({ nodeId: idRemap[t.node_id], slot: t.slot }));
+            inputIdx++;
+        }
+        let outputIdx = 0;
+        for (const [name, source] of Object.entries(rawOutputMap)) {
+            subNode.addOutput(name, '');
+            const src = Array.isArray(source) ? source[0] : source;
+            portMap.outputs[outputIdx] = { nodeId: idRemap[src.node_id], slot: src.slot };
+            outputIdx++;
         }
 
         subNode._molecularDef = compDef;
         subNode._molecularMeta = { id: compId, name: compDef.name };
-
-        // Collapse all inner nodes by default
-        for (const n of innerGraph._nodes) {
-            if (n.type !== 'graph/input' && n.type !== 'graph/output') {
-                n.flags = n.flags || {};
-                n.flags.collapsed = false;
-            }
-        }
+        subNode._portMap = portMap;
 
         return subNode;
     }
@@ -1176,12 +1144,61 @@
     }
 
     function compileSubgraph(subNode, parentVarNames, parentLinks) {
+        // If the subgraph node has a _molecularDef with code, use that directly
+        // (same as compiling any other molecular node, with handlebars substitution)
+        const def = subNode._molecularDef;
+        if (def && def.code) {
+            const allImports = new Set();
+            if (def.imports) def.imports.forEach(i => allImports.add(i));
+
+            const subs = { '_id': String(subNode.id) };
+
+            // Map outputs to parent variable names
+            if (def.outputs) {
+                for (let i = 0; i < def.outputs.length; i++) {
+                    subs[def.outputs[i].name] = parentVarNames[`${subNode.id}:${i}`];
+                }
+            }
+
+            // Map inputs by tracing wires from parent
+            if (def.inputs) {
+                for (let i = 0; i < def.inputs.length; i++) {
+                    const inputName = def.inputs[i].name;
+                    const linkId = (subNode.inputs[i] && subNode.inputs[i].link != null) ? subNode.inputs[i].link : null;
+                    if (linkId !== null && parentLinks[linkId]) {
+                        const link = parentLinks[linkId];
+                        const srcVar = parentVarNames[`${link.origin_id}:${link.origin_slot}`];
+                        subs[inputName] = srcVar || `None  # unresolved: ${inputName}`;
+                    } else {
+                        subs[inputName] = `None  # disconnected: ${inputName}`;
+                    }
+                }
+            }
+
+            // Properties
+            if (def.properties) {
+                for (const prop of def.properties) {
+                    let val = subNode.properties[prop.name];
+                    if (val === undefined) val = prop.default;
+                    subs[prop.name] = (prop.type === 'bool') ? (val ? 'True' : 'False') : String(val);
+                }
+            }
+
+            let code = def.code;
+            for (const [key, value] of Object.entries(subs)) {
+                code = code.replace(new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, 'g'), value);
+            }
+            return { code, imports: Array.from(allImports) };
+        }
+
+        // Fallback: compile inner graph nodes directly
         const innerGraph = subNode.subgraph;
         const innerNodes = innerGraph._nodes || [];
         const innerLinks = innerGraph.links || {};
+        const portMap = subNode._portMap || { inputs: {}, outputs: {} };
 
-        // Map subgraph input names to parent variable names
-        const inputVarMap = {}; // inputName → parent variable name
+        // Map parent wires to inner node variables via portMap
+        const inputVarByNodeSlot = {}; // "nodeId:slot" → parent variable name
         if (subNode.inputs) {
             for (let i = 0; i < subNode.inputs.length; i++) {
                 const inp = subNode.inputs[i];
@@ -1189,54 +1206,48 @@
                 if (linkId !== null && parentLinks[linkId]) {
                     const link = parentLinks[linkId];
                     const srcVar = parentVarNames[`${link.origin_id}:${link.origin_slot}`];
-                    if (srcVar) inputVarMap[inp.name] = srcVar;
+                    if (srcVar && portMap.inputs[i]) {
+                        for (const target of portMap.inputs[i]) {
+                            inputVarByNodeSlot[`${target.nodeId}:${target.slot}`] = srcVar;
+                        }
+                    }
                 }
             }
         }
 
-        // Map subgraph output names to parent variable names
-        const outputVarMap = {}; // outputName → parent variable name
+        // Map output ports to parent variable names
+        const outputVarByNodeSlot = {};
         if (subNode.outputs) {
             for (let i = 0; i < subNode.outputs.length; i++) {
-                const out = subNode.outputs[i];
-                outputVarMap[out.name] = parentVarNames[`${subNode.id}:${i}`];
+                const parentVar = parentVarNames[`${subNode.id}:${i}`];
+                if (parentVar && portMap.outputs[i]) {
+                    const src = portMap.outputs[i];
+                    outputVarByNodeSlot[`${src.nodeId}:${src.slot}`] = parentVar;
+                }
             }
         }
 
-        // Compile the inner graph
         const sorted = topologicalSort(innerNodes, innerLinks);
         const varNames = {};
         const usedNames = new Set();
-        const skipTypes = new Set(['graph/input', 'graph/output']);
 
-        // Assign vars for inner nodes (including nested subgraphs)
         for (const n of sorted) {
-            if (skipTypes.has(n.type)) continue;
-            const def = n._atomicDef || n._molecularDef;
-            const outputs = def ? def.outputs : (n.outputs || []);
+            const nd = n._atomicDef || n._molecularDef;
+            const outputs = nd ? nd.outputs : (n.outputs || []);
             if (!outputs || !outputs.length) continue;
             for (let i = 0; i < outputs.length; i++) {
-                const defId = (def && def.id) || n.title?.toLowerCase().replace(/\s+/g, '_') || 'node';
-                const outName = outputs[i].name || `out_${i}`;
-                const base = sanitizeName(`${defId}_s${subNode.id}_${n.id}_${outName}`);
-                let vn = base; let c = 2;
-                while (usedNames.has(vn)) vn = `${base}_${c++}`;
-                usedNames.add(vn);
-                varNames[`${n.id}:${i}`] = vn;
-            }
-        }
-
-        // For graph/output nodes, use the parent's output variable name
-        for (const n of sorted) {
-            if (n.type !== 'graph/output') continue;
-            const outName = n.properties?.name;
-            if (outName && outputVarMap[outName]) {
-                // The graph/output's input comes from an inner node — find it
-                if (n.inputs && n.inputs[0] && n.inputs[0].link != null) {
-                    const link = innerLinks[n.inputs[0].link];
-                    if (link) {
-                        varNames[`${link.origin_id}:${link.origin_slot}`] = outputVarMap[outName];
-                    }
+                // Check if this output should use the parent's variable name
+                const overrideVar = outputVarByNodeSlot[`${n.id}:${i}`];
+                if (overrideVar) {
+                    varNames[`${n.id}:${i}`] = overrideVar;
+                } else {
+                    const defId = (nd && nd.id) || n.title?.toLowerCase().replace(/\s+/g, '_') || 'node';
+                    const outName = outputs[i].name || `out_${i}`;
+                    const base = sanitizeName(`${defId}_s${subNode.id}_${n.id}_${outName}`);
+                    let vn = base; let c2 = 2;
+                    while (usedNames.has(vn)) vn = `${base}_${c2++}`;
+                    usedNames.add(vn);
+                    varNames[`${n.id}:${i}`] = vn;
                 }
             }
         }
@@ -1245,9 +1256,6 @@
         const allImports = new Set();
 
         for (const n of sorted) {
-            if (skipTypes.has(n.type)) continue;
-
-            // Recursively compile nested subgraphs
             if (n.subgraph) {
                 const nestedResult = compileSubgraph(n, varNames, innerLinks);
                 for (const imp of nestedResult.imports) allImports.add(imp);
@@ -1256,43 +1264,42 @@
                 continue;
             }
 
-            const def = n._atomicDef || n._molecularDef;
-            if (!def) continue;
-            if (def.imports) def.imports.forEach(i => allImports.add(i));
+            const nd = n._atomicDef || n._molecularDef;
+            if (!nd) continue;
+            if (nd.imports) nd.imports.forEach(i => allImports.add(i));
 
             const subs = { '_id': `s${subNode.id}_${n.id}` };
 
-            for (let i = 0; i < def.outputs.length; i++) {
-                subs[def.outputs[i].name] = varNames[`${n.id}:${i}`];
+            for (let i = 0; i < nd.outputs.length; i++) {
+                subs[nd.outputs[i].name] = varNames[`${n.id}:${i}`];
             }
 
-            for (let i = 0; i < def.inputs.length; i++) {
-                const inputName = def.inputs[i].name;
-                const linkId = (n.inputs[i] && n.inputs[i].link != null) ? n.inputs[i].link : null;
-                if (linkId !== null && innerLinks[linkId]) {
-                    const link = innerLinks[linkId];
-                    // Check if source is a graph/input node
-                    const srcNode = innerGraph.getNodeById(link.origin_id);
-                    if (srcNode && srcNode.type === 'graph/input') {
-                        const giName = srcNode.properties?.name;
-                        subs[inputName] = inputVarMap[giName] || `None  # disconnected subgraph input: ${giName}`;
-                    } else {
-                        subs[inputName] = varNames[`${link.origin_id}:${link.origin_slot}`] || 'None';
-                    }
+            for (let i = 0; i < nd.inputs.length; i++) {
+                const inputName = nd.inputs[i].name;
+                // Check if this input is fed by a parent wire (via portMap)
+                const parentVar = inputVarByNodeSlot[`${n.id}:${i}`];
+                if (parentVar) {
+                    subs[inputName] = parentVar;
                 } else {
-                    subs[inputName] = 'None  # disconnected';
+                    const linkId = (n.inputs[i] && n.inputs[i].link != null) ? n.inputs[i].link : null;
+                    if (linkId !== null && innerLinks[linkId]) {
+                        const link = innerLinks[linkId];
+                        subs[inputName] = varNames[`${link.origin_id}:${link.origin_slot}`] || 'None';
+                    } else {
+                        subs[inputName] = 'None  # disconnected';
+                    }
                 }
             }
 
-            if (def.properties) {
-                for (const prop of def.properties) {
+            if (nd.properties) {
+                for (const prop of nd.properties) {
                     let val = n.properties[prop.name];
                     if (val === undefined) val = prop.default;
                     subs[prop.name] = (prop.type === 'bool') ? (val ? 'True' : 'False') : String(val);
                 }
             }
 
-            let code = def.code;
+            let code = nd.code;
             for (const [key, value] of Object.entries(subs)) {
                 code = code.replace(new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, 'g'), value);
             }
@@ -1739,37 +1746,7 @@
         const baseX = node.pos[0];
         const baseY = node.pos[1];
         const idRemap = {};
-
-        // Find graph/input and graph/output nodes (these define the interface)
-        const gInputNodes = innerGraph.findNodesByType('graph/input') || [];
-        const gOutputNodes = innerGraph.findNodesByType('graph/output') || [];
-
-        // Map input names to their connections in the inner graph
-        const inputWireMap = {}; // inputName → [{innerNodeId, innerSlot}]
-        for (const gi of gInputNodes) {
-            const name = gi.properties.name;
-            inputWireMap[name] = [];
-            if (gi.outputs && gi.outputs[0] && gi.outputs[0].links) {
-                for (const linkId of gi.outputs[0].links) {
-                    const link = innerGraph.links[linkId];
-                    if (link) {
-                        inputWireMap[name].push({ nodeId: link.target_id, slot: link.target_slot });
-                    }
-                }
-            }
-        }
-
-        // Map output names to their source in the inner graph
-        const outputWireMap = {}; // outputName → {innerNodeId, innerSlot}
-        for (const go of gOutputNodes) {
-            const name = go.properties.name;
-            if (go.inputs && go.inputs[0] && go.inputs[0].link != null) {
-                const link = innerGraph.links[go.inputs[0].link];
-                if (link) {
-                    outputWireMap[name] = { nodeId: link.origin_id, slot: link.origin_slot };
-                }
-            }
-        }
+        const portMap = node._portMap || { inputs: {}, outputs: {} };
 
         // Copy all non-interface nodes to parent graph
         const skipTypes = new Set(['graph/input', 'graph/output']);
@@ -1821,7 +1798,7 @@
             }
         }
 
-        // Reconnect external inputs
+        // Reconnect external inputs via portMap
         if (node.inputs) {
             for (let i = 0; i < node.inputs.length; i++) {
                 const inp = node.inputs[i];
@@ -1832,7 +1809,7 @@
                 const srcNode = activeGraph().getNodeById(link.origin_id);
                 if (!srcNode) continue;
 
-                const targets = inputWireMap[inp.name] || [];
+                const targets = portMap.inputs[i] || [];
                 for (const t of targets) {
                     const dstNode = activeGraph().getNodeById(idRemap[t.nodeId]);
                     if (dstNode) srcNode.connect(link.origin_slot, dstNode, t.slot);
@@ -1840,13 +1817,13 @@
             }
         }
 
-        // Reconnect external outputs
+        // Reconnect external outputs via portMap
         if (node.outputs) {
             for (let i = 0; i < node.outputs.length; i++) {
                 const out = node.outputs[i];
                 if (!out.links || out.links.length === 0) continue;
 
-                const source = outputWireMap[out.name];
+                const source = portMap.outputs[i];
                 if (!source) continue;
 
                 const innerSrc = activeGraph().getNodeById(idRemap[source.nodeId]);
@@ -2178,52 +2155,30 @@
             }
         }
 
-        // Create graph/input nodes for each incoming wire
-        const inputSlotMap = {}; // wire.name → subgraph input slot index
-        let inputY = 50;
+        // Add ports directly to the subgraph node and build portMap
+        const portMap = { inputs: {}, outputs: {} };
+        const inputSlotMap = {};
         for (const wire of incomingWires) {
             if (!(wire.name in inputSlotMap)) {
-                const ginput = LiteGraph.createNode('graph/input');
-                ginput.pos = [10, inputY];
-                // Must add to graph BEFORE setProperty so onPropertyChanged can register the port
-                innerGraph.add(ginput);
-                ginput.setProperty('name', wire.name);
-                ginput.setProperty('type', wire.type);
-                inputSlotMap[wire.name] = Object.keys(inputSlotMap).length;
-                inputY += 100;
+                const idx = Object.keys(inputSlotMap).length;
+                subNode.addInput(wire.name, '');
+                inputSlotMap[wire.name] = idx;
+                portMap.inputs[idx] = [];
             }
-            // Connect graph/input to the inner destination node
-            const ginputs = innerGraph.findNodesByType('graph/input');
-            const gInputNode = ginputs.find(g => g.properties.name === wire.name);
-            const innerDst = innerGraph.getNodeById(idRemap[wire.dstNodeId]);
-            if (gInputNode && innerDst) {
-                gInputNode.connect(0, innerDst, wire.dstSlot);
-            }
+            portMap.inputs[inputSlotMap[wire.name]].push({ nodeId: idRemap[wire.dstNodeId], slot: wire.dstSlot });
         }
 
-        // Create graph/output nodes for each outgoing wire
         const outputSlotMap = {};
-        let outputY = 50;
-        const maxX = Math.max(...selectedNodes.map(n => n.pos[0] - nodeMinX + 400));
         for (const wire of outgoingWires) {
             if (!(wire.name in outputSlotMap)) {
-                const goutput = LiteGraph.createNode('graph/output');
-                goutput.pos = [maxX, outputY];
-                // Must add to graph BEFORE setProperty
-                innerGraph.add(goutput);
-                goutput.setProperty('name', wire.name);
-                goutput.setProperty('type', wire.type);
-                outputSlotMap[wire.name] = Object.keys(outputSlotMap).length;
-                outputY += 100;
+                const idx = Object.keys(outputSlotMap).length;
+                subNode.addOutput(wire.name, '');
+                outputSlotMap[wire.name] = idx;
             }
-            // Connect inner source node to graph/output
-            const goutputs = innerGraph.findNodesByType('graph/output');
-            const gOutputNode = goutputs.find(g => g.properties.name === wire.name);
-            const innerSrc = innerGraph.getNodeById(idRemap[wire.srcNodeId]);
-            if (gOutputNode && innerSrc) {
-                innerSrc.connect(wire.srcSlot, gOutputNode, 0);
-            }
+            portMap.outputs[outputSlotMap[wire.name]] = { nodeId: idRemap[wire.srcNodeId], slot: wire.srcSlot };
         }
+
+        subNode._portMap = portMap;
 
         // Reconnect external wires to the subgraph node
         for (const wire of incomingWires) {
@@ -2297,42 +2252,32 @@
             if (f && t) f.connect(sl[2], t, sl[4]);
         }
 
-        // Create graph/input nodes from input_map
+        // Add ports directly to subgraph node and build portMap
         const rawInputMap = graphDef.input_map || {};
-        let inputY = 30;
+        const rawOutputMap = graphDef.output_map || {};
+        const portMap = { inputs: {}, outputs: {} };
         const inputSlotMap = {};
+
+        let inputIdx = 0;
         for (const [name, targets] of Object.entries(rawInputMap)) {
-            const ginput = LiteGraph.createNode('graph/input');
-            ginput.pos = [10, inputY];
-            innerGraph.add(ginput);
-            ginput.setProperty('name', name);
-            ginput.setProperty('type', '');
-            inputSlotMap[name] = Object.keys(inputSlotMap).length;
+            subNode.addInput(name, '');
             const arr = Array.isArray(targets) ? targets : [targets];
-            for (const t of arr) {
-                const dst = innerGraph.getNodeById(idRemap[t.node_id]);
-                if (dst) ginput.connect(0, dst, t.slot);
-            }
-            inputY += 100;
+            portMap.inputs[inputIdx] = arr.map(t => ({ nodeId: idRemap[t.node_id], slot: t.slot }));
+            inputSlotMap[name] = inputIdx;
+            inputIdx++;
         }
 
-        // Create graph/output nodes from output_map
-        const rawOutputMap = graphDef.output_map || {};
-        let outputY = 30;
-        const maxX = Math.max(400, ...graphDef.nodes.map(n => (n.pos?.[0] || 0) + 300));
         const outputSlotMap = {};
+        let outputIdx = 0;
         for (const [name, source] of Object.entries(rawOutputMap)) {
-            const goutput = LiteGraph.createNode('graph/output');
-            goutput.pos = [maxX, outputY];
-            innerGraph.add(goutput);
-            goutput.setProperty('name', name);
-            goutput.setProperty('type', '');
-            outputSlotMap[name] = Object.keys(outputSlotMap).length;
+            subNode.addOutput(name, '');
             const src = Array.isArray(source) ? source[0] : source;
-            const srcNode = innerGraph.getNodeById(idRemap[src.node_id]);
-            if (srcNode) srcNode.connect(src.slot, goutput, 0);
-            outputY += 100;
+            portMap.outputs[outputIdx] = { nodeId: idRemap[src.node_id], slot: src.slot };
+            outputSlotMap[name] = outputIdx;
+            outputIdx++;
         }
+
+        subNode._portMap = portMap;
 
         // Reconnect external wires
         if (node.inputs) {
