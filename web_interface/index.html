@@ -970,6 +970,9 @@
             if (f && t) f.connect(sl[2], t, sl[4]);
         }
 
+        // Collect deferred connections — connect after all nodes exist
+        const deferredConnections = [];
+
         // graph/input nodes
         const rawInputMap = graphDef.input_map || {};
         let inputY = 30;
@@ -981,8 +984,7 @@
             gi.setProperty('type', '');
             const arr = Array.isArray(targets) ? targets : [targets];
             for (const t of arr) {
-                const dst = innerGraph.getNodeById(idRemap[t.node_id]);
-                if (dst) gi.connect(0, dst, t.slot);
+                deferredConnections.push({ fromId: gi.id, fromSlot: 0, toOldId: t.node_id, toSlot: t.slot });
             }
             inputY += 100;
         }
@@ -998,9 +1000,20 @@
             go.setProperty('name', name);
             go.setProperty('type', '');
             const src = Array.isArray(source) ? source[0] : source;
-            const srcNode = innerGraph.getNodeById(idRemap[src.node_id]);
-            if (srcNode) srcNode.connect(src.slot, go, 0);
+            deferredConnections.push({ fromOldId: src.node_id, fromSlot: src.slot, toId: go.id, toSlot: 0 });
             outputY += 100;
+        }
+
+        // Execute deferred connections
+        for (const dc of deferredConnections) {
+            const fromNode = dc.fromId ? innerGraph.getNodeById(dc.fromId) : innerGraph.getNodeById(idRemap[dc.fromOldId]);
+            const toNode = dc.toId ? innerGraph.getNodeById(dc.toId) : innerGraph.getNodeById(idRemap[dc.toOldId]);
+            if (fromNode && toNode) {
+                const link = fromNode.connect(dc.fromSlot, toNode, dc.toSlot);
+                if (!link) console.warn('Connection failed:', fromNode.title || fromNode.type, 'slot', dc.fromSlot, '->', toNode.title || toNode.type, 'slot', dc.toSlot);
+            } else {
+                console.warn('Deferred connection: node not found', dc);
+            }
         }
 
         subNode._molecularDef = compDef;
