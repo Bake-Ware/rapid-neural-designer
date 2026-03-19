@@ -811,14 +811,16 @@
         const usedNames = new Set();
         const skipTypes = new Set(['graph/input', 'graph/output']);
 
-        // Assign vars for inner nodes
+        // Assign vars for inner nodes (including nested subgraphs)
         for (const n of sorted) {
             if (skipTypes.has(n.type)) continue;
             const def = n._atomicDef || n._molecularDef;
-            if (!def) continue;
-            for (let i = 0; i < def.outputs.length; i++) {
-                const defId = def.id || def.name?.toLowerCase().replace(/\s+/g, '_') || 'node';
-                const base = sanitizeName(`${defId}_s${subNode.id}_${n.id}_${def.outputs[i].name}`);
+            const outputs = def ? def.outputs : (n.outputs || []);
+            if (!outputs || !outputs.length) continue;
+            for (let i = 0; i < outputs.length; i++) {
+                const defId = (def && def.id) || n.title?.toLowerCase().replace(/\s+/g, '_') || 'node';
+                const outName = outputs[i].name || `out_${i}`;
+                const base = sanitizeName(`${defId}_s${subNode.id}_${n.id}_${outName}`);
                 let vn = base; let c = 2;
                 while (usedNames.has(vn)) vn = `${base}_${c++}`;
                 usedNames.add(vn);
@@ -846,6 +848,16 @@
 
         for (const n of sorted) {
             if (skipTypes.has(n.type)) continue;
+
+            // Recursively compile nested subgraphs
+            if (n.subgraph) {
+                const nestedResult = compileSubgraph(n, varNames, innerLinks);
+                for (const imp of nestedResult.imports) allImports.add(imp);
+                codeLines.push(`# [${n.title || 'Subgraph'}] nested`);
+                codeLines.push(nestedResult.code);
+                continue;
+            }
+
             const def = n._atomicDef || n._molecularDef;
             if (!def) continue;
             if (def.imports) def.imports.forEach(i => allImports.add(i));
