@@ -258,6 +258,9 @@
             z-index: 1000;
         }
 
+        /* Hide subgraph + buttons (we use Condense/Explode instead) */
+        .subgraph_property { display: none !important; }
+
         /* Custom LiteGraph dark theme */
         .litegraph { background-color: #1e1e1e !important; }
         .litecontextmenu { background: #252526 !important; border: 1px solid #3e3e42 !important; }
@@ -397,6 +400,9 @@
     const canvasElement = document.getElementById("graph-canvas");
     const graphCanvas = new LGraphCanvas(canvasElement, graph);
 
+    // Returns the currently viewed graph (root or inner subgraph)
+    function activeGraph() { return graphCanvas.graph || graph; }
+
     graphCanvas.allow_searchbox = true;
     graphCanvas.allow_dragnodes = true;
     graphCanvas.allow_interaction = true;
@@ -434,7 +440,7 @@
         const rect = canvasElement.getBoundingClientRect();
         const cx = (e.clientX - rect.left) / graphCanvas.ds.scale - graphCanvas.ds.offset[0];
         const cy = (e.clientY - rect.top) / graphCanvas.ds.scale - graphCanvas.ds.offset[1];
-        const nodeUnder = graph.getNodeOnPos(cx, cy, graph._nodes);
+        const nodeUnder = activeGraph().getNodeOnPos(cx, cy, activeGraph()._nodes);
 
         if (nodeUnder) {
             // Clicked a node — if no modifier, deselect everything else
@@ -641,7 +647,7 @@
             node.pos = [300 + Math.random() * 200, 100 + Math.random() * 300];
         }
 
-        graph.add(node);
+        activeGraph().add(node);
         scheduleCompile();
     }
 
@@ -970,7 +976,7 @@
     // ---- File Operations ----
 
     function saveGraph() {
-        const data = JSON.stringify(graph.serialize(), null, 2);
+        const data = JSON.stringify(activeGraph().serialize(), null, 2);
         const blob = new Blob([data], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -989,7 +995,7 @@
             const reader = new FileReader();
             reader.onload = event => {
                 try {
-                    graph.configure(JSON.parse(event.target.result));
+                    activeGraph().configure(JSON.parse(event.target.result));
                     scheduleCompile();
                     updateStatus('Loaded: ' + file.name);
                 } catch (err) {
@@ -1003,7 +1009,7 @@
 
     function clearGraph() {
         if (confirm('Clear entire graph?')) {
-            graph.clear();
+            activeGraph().clear();
             scheduleCompile();
         }
     }
@@ -1349,7 +1355,7 @@
                 }
             }
             if (n.title) newNode.title = n.title;
-            graph.add(newNode);
+            activeGraph().add(newNode);
             idRemap[n.id] = newNode.id;
         }
 
@@ -1358,8 +1364,8 @@
             const link = innerGraph.links[linkId];
             if (!link) continue;
             if (!idRemap[link.origin_id] || !idRemap[link.target_id]) continue;
-            const fromNode = graph.getNodeById(idRemap[link.origin_id]);
-            const toNode = graph.getNodeById(idRemap[link.target_id]);
+            const fromNode = activeGraph().getNodeById(idRemap[link.origin_id]);
+            const toNode = activeGraph().getNodeById(idRemap[link.target_id]);
             if (fromNode && toNode) {
                 fromNode.connect(link.origin_slot, toNode, link.target_slot);
             }
@@ -1370,15 +1376,15 @@
             for (let i = 0; i < node.inputs.length; i++) {
                 const inp = node.inputs[i];
                 if (inp.link == null) continue;
-                const link = graph.links[inp.link];
+                const link = activeGraph().links[inp.link];
                 if (!link) continue;
 
-                const srcNode = graph.getNodeById(link.origin_id);
+                const srcNode = activeGraph().getNodeById(link.origin_id);
                 if (!srcNode) continue;
 
                 const targets = inputWireMap[inp.name] || [];
                 for (const t of targets) {
-                    const dstNode = graph.getNodeById(idRemap[t.nodeId]);
+                    const dstNode = activeGraph().getNodeById(idRemap[t.nodeId]);
                     if (dstNode) srcNode.connect(link.origin_slot, dstNode, t.slot);
                 }
             }
@@ -1393,23 +1399,23 @@
                 const source = outputWireMap[out.name];
                 if (!source) continue;
 
-                const innerSrc = graph.getNodeById(idRemap[source.nodeId]);
+                const innerSrc = activeGraph().getNodeById(idRemap[source.nodeId]);
                 if (!innerSrc) continue;
 
                 for (const linkId of [...out.links]) {
-                    const link = graph.links[linkId];
+                    const link = activeGraph().links[linkId];
                     if (!link) continue;
-                    const dstNode = graph.getNodeById(link.target_id);
+                    const dstNode = activeGraph().getNodeById(link.target_id);
                     if (dstNode) innerSrc.connect(source.slot, dstNode, link.target_slot);
                 }
             }
         }
 
         // Remove subgraph node
-        graph.remove(node);
+        activeGraph().remove(node);
 
         // Wrap in group
-        const createdNodes = Object.values(idRemap).map(id => graph.getNodeById(id)).filter(Boolean);
+        const createdNodes = Object.values(idRemap).map(id => activeGraph().getNodeById(id)).filter(Boolean);
         if (createdNodes.length > 0) {
             let gx1 = Infinity, gy1 = Infinity, gx2 = -Infinity, gy2 = -Infinity;
             for (const n of createdNodes) {
@@ -1424,7 +1430,7 @@
             grp.pos = [gx1 - pad, gy1 - pad - 20];
             grp.size = [gx2 - gx1 + pad * 2, gy2 - gy1 + pad * 2 + 20];
             grp.color = "#335577";
-            graph.add(grp);
+            activeGraph().add(grp);
         }
 
         scheduleCompile();
@@ -1457,13 +1463,13 @@
                 }
             }
             if (sn.title) newNode.title = sn.title;
-            graph.add(newNode);
+            activeGraph().add(newNode);
             idRemap[sn.id] = newNode.id;
         }
 
         if (subLinks) {
             for (const sl of subLinks) {
-                const f = graph.getNodeById(idRemap[sl[1]]), t = graph.getNodeById(idRemap[sl[3]]);
+                const f = activeGraph().getNodeById(idRemap[sl[1]]), t = activeGraph().getNodeById(idRemap[sl[3]]);
                 if (f && t) f.connect(sl[2], t, sl[4]);
             }
         }
@@ -1471,10 +1477,10 @@
         if (node.inputs) {
             for (let i = 0; i < node.inputs.length; i++) {
                 const inp = node.inputs[i]; if (inp.link == null) continue;
-                const link = graph.links[inp.link]; if (!link) continue;
+                const link = activeGraph().links[inp.link]; if (!link) continue;
                 const mappings = inputMap[inp.name]; if (!mappings) continue;
-                const src = graph.getNodeById(link.origin_id); if (!src) continue;
-                for (const m of mappings) { const d = graph.getNodeById(idRemap[m.node_id]); if (d) src.connect(link.origin_slot, d, m.slot); }
+                const src = activeGraph().getNodeById(link.origin_id); if (!src) continue;
+                for (const m of mappings) { const d = activeGraph().getNodeById(idRemap[m.node_id]); if (d) src.connect(link.origin_slot, d, m.slot); }
             }
         }
 
@@ -1482,18 +1488,18 @@
             for (let i = 0; i < node.outputs.length; i++) {
                 const out = node.outputs[i]; if (!out.links || !out.links.length) continue;
                 const mappings = outputMap[out.name]; if (!mappings || !mappings.length) continue;
-                const src = graph.getNodeById(idRemap[mappings[0].node_id]); if (!src) continue;
-                for (const lid of [...out.links]) { const l = graph.links[lid]; if (!l) continue; const d = graph.getNodeById(l.target_id); if (d) src.connect(mappings[0].slot, d, l.target_slot); }
+                const src = activeGraph().getNodeById(idRemap[mappings[0].node_id]); if (!src) continue;
+                for (const lid of [...out.links]) { const l = activeGraph().links[lid]; if (!l) continue; const d = activeGraph().getNodeById(l.target_id); if (d) src.connect(mappings[0].slot, d, l.target_slot); }
             }
         }
 
         const label = node.title || def.name;
-        graph.remove(node);
-        const created = Object.values(idRemap).map(id => graph.getNodeById(id)).filter(Boolean);
+        activeGraph().remove(node);
+        const created = Object.values(idRemap).map(id => activeGraph().getNodeById(id)).filter(Boolean);
         if (created.length) {
             let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity;
             for (const n of created) { x1=Math.min(x1,n.pos[0]); y1=Math.min(y1,n.pos[1]); x2=Math.max(x2,n.pos[0]+(n.size[0]||200)); y2=Math.max(y2,n.pos[1]+(n.size[1]||100)); }
-            const g=new LGraphGroup(); g.title=label; g.pos=[x1-30,y1-50]; g.size=[x2-x1+60,y2-y1+80]; g.color="#335577"; graph.add(g);
+            const g=new LGraphGroup(); g.title=label; g.pos=[x1-30,y1-50]; g.size=[x2-x1+60,y2-y1+80]; g.color="#335577"; activeGraph().add(g);
         }
         scheduleCompile();
         updateStatus(`Exploded "${label}" → ${subNodes.length} nodes`);
@@ -1537,18 +1543,18 @@
             options.push(null);
             options.push({ content: `Condense (${selected.length} nodes)`, callback: () => createMolecularFromSelection(selected) });
             options.push({ content: `Delete Selected (${selected.length})`, callback: () => {
-                for (const n of selected) graph.remove(n);
+                for (const n of selected) activeGraph().remove(n);
                 scheduleCompile();
             }});
         }
 
         options.push(null);
         options.push({ content: 'Select All', callback: () => {
-            for (const n of graph._nodes) n.is_selected = true;
+            for (const n of activeGraph()._nodes) n.is_selected = true;
             graphCanvas.setDirty(true, true);
         }});
         options.push({ content: 'Deselect All', callback: () => {
-            for (const n of graph._nodes) n.is_selected = false;
+            for (const n of activeGraph()._nodes) n.is_selected = false;
             graphCanvas.setDirty(true, true);
         }});
         options.push({ content: 'Clear Graph', callback: () => clearGraph() });
@@ -1574,7 +1580,7 @@
                 if (node.properties) {
                     for (const [k, v] of Object.entries(node.properties)) clone.properties[k] = v;
                 }
-                graph.add(clone);
+                activeGraph().add(clone);
                 scheduleCompile();
             }
         }});
@@ -1602,7 +1608,7 @@
         }});
 
         options.push({ content: 'Delete', callback: () => {
-            graph.remove(node);
+            activeGraph().remove(node);
             scheduleCompile();
         }});
 
@@ -1640,7 +1646,7 @@
                 for (let i = 0; i < n.inputs.length; i++) {
                     const inp = n.inputs[i];
                     if (inp.link == null) continue;
-                    const link = graph.links[inp.link];
+                    const link = activeGraph().links[inp.link];
                     if (!link) continue;
                     if (!selectedIds.has(link.origin_id)) {
                         let inputName = inp.name || 'input';
@@ -1659,7 +1665,7 @@
                     const out = n.outputs[i];
                     if (!out.links || out.links.length === 0) continue;
                     for (const linkId of out.links) {
-                        const link = graph.links[linkId];
+                        const link = activeGraph().links[linkId];
                         if (link && !selectedIds.has(link.target_id)) {
                             let outputName = out.name || 'output';
                             outputNameCount[outputName] = (outputNameCount[outputName] || 0) + 1;
@@ -1680,7 +1686,7 @@
         if (!subNode) { updateStatus('Error: subgraph type not available'); return; }
         subNode.title = cleanName;
         subNode.pos = [cx - 70, cy - 30];
-        graph.add(subNode);
+        activeGraph().add(subNode);
 
         const innerGraph = subNode.subgraph;
 
@@ -1714,7 +1720,7 @@
             for (let i = 0; i < n.inputs.length; i++) {
                 const inp = n.inputs[i];
                 if (inp.link == null) continue;
-                const link = graph.links[inp.link];
+                const link = activeGraph().links[inp.link];
                 if (!link || !selectedIds.has(link.origin_id)) continue;
 
                 const fromNode = innerGraph.getNodeById(idRemap[link.origin_id]);
@@ -1774,7 +1780,7 @@
 
         // Reconnect external wires to the subgraph node
         for (const wire of incomingWires) {
-            const srcNode = graph.getNodeById(wire.srcNodeId);
+            const srcNode = activeGraph().getNodeById(wire.srcNodeId);
             const slotIdx = inputSlotMap[wire.name];
             if (srcNode && slotIdx !== undefined) {
                 srcNode.connect(wire.srcSlot, subNode, slotIdx);
@@ -1782,7 +1788,7 @@
         }
 
         for (const wire of outgoingWires) {
-            const dstNode = graph.getNodeById(wire.dstNodeId);
+            const dstNode = activeGraph().getNodeById(wire.dstNodeId);
             const slotIdx = outputSlotMap[wire.name];
             if (dstNode && slotIdx !== undefined) {
                 subNode.connect(slotIdx, dstNode, wire.dstSlot);
@@ -1791,7 +1797,7 @@
 
         // Remove original selected nodes from parent graph
         for (const n of selectedNodes) {
-            graph.remove(n);
+            activeGraph().remove(n);
         }
 
         scheduleCompile();
