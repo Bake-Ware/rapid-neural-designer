@@ -764,9 +764,9 @@
 
     // Subgraph default: lighter so title text is readable
     LiteGraph.Subgraph.title_color = "#4a6a8a";
-    // Remove the + buttons drawn on subgraph nodes
-    LiteGraph.Subgraph.prototype.onDrawForeground = function() {};  // suppress the two "+" symbols
-    LiteGraph.Subgraph.prototype.onMouseDown = null;  // suppress click handler for +
+    // Remove the + buttons drawn on subgraph nodes (drawn in onDrawBackground)
+    LiteGraph.Subgraph.prototype.onDrawBackground = function() {};
+    LiteGraph.Subgraph.prototype.onMouseDown = null;
     delete LiteGraph.Subgraph.prototype.onGetInputs;
     delete LiteGraph.Subgraph.prototype.onGetOutputs;
 
