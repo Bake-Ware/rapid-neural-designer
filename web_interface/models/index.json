@@ -57,6 +57,20 @@
       "description": "4-layer Qwen2.5 transformer (dim=256, 8 query/2 KV heads GQA, 32k vocab)",
       "file": "qwen.json",
       "color": "#42a5f5"
+    },
+    {
+      "id": "liquid",
+      "name": "Liquid Neural Network",
+      "description": "4-layer Liquid Time-Constant cells (dim=128, ODE steps=6, 10k vocab)",
+      "file": "liquid.json",
+      "color": "#26c6da"
+    },
+    {
+      "id": "mixtral",
+      "name": "Mixtral MoE",
+      "description": "4-layer MoE transformer (dim=256, 4 heads, 8 experts top-2, 32k vocab)",
+      "file": "mixtral.json",
+      "color": "#ab47bc"
     }
   ]
 }

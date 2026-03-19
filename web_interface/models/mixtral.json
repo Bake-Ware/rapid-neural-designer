@@ -1,0 +1,256 @@
+{
+  "last_node_id": 10,
+  "last_link_id": 12,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "atomic/data/input_tensor",
+      "pos": [100, 50],
+      "size": [220, 130],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        { "name": "tensor", "type": "tensor", "links": [1] }
+      ],
+      "properties": {
+        "batch_size": 1,
+        "seq_len": 32,
+        "dtype": "int",
+        "vocab_size": 32000
+      },
+      "widgets_values": [1, 32, "int", 32000]
+    },
+    {
+      "id": 2,
+      "type": "atomic/init/triangular_mask",
+      "pos": [450, 50],
+      "size": [220, 60],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        { "name": "mask", "type": "tensor", "links": [2, 5, 7, 9] }
+      ],
+      "properties": {
+        "size": 32
+      },
+      "widgets_values": [32]
+    },
+    {
+      "id": 3,
+      "type": "molecular/embedding",
+      "pos": [100, 250],
+      "size": [220, 100],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        { "name": "token_ids", "type": "tensor", "link": 1 }
+      ],
+      "outputs": [
+        { "name": "embeddings", "type": "tensor", "links": [3] }
+      ],
+      "properties": {
+        "vocab_size": 32000,
+        "dim": 256,
+        "init_std": 0.02
+      },
+      "widgets_values": [32000, 256, 0.02]
+    },
+    {
+      "id": 4,
+      "type": "molecular/moe_transformer_block",
+      "pos": [100, 430],
+      "size": [260, 210],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 3 },
+        { "name": "mask", "type": "tensor", "link": 2 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [4] }
+      ],
+      "title": "MoE Block 1",
+      "properties": {
+        "dim": 256,
+        "n_heads": 4,
+        "hidden_dim": 688,
+        "n_experts": 8,
+        "top_k": 2,
+        "theta": 10000.0,
+        "eps": 1e-6,
+        "init_std": 0.02
+      },
+      "widgets_values": [256, 4, 688, 8, 2, 10000.0, 0.000001, 0.02]
+    },
+    {
+      "id": 5,
+      "type": "molecular/moe_transformer_block",
+      "pos": [100, 720],
+      "size": [260, 210],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 4 },
+        { "name": "mask", "type": "tensor", "link": 5 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [6] }
+      ],
+      "title": "MoE Block 2",
+      "properties": {
+        "dim": 256,
+        "n_heads": 4,
+        "hidden_dim": 688,
+        "n_experts": 8,
+        "top_k": 2,
+        "theta": 10000.0,
+        "eps": 1e-6,
+        "init_std": 0.02
+      },
+      "widgets_values": [256, 4, 688, 8, 2, 10000.0, 0.000001, 0.02]
+    },
+    {
+      "id": 6,
+      "type": "molecular/moe_transformer_block",
+      "pos": [100, 1010],
+      "size": [260, 210],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 6 },
+        { "name": "mask", "type": "tensor", "link": 7 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [8] }
+      ],
+      "title": "MoE Block 3",
+      "properties": {
+        "dim": 256,
+        "n_heads": 4,
+        "hidden_dim": 688,
+        "n_experts": 8,
+        "top_k": 2,
+        "theta": 10000.0,
+        "eps": 1e-6,
+        "init_std": 0.02
+      },
+      "widgets_values": [256, 4, 688, 8, 2, 10000.0, 0.000001, 0.02]
+    },
+    {
+      "id": 7,
+      "type": "molecular/moe_transformer_block",
+      "pos": [100, 1300],
+      "size": [260, 210],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 8 },
+        { "name": "mask", "type": "tensor", "link": 9 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [10] }
+      ],
+      "title": "MoE Block 4",
+      "properties": {
+        "dim": 256,
+        "n_heads": 4,
+        "hidden_dim": 688,
+        "n_experts": 8,
+        "top_k": 2,
+        "theta": 10000.0,
+        "eps": 1e-6,
+        "init_std": 0.02
+      },
+      "widgets_values": [256, 4, 688, 8, 2, 10000.0, 0.000001, 0.02]
+    },
+    {
+      "id": 8,
+      "type": "molecular/rmsnorm",
+      "pos": [100, 1590],
+      "size": [220, 80],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 10 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [11] }
+      ],
+      "properties": {
+        "dim": 256,
+        "eps": 1e-6
+      },
+      "widgets_values": [256, 0.000001]
+    },
+    {
+      "id": 9,
+      "type": "molecular/linear",
+      "pos": [100, 1750],
+      "size": [220, 130],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 11 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [12] }
+      ],
+      "title": "Output Projection",
+      "properties": {
+        "in_features": 256,
+        "out_features": 32000,
+        "use_bias": false,
+        "init_std": 0.02
+      },
+      "widgets_values": [256, 32000, false, 0.02]
+    },
+    {
+      "id": 10,
+      "type": "atomic/data/output",
+      "pos": [100, 1950],
+      "size": [220, 60],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 12 }
+      ],
+      "outputs": [],
+      "properties": {
+        "label": "logits"
+      },
+      "widgets_values": ["logits"]
+    }
+  ],
+  "links": [
+    [1,  1, 0,  3, 0, "tensor"],
+    [2,  2, 0,  4, 1, "tensor"],
+    [3,  3, 0,  4, 0, "tensor"],
+    [4,  4, 0,  5, 0, "tensor"],
+    [5,  2, 0,  5, 1, "tensor"],
+    [6,  5, 0,  6, 0, "tensor"],
+    [7,  2, 0,  6, 1, "tensor"],
+    [8,  6, 0,  7, 0, "tensor"],
+    [9,  2, 0,  7, 1, "tensor"],
+    [10, 7, 0,  8, 0, "tensor"],
+    [11, 8, 0,  9, 0, "tensor"],
+    [12, 9, 0, 10, 0, "tensor"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "info": "Mixtral MoE - 4-layer MoE transformer (dim=256, 4 heads, 8 experts top-2, 32k vocab). Generated by Rapid Neural Designer."
+  },
+  "version": 0.4
+}

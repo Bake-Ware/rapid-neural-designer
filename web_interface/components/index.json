@@ -13,8 +13,10 @@
     { "id": "rnn_layer", "name": "RNN Layer", "description": "Vanilla RNN: h = tanh(Wx + Wh + b)", "file": "rnn_cell.json", "color": "#f0a500" },
     { "id": "lstm_layer", "name": "LSTM Layer", "description": "LSTM with forget/input/output gates", "file": "lstm_layer.json", "color": "#f0a500" },
     { "id": "mamba_block", "name": "Mamba Block", "description": "Selective SSM — linear-time sequence modeling", "file": "mamba_block.json", "color": "#f0a500" },
+    { "id": "liquid_cell", "name": "Liquid Cell", "description": "Liquid Time-Constant — continuous dynamics with input-dependent tau", "file": "liquid_cell.json", "color": "#f0a500" },
     { "id": "rope", "name": "RoPE", "description": "Rotary Positional Encoding", "file": "rope.json", "color": "#f0a500" },
     { "id": "swiglu_ffn", "name": "SwiGLU FFN", "description": "SwiGLU gated feed-forward network", "file": "swiglu_ffn.json", "color": "#95e1d3" },
+    { "id": "moe_layer", "name": "MoE Layer", "description": "Mixture of Experts — router + top-k SwiGLU experts", "file": "moe_layer.json", "color": "#95e1d3" },
     { "id": "multi_head_attention", "name": "Multi-Head Attention", "description": "Multi-head self-attention with QKV", "file": "multi_head_attention.json", "color": "#6bb5ff" },
     { "id": "bidirectional_attention", "name": "Bidirectional Attention", "description": "Full attention without causal mask (LLaDA-style)", "file": "bidirectional_attention.json", "color": "#6bb5ff" },
     { "id": "gqa_attention", "name": "GQA Attention", "description": "Grouped Query Attention with RoPE (Qwen-style)", "file": "gqa_attention.json", "color": "#6bb5ff" },
@@ -22,6 +24,7 @@
     { "id": "gat_layer", "name": "GAT Layer", "description": "Graph Attention Network layer", "file": "gat_layer.json", "color": "#6bb5ff" },
     { "id": "transformer_block", "name": "Transformer Block", "description": "LLaMA-style: RMSNorm -> RoPE Attn -> Residual -> RMSNorm -> SwiGLU -> Residual", "file": "transformer_block.json", "color": "#e056a0" },
     { "id": "llada_block", "name": "LLaDA Block", "description": "Diffusion transformer: bidirectional attention + SwiGLU", "file": "llada_block.json", "color": "#e056a0" },
-    { "id": "qwen_block", "name": "Qwen Block", "description": "Qwen-style: GQA + RoPE + SwiGLU", "file": "qwen_block.json", "color": "#e056a0" }
+    { "id": "qwen_block", "name": "Qwen Block", "description": "Qwen-style: GQA + RoPE + SwiGLU", "file": "qwen_block.json", "color": "#e056a0" },
+    { "id": "moe_transformer_block", "name": "MoE Transformer Block", "description": "Mixtral-style: RoPE Attn + MoE FFN (8 experts, top-2)", "file": "moe_transformer_block.json", "color": "#e056a0" }
   ]
 }

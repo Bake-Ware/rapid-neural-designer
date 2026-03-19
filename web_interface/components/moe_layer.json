@@ -1,0 +1,20 @@
+{
+  "name": "MoE Layer",
+  "id": "moe_layer",
+  "description": "Mixture of Experts — router selects top-k experts per token, each expert is a SwiGLU FFN",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "dim", "type": "int", "default": 512, "description": "Model dimension" },
+    { "name": "hidden_dim", "type": "int", "default": 1376, "description": "Expert FFN hidden dimension" },
+    { "name": "n_experts", "type": "int", "default": 8, "description": "Total number of experts" },
+    { "name": "top_k", "type": "int", "default": 2, "description": "Number of experts activated per token" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight initialization std" }
+  ],
+  "code": "# MoE Layer {{_id}}: {{n_experts}} experts, top-{{top_k}}\n_moe{{_id}}_d = {{dim}}\n_moe{{_id}}_hd = {{hidden_dim}}\n_moe{{_id}}_ne = {{n_experts}}\n_moe{{_id}}_k = {{top_k}}\n# Router\n_moe{{_id}}_w_gate = np.random.randn(_moe{{_id}}_ne, _moe{{_id}}_d).astype(np.float32) * {{init_std}}\n# Expert weights (all experts stored as 3D tensors)\n_moe{{_id}}_w_g = np.random.randn(_moe{{_id}}_ne, _moe{{_id}}_hd, _moe{{_id}}_d).astype(np.float32) * {{init_std}}\n_moe{{_id}}_w_u = np.random.randn(_moe{{_id}}_ne, _moe{{_id}}_hd, _moe{{_id}}_d).astype(np.float32) * {{init_std}}\n_moe{{_id}}_w_d = np.random.randn(_moe{{_id}}_ne, _moe{{_id}}_d, _moe{{_id}}_hd).astype(np.float32) * {{init_std}}\n_moe{{_id}}_bs, _moe{{_id}}_sl, _ = {{input}}.shape\n_moe{{_id}}_flat = {{input}}.reshape(-1, _moe{{_id}}_d)\n_moe{{_id}}_ntok = _moe{{_id}}_flat.shape[0]\n# Router scores -> top-k selection\n_moe{{_id}}_logits = np.matmul(_moe{{_id}}_flat, _moe{{_id}}_w_gate.T)  # (ntok, n_experts)\n_moe{{_id}}_topk_idx = np.argsort(_moe{{_id}}_logits, axis=-1)[:, -_moe{{_id}}_k:]  # (ntok, k)\n_moe{{_id}}_topk_logits = np.take_along_axis(_moe{{_id}}_logits, _moe{{_id}}_topk_idx, axis=-1)\n_moe{{_id}}_exp = np.exp(_moe{{_id}}_topk_logits - np.max(_moe{{_id}}_topk_logits, axis=-1, keepdims=True))\n_moe{{_id}}_weights = _moe{{_id}}_exp / np.sum(_moe{{_id}}_exp, axis=-1, keepdims=True)\n# Compute expert outputs (loop over tokens for clarity)\n_moe{{_id}}_out = np.zeros((_moe{{_id}}_ntok, _moe{{_id}}_d), dtype=np.float32)\nfor _moe{{_id}}_i in range(_moe{{_id}}_ntok):\n    for _moe{{_id}}_j in range(_moe{{_id}}_k):\n        _moe{{_id}}_e = _moe{{_id}}_topk_idx[_moe{{_id}}_i, _moe{{_id}}_j]\n        _moe{{_id}}_w = _moe{{_id}}_weights[_moe{{_id}}_i, _moe{{_id}}_j]\n        _moe{{_id}}_gate_v = np.matmul(_moe{{_id}}_flat[_moe{{_id}}_i], _moe{{_id}}_w_g[_moe{{_id}}_e].T)\n        _moe{{_id}}_up_v = np.matmul(_moe{{_id}}_flat[_moe{{_id}}_i], _moe{{_id}}_w_u[_moe{{_id}}_e].T)\n        _moe{{_id}}_act = _moe{{_id}}_gate_v * (1.0 / (1.0 + np.exp(-_moe{{_id}}_gate_v)))  # SiLU\n        _moe{{_id}}_expert_out = np.matmul(_moe{{_id}}_act * _moe{{_id}}_up_v, _moe{{_id}}_w_d[_moe{{_id}}_e].T)\n        _moe{{_id}}_out[_moe{{_id}}_i] += _moe{{_id}}_w * _moe{{_id}}_expert_out\n{{output}} = _moe{{_id}}_out.reshape(_moe{{_id}}_bs, _moe{{_id}}_sl, _moe{{_id}}_d)",
+  "imports": ["import numpy as np"]
+}

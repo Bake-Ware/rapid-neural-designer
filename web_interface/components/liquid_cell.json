@@ -1,0 +1,20 @@
+{
+  "name": "Liquid Cell",
+  "id": "liquid_cell",
+  "description": "Liquid Time-Constant layer — continuous dynamics with input-dependent time constants (Neural ODE-inspired)",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" },
+    { "name": "hidden", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "input_dim", "type": "int", "default": 128, "description": "Input feature dimension" },
+    { "name": "hidden_dim", "type": "int", "default": 256, "description": "Hidden state dimension" },
+    { "name": "ode_steps", "type": "int", "default": 6, "description": "Number of ODE solver sub-steps per timestep" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight initialization std" }
+  ],
+  "code": "# Liquid Time-Constant Cell {{_id}}\n_lc{{_id}}_id = {{input_dim}}\n_lc{{_id}}_hd = {{hidden_dim}}\n_lc{{_id}}_steps = {{ode_steps}}\n_lc{{_id}}_dt = 1.0 / _lc{{_id}}_steps\n# Weights\n_lc{{_id}}_wih = np.random.randn(_lc{{_id}}_hd, _lc{{_id}}_id).astype(np.float32) * {{init_std}}\n_lc{{_id}}_whh = np.random.randn(_lc{{_id}}_hd, _lc{{_id}}_hd).astype(np.float32) * {{init_std}}\n_lc{{_id}}_b = np.zeros(_lc{{_id}}_hd, dtype=np.float32)\n# Time-constant network (input-dependent tau)\n_lc{{_id}}_w_tau = np.random.randn(_lc{{_id}}_hd, _lc{{_id}}_id + _lc{{_id}}_hd).astype(np.float32) * {{init_std}}\n_lc{{_id}}_b_tau = np.ones(_lc{{_id}}_hd, dtype=np.float32)  # init tau ~ 1.0\n# Backbone: sensitivity network\n_lc{{_id}}_w_A = np.random.randn(_lc{{_id}}_hd, _lc{{_id}}_hd).astype(np.float32) * {{init_std}}\n_lc{{_id}}_bs, _lc{{_id}}_sl, _ = {{input}}.shape\n_lc{{_id}}_h = np.zeros((_lc{{_id}}_bs, _lc{{_id}}_hd), dtype=np.float32)\n_lc{{_id}}_outs = []\nfor _lc{{_id}}_t in range(_lc{{_id}}_sl):\n    _lc{{_id}}_xt = {{input}}[:, _lc{{_id}}_t, :]\n    # Compute input-dependent time constant\n    _lc{{_id}}_cat = np.concatenate([_lc{{_id}}_xt, _lc{{_id}}_h], axis=-1)\n    _lc{{_id}}_tau = 1.0 / (1.0 + np.exp(-(np.matmul(_lc{{_id}}_cat, _lc{{_id}}_w_tau.T) + _lc{{_id}}_b_tau)))\n    _lc{{_id}}_tau = _lc{{_id}}_tau * 2.0 + 0.1  # scale to (0.1, 2.1)\n    # ODE integration (Euler sub-steps)\n    for _lc{{_id}}_s in range(_lc{{_id}}_steps):\n        _lc{{_id}}_f = np.tanh(np.matmul(_lc{{_id}}_xt, _lc{{_id}}_wih.T) + np.matmul(_lc{{_id}}_h, _lc{{_id}}_whh.T) + _lc{{_id}}_b)\n        _lc{{_id}}_sens = 1.0 / (1.0 + np.exp(-np.matmul(_lc{{_id}}_h, _lc{{_id}}_w_A.T)))\n        _lc{{_id}}_dh = (-_lc{{_id}}_h / _lc{{_id}}_tau) + _lc{{_id}}_f * _lc{{_id}}_sens\n        _lc{{_id}}_h = _lc{{_id}}_h + _lc{{_id}}_dt * _lc{{_id}}_dh\n    _lc{{_id}}_outs.append(_lc{{_id}}_h)\n{{output}} = np.stack(_lc{{_id}}_outs, axis=1)\n{{hidden}} = _lc{{_id}}_h",
+  "imports": ["import numpy as np"]
+}
