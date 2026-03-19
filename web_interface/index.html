@@ -633,7 +633,21 @@
 
     // ---- Add Node to Graph ----
 
+    // Subgraph style: lighter title so text is readable
+    LiteGraph.Subgraph.title_color = "#557799";
+
     function addNodeToGraph(typeName) {
+        // If it's a molecular component with a graph definition,
+        // create a native subgraph node instead so it gets the expand button
+        if (typeName.startsWith('molecular/')) {
+            const compId = typeName.replace('molecular/', '');
+            const compDef = molecularRegistry[compId];
+            if (compDef && compDef.graph) {
+                addComponentAsSubgraph(compDef, compId);
+                return;
+            }
+        }
+
         const node = LiteGraph.createNode(typeName);
         if (!node) { console.error('Failed to create node:', typeName); return; }
 
@@ -648,6 +662,89 @@
         }
 
         activeGraph().add(node);
+        scheduleCompile();
+    }
+
+    function addComponentAsSubgraph(compDef, compId) {
+        const subNode = LiteGraph.createNode('graph/subgraph');
+        if (!subNode) return;
+        subNode.title = compDef.name;
+
+        const area = graphCanvas.visible_area;
+        if (area) {
+            subNode.pos = [
+                area[0] + area[2] * 0.3 + (Math.random() - 0.5) * 150,
+                area[1] + area[3] * 0.3 + (Math.random() - 0.5) * 150
+            ];
+        } else {
+            subNode.pos = [300 + Math.random() * 200, 100 + Math.random() * 300];
+        }
+
+        activeGraph().add(subNode);
+        const innerGraph = subNode.subgraph;
+        const graphDef = compDef.graph;
+        const idRemap = {};
+
+        // Create inner nodes
+        for (const sn of graphDef.nodes) {
+            const newNode = LiteGraph.createNode(sn.type);
+            if (!newNode) continue;
+            newNode.pos = [100 + (sn.pos?.[0] || 0), 100 + (sn.pos?.[1] || 0)];
+            if (sn.properties) {
+                for (const [k, v] of Object.entries(sn.properties)) {
+                    newNode.properties[k] = v;
+                    if (newNode.widgets) { const w = newNode.widgets.find(w => w.name === k); if (w) w.value = v; }
+                }
+            }
+            if (sn.title) newNode.title = sn.title;
+            innerGraph.add(newNode);
+            idRemap[sn.id] = newNode.id;
+        }
+
+        // Inner links
+        for (const sl of (graphDef.links || [])) {
+            const f = innerGraph.getNodeById(idRemap[sl[1]]);
+            const t = innerGraph.getNodeById(idRemap[sl[3]]);
+            if (f && t) f.connect(sl[2], t, sl[4]);
+        }
+
+        // graph/input nodes
+        const rawInputMap = graphDef.input_map || {};
+        let inputY = 30;
+        for (const [name, targets] of Object.entries(rawInputMap)) {
+            const gi = LiteGraph.createNode('graph/input');
+            gi.pos = [10, inputY];
+            innerGraph.add(gi);
+            gi.setProperty('name', name);
+            gi.setProperty('type', 'tensor');
+            const arr = Array.isArray(targets) ? targets : [targets];
+            for (const t of arr) {
+                const dst = innerGraph.getNodeById(idRemap[t.node_id]);
+                if (dst) gi.connect(0, dst, t.slot);
+            }
+            inputY += 100;
+        }
+
+        // graph/output nodes
+        const rawOutputMap = graphDef.output_map || {};
+        let outputY = 30;
+        const maxX = Math.max(400, ...graphDef.nodes.map(n => (n.pos?.[0] || 0) + 300));
+        for (const [name, source] of Object.entries(rawOutputMap)) {
+            const go = LiteGraph.createNode('graph/output');
+            go.pos = [maxX, outputY];
+            innerGraph.add(go);
+            go.setProperty('name', name);
+            go.setProperty('type', 'tensor');
+            const src = Array.isArray(source) ? source[0] : source;
+            const srcNode = innerGraph.getNodeById(idRemap[src.node_id]);
+            if (srcNode) srcNode.connect(src.slot, go, 0);
+            outputY += 100;
+        }
+
+        // Store reference to component def for the compiler
+        subNode._molecularDef = compDef;
+        subNode._molecularMeta = { id: compId, name: compDef.name };
+
         scheduleCompile();
     }
 
