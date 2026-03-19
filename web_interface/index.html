@@ -622,19 +622,106 @@
         bar.appendChild(curEl);
     }
 
-    // Hook into openSubgraph/closeSubgraph to update breadcrumbs
+    // Hook into openSubgraph/closeSubgraph for breadcrumbs + zoom animation
+    const ZOOM_DURATION = 250; // ms
+
+    function animateDS(canvas, targetScale, targetOffsetX, targetOffsetY, duration, callback) {
+        const startScale = canvas.ds.scale;
+        const startOX = canvas.ds.offset[0];
+        const startOY = canvas.ds.offset[1];
+        const startTime = performance.now();
+
+        function tick(now) {
+            let t = Math.min(1, (now - startTime) / duration);
+            // Ease in-out
+            t = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+            canvas.ds.scale = startScale + (targetScale - startScale) * t;
+            canvas.ds.offset[0] = startOX + (targetOffsetX - startOX) * t;
+            canvas.ds.offset[1] = startOY + (targetOffsetY - startOY) * t;
+            canvas.setDirty(true, true);
+
+            if (t < 1) {
+                requestAnimationFrame(tick);
+            } else {
+                if (callback) callback();
+            }
+        }
+        requestAnimationFrame(tick);
+    }
+
     const _origOpen = LGraphCanvas.prototype.openSubgraph;
     LGraphCanvas.prototype.openSubgraph = function(g) {
-        _origOpen.call(this, g);
-        updateBreadcrumbs();
-        setTimeout(resizeCanvas, 50);
+        const canvas = this;
+
+        // Find the subgraph node we're entering
+        const subNode = g._subgraph_node;
+        if (!subNode) {
+            _origOpen.call(this, g);
+            updateBreadcrumbs();
+            setTimeout(resizeCanvas, 50);
+            return;
+        }
+
+        // Calculate target: zoom into the node's center
+        const wrapper = document.getElementById('graph-canvas-wrapper');
+        const ww = wrapper.clientWidth;
+        const wh = wrapper.clientHeight;
+        const nodeCX = subNode.pos[0] + (subNode.size[0] || 200) / 2;
+        const nodeCY = subNode.pos[1] - LiteGraph.NODE_TITLE_HEIGHT / 2;
+        const targetScale = Math.min(ww / (subNode.size[0] + 40), wh / ((subNode.size[1] || 80) + 60));
+        const zoomScale = Math.max(canvas.ds.scale * 2, targetScale);
+        const targetOX = ww / (2 * zoomScale) - nodeCX;
+        const targetOY = wh / (2 * zoomScale) - nodeCY;
+
+        animateDS(canvas, zoomScale, targetOX, targetOY, ZOOM_DURATION, function() {
+            _origOpen.call(canvas, g);
+            // Reset view for the inner graph
+            canvas.ds.scale = 1;
+            canvas.ds.offset[0] = 0;
+            canvas.ds.offset[1] = 0;
+            canvas.setDirty(true, true);
+            updateBreadcrumbs();
+            setTimeout(resizeCanvas, 50);
+        });
     };
 
     const _origClose = LGraphCanvas.prototype.closeSubgraph;
     LGraphCanvas.prototype.closeSubgraph = function() {
+        const canvas = this;
+        const currentGraph = canvas.graph;
+        const subNode = currentGraph._subgraph_node;
+
+        // Save where we'll land in the parent
+        const parentGraph = (canvas._graph_stack && canvas._graph_stack.length > 0)
+            ? canvas._graph_stack[canvas._graph_stack.length - 1] : null;
+
         _origClose.call(this);
         updateBreadcrumbs();
         setTimeout(resizeCanvas, 50);
+
+        if (!subNode || !parentGraph) return;
+
+        // Start zoomed in on the node we just exited, then zoom out
+        const wrapper = document.getElementById('graph-canvas-wrapper');
+        const ww = wrapper.clientWidth;
+        const wh = wrapper.clientHeight;
+        const nodeCX = subNode.pos[0] + (subNode.size[0] || 200) / 2;
+        const nodeCY = subNode.pos[1] - LiteGraph.NODE_TITLE_HEIGHT / 2;
+
+        // Save the target (normal) view
+        const endScale = canvas.ds.scale;
+        const endOX = canvas.ds.offset[0];
+        const endOY = canvas.ds.offset[1];
+
+        // Start zoomed in on the exited node
+        const startScale = Math.max(endScale * 2, 3);
+        canvas.ds.scale = startScale;
+        canvas.ds.offset[0] = ww / (2 * startScale) - nodeCX;
+        canvas.ds.offset[1] = wh / (2 * startScale) - nodeCY;
+        canvas.setDirty(true, true);
+
+        animateDS(canvas, endScale, endOX, endOY, ZOOM_DURATION, null);
     };
 
     function resizeCanvas() {
