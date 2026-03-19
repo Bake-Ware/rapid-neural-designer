@@ -978,7 +978,7 @@
             gi.pos = [10, inputY];
             innerGraph.add(gi);
             gi.setProperty('name', name);
-            gi.setProperty('type', 'tensor');
+            gi.setProperty('type', '');
             const arr = Array.isArray(targets) ? targets : [targets];
             for (const t of arr) {
                 const dst = innerGraph.getNodeById(idRemap[t.node_id]);
@@ -996,7 +996,7 @@
             go.pos = [maxX, outputY];
             innerGraph.add(go);
             go.setProperty('name', name);
-            go.setProperty('type', 'tensor');
+            go.setProperty('type', '');
             const src = Array.isArray(source) ? source[0] : source;
             const srcNode = innerGraph.getNodeById(idRemap[src.node_id]);
             if (srcNode) srcNode.connect(src.slot, go, 0);
@@ -1763,21 +1763,37 @@
         const innerNodes = innerGraph._nodes.filter(n => !skipTypes.has(n.type));
 
         for (const n of innerNodes) {
-            const newNode = LiteGraph.createNode(n.type);
-            if (!newNode) continue;
-            newNode.pos = [baseX + n.pos[0], baseY + n.pos[1]];
-            if (n.properties) {
-                for (const [k, v] of Object.entries(n.properties)) {
-                    newNode.properties[k] = v;
-                    if (newNode.widgets) {
-                        const w = newNode.widgets.find(w => w.name === k);
-                        if (w) w.value = v;
+            // For nested subgraph nodes, serialize and restore to preserve inner graph
+            if (n.subgraph) {
+                const serialized = n.serialize();
+                const newNode = LiteGraph.createNode(n.type);
+                if (!newNode) continue;
+                newNode.configure(serialized);
+                newNode.pos = [baseX + n.pos[0], baseY + n.pos[1]];
+                if (n.title) newNode.title = n.title;
+                if (n.color) newNode.color = n.color;
+                if (n.bgcolor) newNode.bgcolor = n.bgcolor;
+                activeGraph().add(newNode);
+                idRemap[n.id] = newNode.id;
+            } else {
+                const newNode = LiteGraph.createNode(n.type);
+                if (!newNode) continue;
+                newNode.pos = [baseX + n.pos[0], baseY + n.pos[1]];
+                if (n.properties) {
+                    for (const [k, v] of Object.entries(n.properties)) {
+                        newNode.properties[k] = v;
+                        if (newNode.widgets) {
+                            const w = newNode.widgets.find(w => w.name === k);
+                            if (w) w.value = v;
+                        }
                     }
                 }
+                if (n.title) newNode.title = n.title;
+                if (n.color) newNode.color = n.color;
+                if (n.bgcolor) newNode.bgcolor = n.bgcolor;
+                activeGraph().add(newNode);
+                idRemap[n.id] = newNode.id;
             }
-            if (n.title) newNode.title = n.title;
-            activeGraph().add(newNode);
-            idRemap[n.id] = newNode.id;
         }
 
         // Recreate internal links (between non-interface nodes)
@@ -2277,7 +2293,7 @@
             ginput.pos = [10, inputY];
             innerGraph.add(ginput);
             ginput.setProperty('name', name);
-            ginput.setProperty('type', 'tensor');
+            ginput.setProperty('type', '');
             inputSlotMap[name] = Object.keys(inputSlotMap).length;
             const arr = Array.isArray(targets) ? targets : [targets];
             for (const t of arr) {
@@ -2297,7 +2313,7 @@
             goutput.pos = [maxX, outputY];
             innerGraph.add(goutput);
             goutput.setProperty('name', name);
-            goutput.setProperty('type', 'tensor');
+            goutput.setProperty('type', '');
             outputSlotMap[name] = Object.keys(outputSlotMap).length;
             const src = Array.isArray(source) ? source[0] : source;
             const srcNode = innerGraph.getNodeById(idRemap[src.node_id]);
