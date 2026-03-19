@@ -1134,19 +1134,27 @@
     // ---- Merge graph data (add model without clearing) ----
 
     function mergeGraphData(data, label) {
-        // Find offset: place new nodes to the right of existing content
-        let offsetX = 50, offsetY = 50;
+        // Place subgraph node to the right of existing content
+        let posX = 50, posY = 100;
         if (graph._nodes.length > 0) {
             let maxX = -Infinity;
             for (const n of graph._nodes) {
                 const right = n.pos[0] + (n.size[0] || 200);
                 if (right > maxX) maxX = right;
             }
-            offsetX = maxX + 100;
-            offsetY = 50;
+            posX = maxX + 100;
         }
 
-        // Find the bounding box of incoming nodes to calc relative offset
+        // Create a subgraph node to contain the model
+        const subNode = LiteGraph.createNode('graph/subgraph');
+        if (!subNode) { updateStatus('Error: subgraph type not available'); return; }
+        subNode.title = label || 'Model';
+        subNode.pos = [posX, posY];
+        graph.add(subNode);
+
+        const innerGraph = subNode.subgraph;
+
+        // Find bounding box of source nodes
         let srcMinX = Infinity, srcMinY = Infinity;
         for (const nd of (data.nodes || [])) {
             if (nd.pos[0] < srcMinX) srcMinX = nd.pos[0];
@@ -1155,14 +1163,14 @@
 
         const idRemap = {};
 
-        // Create nodes
+        // Create all nodes inside the subgraph
         for (const nd of (data.nodes || [])) {
             const newNode = LiteGraph.createNode(nd.type);
             if (!newNode) { console.warn('Cannot create node type:', nd.type); continue; }
 
             newNode.pos = [
-                offsetX + (nd.pos[0] - srcMinX),
-                offsetY + (nd.pos[1] - srcMinY)
+                100 + (nd.pos[0] - srcMinX),
+                100 + (nd.pos[1] - srcMinY)
             ];
 
             if (nd.properties) {
@@ -1176,42 +1184,21 @@
             }
             if (nd.title) newNode.title = nd.title;
 
-            graph.add(newNode);
+            innerGraph.add(newNode);
             idRemap[nd.id] = newNode.id;
         }
 
-        // Create links
+        // Create internal links
         for (const lk of (data.links || [])) {
-            const fromId = idRemap[lk[1]];
-            const toId = idRemap[lk[3]];
-            const fromNode = graph.getNodeById(fromId);
-            const toNode = graph.getNodeById(toId);
+            const fromNode = innerGraph.getNodeById(idRemap[lk[1]]);
+            const toNode = innerGraph.getNodeById(idRemap[lk[3]]);
             if (fromNode && toNode) {
                 fromNode.connect(lk[2], toNode, lk[4]);
             }
         }
 
-        // Wrap in a group
-        const createdNodes = Object.values(idRemap).map(id => graph.getNodeById(id)).filter(Boolean);
-        if (createdNodes.length > 0) {
-            let gx1 = Infinity, gy1 = Infinity, gx2 = -Infinity, gy2 = -Infinity;
-            for (const n of createdNodes) {
-                gx1 = Math.min(gx1, n.pos[0]);
-                gy1 = Math.min(gy1, n.pos[1]);
-                gx2 = Math.max(gx2, n.pos[0] + (n.size[0] || 200));
-                gy2 = Math.max(gy2, n.pos[1] + (n.size[1] || 100));
-            }
-            const pad = 30;
-            const group = new LGraphGroup();
-            group.title = label || 'Imported Model';
-            group.pos = [gx1 - pad, gy1 - pad - 20];
-            group.size = [gx2 - gx1 + pad * 2, gy2 - gy1 + pad * 2 + 20];
-            group.color = "#335577";
-            graph.add(group);
-        }
-
         scheduleCompile();
-        updateStatus(`Added model: ${label} (${Object.keys(idRemap).length} nodes)`);
+        updateStatus(`Added model: ${label} (double-click to open, right-click to explode)`);
     }
 
     // ---- Model Library ----
@@ -1733,9 +1720,10 @@
             if (!(wire.name in inputSlotMap)) {
                 const ginput = LiteGraph.createNode('graph/input');
                 ginput.pos = [10, inputY];
+                // Must add to graph BEFORE setProperty so onPropertyChanged can register the port
+                innerGraph.add(ginput);
                 ginput.setProperty('name', wire.name);
                 ginput.setProperty('type', wire.type);
-                innerGraph.add(ginput);
                 inputSlotMap[wire.name] = Object.keys(inputSlotMap).length;
                 inputY += 100;
             }
@@ -1756,9 +1744,10 @@
             if (!(wire.name in outputSlotMap)) {
                 const goutput = LiteGraph.createNode('graph/output');
                 goutput.pos = [maxX, outputY];
+                // Must add to graph BEFORE setProperty
+                innerGraph.add(goutput);
                 goutput.setProperty('name', wire.name);
                 goutput.setProperty('type', wire.type);
-                innerGraph.add(goutput);
                 outputSlotMap[wire.name] = Object.keys(outputSlotMap).length;
                 outputY += 100;
             }
