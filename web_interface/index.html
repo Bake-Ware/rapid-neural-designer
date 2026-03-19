@@ -764,12 +764,11 @@
 
     // Subgraph default: lighter so title text is readable
     LiteGraph.Subgraph.title_color = "#4a6a8a";
-    // Remove the + buttons for manually adding inputs/outputs on subgraph nodes
+    // Remove the + buttons drawn on subgraph nodes
+    LiteGraph.Subgraph.prototype.onDrawForeground = function() {};  // suppress the two "+" symbols
+    LiteGraph.Subgraph.prototype.onMouseDown = null;  // suppress click handler for +
     delete LiteGraph.Subgraph.prototype.onGetInputs;
     delete LiteGraph.Subgraph.prototype.onGetOutputs;
-    // Also suppress in GraphInput/GraphOutput which may show them too
-    if (LiteGraph.GraphInput) delete LiteGraph.GraphInput.prototype.onGetInputs;
-    if (LiteGraph.GraphOutput) delete LiteGraph.GraphOutput.prototype.onGetOutputs;
 
     function addNodeToGraph(typeName) {
         // If it's a molecular component with a graph definition,
