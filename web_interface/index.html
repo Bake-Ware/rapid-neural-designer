@@ -258,9 +258,6 @@
             z-index: 1000;
         }
 
-        /* Hide subgraph + buttons (we use Condense/Explode instead) */
-        .subgraph_property { display: none !important; }
-
         /* Custom LiteGraph dark theme */
         .litegraph { background-color: #1e1e1e !important; }
         .litecontextmenu { background: #252526 !important; border: 1px solid #3e3e42 !important; }
@@ -633,8 +630,8 @@
 
     // ---- Add Node to Graph ----
 
-    // Subgraph style: lighter title so text is readable
-    LiteGraph.Subgraph.title_color = "#557799";
+    // Subgraph default: lighter so title text is readable
+    LiteGraph.Subgraph.title_color = "#4a6a8a";
 
     function addNodeToGraph(typeName) {
         // If it's a molecular component with a graph definition,
@@ -669,6 +666,10 @@
         const subNode = LiteGraph.createNode('graph/subgraph');
         if (!subNode) return;
         subNode.title = compDef.name;
+        // Use the component's palette color
+        const nodeColor = compDef._paletteColor || '#6bb5ff';
+        subNode.color = nodeColor;
+        subNode.bgcolor = darkenColor(nodeColor, 0.35);
 
         const area = graphCanvas.visible_area;
         if (area) {
@@ -1190,6 +1191,7 @@
             for (const comp of index.components) {
                 const compResp = await fetch(`components/${comp.file}`);
                 const compDef = await compResp.json();
+                compDef._paletteColor = comp.color || '#6bb5ff';
                 molecularRegistry[comp.id] = compDef;
                 registerMolecular(comp, compDef);
 
@@ -1248,7 +1250,7 @@
 
     // ---- Merge graph data (add model without clearing) ----
 
-    function mergeGraphData(data, label) {
+    function mergeGraphData(data, label, color) {
         // Place subgraph node to the right of existing content
         let posX = 50, posY = 100;
         if (graph._nodes.length > 0) {
@@ -1265,6 +1267,10 @@
         if (!subNode) { updateStatus('Error: subgraph type not available'); return; }
         subNode.title = label || 'Model';
         subNode.pos = [posX, posY];
+        if (color) {
+            subNode.color = color;
+            subNode.bgcolor = darkenColor(color, 0.35);
+        }
         graph.add(subNode);
 
         const innerGraph = subNode.subgraph;
@@ -1370,7 +1376,7 @@
             try {
                 const r = await fetch(`models/${model.file}`);
                 const data = await r.json();
-                mergeGraphData(data, model.name);
+                mergeGraphData(data, model.name, model.color);
             } catch (err) {
                 alert('Error loading model: ' + err.message);
             }
