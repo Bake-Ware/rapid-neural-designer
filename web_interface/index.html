@@ -1447,7 +1447,10 @@
 
     // ---- Backend Execution ----
 
-    const BACKEND_URL = `http://${window.location.hostname}:5000`;
+    // Backend URL: use subdomain for remote access, port 5000 for local
+    const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:5000'
+        : `https://rndbackend.bake.systems`;
 
     async function runCode() {
         const code = monacoEditor ? monacoEditor.getValue() : '';
