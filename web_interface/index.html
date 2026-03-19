@@ -490,7 +490,18 @@
         const rect = canvasElement.getBoundingClientRect();
         const cx = (e.clientX - rect.left) / graphCanvas.ds.scale - graphCanvas.ds.offset[0];
         const cy = (e.clientY - rect.top) / graphCanvas.ds.scale - graphCanvas.ds.offset[1];
-        const nodeUnder = activeGraph().getNodeOnPos(cx, cy, activeGraph()._nodes);
+        // Check both node body AND title bar (getNodeOnPos misses the title)
+        let nodeUnder = activeGraph().getNodeOnPos(cx, cy, activeGraph()._nodes);
+        if (!nodeUnder) {
+            const th = LiteGraph.NODE_TITLE_HEIGHT;
+            for (const n of activeGraph()._nodes) {
+                if (cx >= n.pos[0] && cx <= n.pos[0] + n.size[0] &&
+                    cy >= n.pos[1] - th && cy < n.pos[1]) {
+                    nodeUnder = n;
+                    break;
+                }
+            }
+        }
 
         if (nodeUnder) {
             // Clicked a node — if no modifier, deselect everything else
