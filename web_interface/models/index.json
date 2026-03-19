@@ -1,76 +1,55 @@
 {
   "version": "1.0",
   "description": "Rapid Neural Designer - Saved Model Library",
-  "models": [
+  "groups": [
     {
-      "id": "llama_mini",
-      "name": "Mini LLaMA",
-      "description": "4-layer LLaMA (dim=288, 6 heads, 32k vocab)",
-      "file": "llama_mini.json",
-      "color": "#e056a0"
+      "name": "Transformers",
+      "models": [
+        { "id": "llama_mini", "name": "Mini LLaMA", "description": "4-layer, dim=288, 6 heads, RoPE + SwiGLU", "file": "llama_mini.json", "color": "#e056a0" },
+        { "id": "qwen", "name": "Qwen2.5", "description": "4-layer, GQA (8Q/2KV heads), RoPE theta=1M", "file": "qwen.json", "color": "#42a5f5" },
+        { "id": "llada", "name": "LLaDA", "description": "4-layer diffusion LM, bidirectional attention", "file": "llada.json", "color": "#ff7043" },
+        { "id": "vanilla_transformer", "name": "Vanilla Transformer", "description": "Encoder-decoder, 2-layer, cross-attention, dim=256", "file": "vanilla_transformer.json", "color": "#7e57c2" },
+        { "id": "bert", "name": "BERT", "description": "Encoder-only, bidirectional attention, MLM head", "file": "bert.json", "color": "#5c6bc0" }
+      ]
     },
     {
-      "id": "mlp",
-      "name": "MLP Classifier",
-      "description": "3-layer feedforward (784->256->128->10) for MNIST-like classification",
-      "file": "mlp.json",
-      "color": "#4ecdc4"
+      "name": "Mixture of Experts",
+      "models": [
+        { "id": "mixtral", "name": "Mixtral MoE", "description": "4-layer, 8 experts top-2, RoPE attention", "file": "mixtral.json", "color": "#ab47bc" }
+      ]
     },
     {
-      "id": "cnn",
-      "name": "CNN Classifier",
-      "description": "Conv2D(1->32->64) + MaxPool + FC for 28x28 image classification",
-      "file": "cnn.json",
-      "color": "#45b7d1"
+      "name": "State Space & Recurrent",
+      "models": [
+        { "id": "mamba", "name": "Mamba SSM", "description": "6-layer selective state space, linear complexity", "file": "mamba.json", "color": "#66bb6a" },
+        { "id": "liquid", "name": "Liquid Neural Net", "description": "4-layer LTC cells, ODE integration", "file": "liquid.json", "color": "#26c6da" },
+        { "id": "rnn", "name": "RNN Classifier", "description": "Embedding + RNN + Linear", "file": "rnn.json", "color": "#f7dc6f" },
+        { "id": "lstm", "name": "LSTM Classifier", "description": "Embedding + LSTM + Linear", "file": "lstm.json", "color": "#fdd835" },
+        { "id": "seq2seq", "name": "Seq2Seq", "description": "Encoder RNN + Cross Attention decoder", "file": "seq2seq.json", "color": "#ffb74d" }
+      ]
     },
     {
-      "id": "rnn",
-      "name": "RNN Classifier",
-      "description": "Embedding + RNN(128->256) + Linear for sequence classification",
-      "file": "rnn.json",
-      "color": "#f7dc6f"
+      "name": "Vision",
+      "models": [
+        { "id": "cnn", "name": "CNN Classifier", "description": "Conv2D + MaxPool + FC for 28x28 images", "file": "cnn.json", "color": "#45b7d1" },
+        { "id": "resnet", "name": "ResNet", "description": "Conv + skip connection residual block, 28x28 images", "file": "resnet.json", "color": "#ef5350" },
+        { "id": "unet", "name": "U-Net", "description": "Encoder-decoder with skip concat, 16x16 segmentation", "file": "unet.json", "color": "#29b6f6" }
+      ]
     },
     {
-      "id": "gat",
-      "name": "GAT Node Classifier",
-      "description": "2-layer GAT (64->64->16, 4 heads) for graph node classification",
-      "file": "gat.json",
-      "color": "#bb8fce"
+      "name": "Graph Neural Networks",
+      "models": [
+        { "id": "gat", "name": "GAT Node Classifier", "description": "2-layer graph attention, 4 heads", "file": "gat.json", "color": "#bb8fce" }
+      ]
     },
     {
-      "id": "llada",
-      "name": "LLaDA Diffusion LM",
-      "description": "4-layer LLaDA diffusion transformer (dim=256, 4 heads, bidirectional attention, 32k vocab)",
-      "file": "llada.json",
-      "color": "#ff7043"
-    },
-    {
-      "id": "mamba",
-      "name": "Mamba SSM",
-      "description": "6-layer Mamba state space model (dim=256, state_dim=16, expand=2, 32k vocab)",
-      "file": "mamba.json",
-      "color": "#66bb6a"
-    },
-    {
-      "id": "qwen",
-      "name": "Qwen2.5-style LM",
-      "description": "4-layer Qwen2.5 transformer (dim=256, 8 query/2 KV heads GQA, 32k vocab)",
-      "file": "qwen.json",
-      "color": "#42a5f5"
-    },
-    {
-      "id": "liquid",
-      "name": "Liquid Neural Network",
-      "description": "4-layer Liquid Time-Constant cells (dim=128, ODE steps=6, 10k vocab)",
-      "file": "liquid.json",
-      "color": "#26c6da"
-    },
-    {
-      "id": "mixtral",
-      "name": "Mixtral MoE",
-      "description": "4-layer MoE transformer (dim=256, 4 heads, 8 experts top-2, 32k vocab)",
-      "file": "mixtral.json",
-      "color": "#ab47bc"
+      "name": "Classic",
+      "models": [
+        { "id": "mlp", "name": "MLP Classifier", "description": "3-layer feedforward (784→256→128→10)", "file": "mlp.json", "color": "#4ecdc4" },
+        { "id": "autoencoder", "name": "Autoencoder", "description": "Encoder(784->64) + Decoder(64->784)", "file": "autoencoder.json", "color": "#26a69a" },
+        { "id": "vae", "name": "VAE", "description": "Variational autoencoder with reparameterization", "file": "vae.json", "color": "#009688" },
+        { "id": "gan", "name": "GAN", "description": "Generator + Discriminator, latent(64)->784", "file": "gan.json", "color": "#ffa726" }
+      ]
     }
   ]
 }

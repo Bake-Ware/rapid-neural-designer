@@ -291,12 +291,16 @@
                 <div id="node-palette">
                     <div class="palette-section">
                         <div class="palette-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                            <span>Primitives</span>
+                            <span>Models</span>
                             <span class="section-arrow">▼</span>
                         </div>
-                        <div class="palette-section-content" id="atomic-palette"></div>
+                        <div class="palette-section-content" id="model-palette">
+                            <div style="padding:12px;color:#888;font-size:11px;">
+                                No saved models found.
+                            </div>
+                        </div>
                     </div>
-                    <div class="palette-section">
+                    <div class="palette-section collapsed">
                         <div class="palette-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
                             <span>Components</span>
                             <span class="section-arrow">▼</span>
@@ -307,16 +311,12 @@
                             </div>
                         </div>
                     </div>
-                    <div class="palette-section">
+                    <div class="palette-section collapsed">
                         <div class="palette-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                            <span>Models</span>
+                            <span>Primitives</span>
                             <span class="section-arrow">▼</span>
                         </div>
-                        <div class="palette-section-content" id="model-palette">
-                            <div style="padding:12px;color:#888;font-size:11px;">
-                                No saved models found.
-                            </div>
-                        </div>
+                        <div class="palette-section-content" id="atomic-palette"></div>
                     </div>
                 </div>
                 <div id="graph-canvas-wrapper">
@@ -1099,25 +1099,55 @@
             const paletteEl = document.getElementById('model-palette');
             paletteEl.innerHTML = '';
 
-            for (const model of index.models) {
-                const nodeEl = document.createElement('div');
-                nodeEl.className = 'palette-node';
-                nodeEl.style.borderLeftColor = model.color || '#e056a0';
-                nodeEl.innerHTML = `<div>${model.name}</div><div class="palette-node-desc">${model.description || ''}</div>`;
-                nodeEl.addEventListener('click', async () => {
-                    try {
-                        const r = await fetch(`models/${model.file}`);
-                        const data = await r.json();
-                        mergeGraphData(data, model.name);
-                    } catch (err) {
-                        alert('Error loading model: ' + err.message);
+            // Support grouped format (groups[]) or flat format (models[])
+            const groups = index.groups || [{ name: null, models: index.models || [] }];
+
+            for (const group of groups) {
+                if (group.name) {
+                    // Render as collapsible subcategory
+                    const catEl = document.createElement('div');
+                    catEl.className = 'palette-category expanded';
+                    catEl.innerHTML = `
+                        <div class="palette-category-header">
+                            <span>${group.name}</span>
+                            <span class="palette-arrow">&#9654;</span>
+                        </div>
+                        <div class="palette-category-content"></div>
+                    `;
+                    paletteEl.appendChild(catEl);
+                    catEl.querySelector('.palette-category-header').addEventListener('click', () => {
+                        catEl.classList.toggle('expanded');
+                    });
+                    const contentEl = catEl.querySelector('.palette-category-content');
+                    for (const model of group.models) {
+                        contentEl.appendChild(createModelNode(model));
                     }
-                });
-                paletteEl.appendChild(nodeEl);
+                } else {
+                    for (const model of group.models) {
+                        paletteEl.appendChild(createModelNode(model));
+                    }
+                }
             }
         } catch (err) {
             console.log('No models found (models/index.json missing)');
         }
+    }
+
+    function createModelNode(model) {
+        const nodeEl = document.createElement('div');
+        nodeEl.className = 'palette-node';
+        nodeEl.style.borderLeftColor = model.color || '#e056a0';
+        nodeEl.innerHTML = `<div>${model.name}</div><div class="palette-node-desc">${model.description || ''}</div>`;
+        nodeEl.addEventListener('click', async () => {
+            try {
+                const r = await fetch(`models/${model.file}`);
+                const data = await r.json();
+                mergeGraphData(data, model.name);
+            } catch (err) {
+                alert('Error loading model: ' + err.message);
+            }
+        });
+        return nodeEl;
     }
 
     // ---- Explode Molecular into Atomics ----

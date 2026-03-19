@@ -1,0 +1,17 @@
+{
+  "name": "LayerNorm",
+  "id": "layernorm",
+  "description": "Layer normalization (mean + variance, used in vanilla transformers and BERT)",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "dim", "type": "int", "default": 256, "description": "Normalization dimension" },
+    { "name": "eps", "type": "float", "default": 1e-5, "description": "Epsilon" }
+  ],
+  "code": "_ln{{_id}}_gamma = np.ones({{dim}}, dtype=np.float32)\n_ln{{_id}}_beta = np.zeros({{dim}}, dtype=np.float32)\n_ln{{_id}}_mean = np.mean({{input}}, axis=-1, keepdims=True)\n_ln{{_id}}_var = np.var({{input}}, axis=-1, keepdims=True)\n{{output}} = _ln{{_id}}_gamma * ({{input}} - _ln{{_id}}_mean) / np.sqrt(_ln{{_id}}_var + {{eps}}) + _ln{{_id}}_beta",
+  "imports": ["import numpy as np"]
+}

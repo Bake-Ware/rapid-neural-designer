@@ -1,0 +1,273 @@
+{
+  "last_node_id": 12,
+  "last_link_id": 13,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "atomic/init/random_normal",
+      "pos": [100, 50],
+      "size": [220, 100],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [1] }
+      ],
+      "title": "Image Input (2,1,28,28)",
+      "properties": {
+        "shape": "2,1,28,28",
+        "mean": 0.0,
+        "std": 1.0
+      },
+      "widgets_values": ["2,1,28,28", 0.0, 1.0]
+    },
+    {
+      "id": 2,
+      "type": "molecular/conv2d",
+      "pos": [100, 200],
+      "size": [220, 160],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 1 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [2] }
+      ],
+      "title": "Conv2D 1->16 (initial)",
+      "properties": {
+        "in_channels": 1,
+        "out_channels": 16,
+        "kernel_size": 3,
+        "stride": 1,
+        "padding": 1,
+        "init_std": 0.02
+      },
+      "widgets_values": [1, 16, 3, 1, 1, 0.02]
+    },
+    {
+      "id": 3,
+      "type": "atomic/trig/relu",
+      "pos": [100, 410],
+      "size": [180, 60],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 2 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [3, 10] }
+      ],
+      "title": "ReLU (initial)",
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "molecular/conv2d",
+      "pos": [100, 520],
+      "size": [220, 160],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 3 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [4] }
+      ],
+      "title": "Conv2D 16->16 (res block A)",
+      "properties": {
+        "in_channels": 16,
+        "out_channels": 16,
+        "kernel_size": 3,
+        "stride": 1,
+        "padding": 1,
+        "init_std": 0.02
+      },
+      "widgets_values": [16, 16, 3, 1, 1, 0.02]
+    },
+    {
+      "id": 5,
+      "type": "atomic/trig/relu",
+      "pos": [100, 730],
+      "size": [180, 60],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 4 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [5] }
+      ],
+      "title": "ReLU (res block mid)",
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 6,
+      "type": "molecular/conv2d",
+      "pos": [100, 840],
+      "size": [220, 160],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 5 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [6] }
+      ],
+      "title": "Conv2D 16->16 (res block B)",
+      "properties": {
+        "in_channels": 16,
+        "out_channels": 16,
+        "kernel_size": 3,
+        "stride": 1,
+        "padding": 1,
+        "init_std": 0.02
+      },
+      "widgets_values": [16, 16, 3, 1, 1, 0.02]
+    },
+    {
+      "id": 7,
+      "type": "atomic/math/add",
+      "pos": [400, 680],
+      "size": [180, 80],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        { "name": "A", "type": "tensor", "link": 10 },
+        { "name": "B", "type": "tensor", "link": 6 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [7] }
+      ],
+      "title": "Skip Connection (Add)",
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 8,
+      "type": "atomic/trig/relu",
+      "pos": [400, 810],
+      "size": [180, 60],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 7 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [8] }
+      ],
+      "title": "ReLU (after skip)",
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 9,
+      "type": "molecular/maxpool2d",
+      "pos": [400, 920],
+      "size": [220, 80],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 8 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [9] }
+      ],
+      "title": "MaxPool2D 2x2",
+      "properties": {
+        "kernel_size": 2,
+        "stride": 2
+      },
+      "widgets_values": [2, 2]
+    },
+    {
+      "id": 10,
+      "type": "molecular/flatten",
+      "pos": [400, 1050],
+      "size": [180, 60],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 9 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [11] }
+      ],
+      "title": "Flatten",
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 11,
+      "type": "molecular/linear",
+      "pos": [400, 1160],
+      "size": [220, 130],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 11 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [12] }
+      ],
+      "title": "Linear 3136->10",
+      "properties": {
+        "in_features": 3136,
+        "out_features": 10,
+        "use_bias": true,
+        "init_std": 0.02
+      },
+      "widgets_values": [3136, 10, true, 0.02]
+    },
+    {
+      "id": 12,
+      "type": "atomic/data/output",
+      "pos": [400, 1340],
+      "size": [220, 60],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 12 }
+      ],
+      "outputs": [],
+      "properties": {
+        "label": "logits"
+      },
+      "widgets_values": ["logits"]
+    }
+  ],
+  "links": [
+    [1,  1, 0, 2, 0, "tensor"],
+    [2,  2, 0, 3, 0, "tensor"],
+    [3,  3, 0, 4, 0, "tensor"],
+    [4,  4, 0, 5, 0, "tensor"],
+    [5,  5, 0, 6, 0, "tensor"],
+    [6,  6, 0, 7, 1, "tensor"],
+    [7,  7, 0, 8, 0, "tensor"],
+    [8,  8, 0, 9, 0, "tensor"],
+    [9,  9, 0, 10, 0, "tensor"],
+    [10, 3, 0, 7, 0, "tensor"],
+    [11, 10, 0, 11, 0, "tensor"],
+    [12, 11, 0, 12, 0, "tensor"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "info": "ResNet - CNN with skip connection: Conv2D(1->16) -> ReLU -> [Conv2D(16->16) -> ReLU -> Conv2D(16->16) + skip] -> ReLU -> MaxPool -> Flatten -> Linear(3136->10). For 28x28 image classification."
+  },
+  "version": 0.4
+}

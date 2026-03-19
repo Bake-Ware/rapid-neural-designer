@@ -1,0 +1,310 @@
+{
+  "last_node_id": 14,
+  "last_link_id": 14,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "atomic/init/random_normal",
+      "pos": [100, 50],
+      "size": [220, 100],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [1] }
+      ],
+      "title": "Input Data",
+      "properties": {
+        "shape": "4,784",
+        "mean": 0.0,
+        "std": 1.0
+      },
+      "widgets_values": ["4,784", 0.0, 1.0]
+    },
+    {
+      "id": 2,
+      "type": "molecular/linear",
+      "pos": [100, 220],
+      "size": [220, 130],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 1 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [2] }
+      ],
+      "title": "Encoder (784->256)",
+      "properties": {
+        "in_features": 784,
+        "out_features": 256,
+        "use_bias": true,
+        "init_std": 0.02
+      },
+      "widgets_values": [784, 256, true, 0.02]
+    },
+    {
+      "id": 3,
+      "type": "atomic/trig/relu",
+      "pos": [100, 410],
+      "size": [180, 60],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 2 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [3, 4] }
+      ],
+      "title": "Encoder ReLU",
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "molecular/linear",
+      "pos": [100, 540],
+      "size": [220, 130],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 3 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [9] }
+      ],
+      "title": "Mu (256->32)",
+      "properties": {
+        "in_features": 256,
+        "out_features": 32,
+        "use_bias": true,
+        "init_std": 0.02
+      },
+      "widgets_values": [256, 32, true, 0.02]
+    },
+    {
+      "id": 5,
+      "type": "molecular/linear",
+      "pos": [400, 540],
+      "size": [220, 130],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 4 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [5] }
+      ],
+      "title": "Log Var (256->32)",
+      "properties": {
+        "in_features": 256,
+        "out_features": 32,
+        "use_bias": true,
+        "init_std": 0.02
+      },
+      "widgets_values": [256, 32, true, 0.02]
+    },
+    {
+      "id": 6,
+      "type": "atomic/init/random_normal",
+      "pos": [700, 400],
+      "size": [220, 100],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [7] }
+      ],
+      "title": "Epsilon",
+      "properties": {
+        "shape": "4,32",
+        "mean": 0.0,
+        "std": 1.0
+      },
+      "widgets_values": ["4,32", 0.0, 1.0]
+    },
+    {
+      "id": 7,
+      "type": "atomic/math/exp",
+      "pos": [400, 730],
+      "size": [180, 60],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 5 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [6] }
+      ],
+      "title": "Exp(log_var)",
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 8,
+      "type": "atomic/math/sqrt",
+      "pos": [400, 850],
+      "size": [180, 60],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 6 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [8] }
+      ],
+      "title": "Sqrt(var)",
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 9,
+      "type": "atomic/math/multiply",
+      "pos": [700, 730],
+      "size": [180, 60],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        { "name": "A", "type": "tensor", "link": 8 },
+        { "name": "B", "type": "tensor", "link": 7 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [10] }
+      ],
+      "title": "std * epsilon",
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 10,
+      "type": "atomic/math/add",
+      "pos": [700, 880],
+      "size": [180, 60],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        { "name": "A", "type": "tensor", "link": 9 },
+        { "name": "B", "type": "tensor", "link": 10 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [11] }
+      ],
+      "title": "z = mu + noise",
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 11,
+      "type": "molecular/linear",
+      "pos": [100, 1020],
+      "size": [220, 130],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 11 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [12] }
+      ],
+      "title": "Decoder 1 (32->256)",
+      "properties": {
+        "in_features": 32,
+        "out_features": 256,
+        "use_bias": true,
+        "init_std": 0.02
+      },
+      "widgets_values": [32, 256, true, 0.02]
+    },
+    {
+      "id": 12,
+      "type": "atomic/trig/relu",
+      "pos": [100, 1210],
+      "size": [180, 60],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 12 }
+      ],
+      "outputs": [
+        { "name": "result", "type": "tensor", "links": [13] }
+      ],
+      "title": "Decoder ReLU",
+      "properties": {},
+      "widgets_values": []
+    },
+    {
+      "id": 13,
+      "type": "molecular/linear",
+      "pos": [100, 1330],
+      "size": [220, 130],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 13 }
+      ],
+      "outputs": [
+        { "name": "output", "type": "tensor", "links": [14] }
+      ],
+      "title": "Decoder 2 (256->784)",
+      "properties": {
+        "in_features": 256,
+        "out_features": 784,
+        "use_bias": true,
+        "init_std": 0.02
+      },
+      "widgets_values": [256, 784, true, 0.02]
+    },
+    {
+      "id": 14,
+      "type": "atomic/data/output",
+      "pos": [100, 1520],
+      "size": [220, 60],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        { "name": "input", "type": "tensor", "link": 14 }
+      ],
+      "outputs": [],
+      "properties": {
+        "label": "reconstruction"
+      },
+      "widgets_values": ["reconstruction"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "tensor"],
+    [2, 2, 0, 3, 0, "tensor"],
+    [3, 3, 0, 4, 0, "tensor"],
+    [4, 3, 0, 5, 0, "tensor"],
+    [5, 5, 0, 7, 0, "tensor"],
+    [6, 7, 0, 8, 0, "tensor"],
+    [7, 6, 0, 9, 1, "tensor"],
+    [8, 8, 0, 9, 0, "tensor"],
+    [9, 4, 0, 10, 0, "tensor"],
+    [10, 9, 0, 10, 1, "tensor"],
+    [11, 10, 0, 11, 0, "tensor"],
+    [12, 11, 0, 12, 0, "tensor"],
+    [13, 12, 0, 13, 0, "tensor"],
+    [14, 13, 0, 14, 0, "tensor"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "info": "Variational Autoencoder - Encoder: Linear(784,256)->ReLU->[mu(32), logvar(32)]. Reparameterization: z = mu + sqrt(exp(logvar)) * epsilon. Decoder: Linear(32,256)->ReLU->Linear(256,784)."
+  },
+  "version": 0.4
+}

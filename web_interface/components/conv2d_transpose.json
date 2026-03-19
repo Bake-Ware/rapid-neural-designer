@@ -1,0 +1,20 @@
+{
+  "name": "Conv2D Transpose",
+  "id": "conv2d_transpose",
+  "description": "2D transposed convolution (upsampling / decoder)",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "in_channels", "type": "int", "default": 64, "description": "Input channels" },
+    { "name": "out_channels", "type": "int", "default": 32, "description": "Output channels" },
+    { "name": "kernel_size", "type": "int", "default": 2, "description": "Kernel size" },
+    { "name": "stride", "type": "int", "default": 2, "description": "Stride (upsampling factor)" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight init std" }
+  ],
+  "code": "_ct{{_id}}_w = np.random.randn({{in_channels}}, {{out_channels}}, {{kernel_size}}, {{kernel_size}}).astype(np.float32) * {{init_std}}\n_ct{{_id}}_b = np.zeros({{out_channels}}, dtype=np.float32)\n_ct{{_id}}_bs, _ct{{_id}}_ci, _ct{{_id}}_h, _ct{{_id}}_wi = {{input}}.shape\n_ct{{_id}}_oh = _ct{{_id}}_h * {{stride}}\n_ct{{_id}}_ow = _ct{{_id}}_wi * {{stride}}\n{{output}} = np.zeros((_ct{{_id}}_bs, {{out_channels}}, _ct{{_id}}_oh, _ct{{_id}}_ow), dtype=np.float32)\nfor _ct{{_id}}_i in range(_ct{{_id}}_h):\n    for _ct{{_id}}_j in range(_ct{{_id}}_wi):\n        _ct{{_id}}_rs = _ct{{_id}}_i * {{stride}}\n        _ct{{_id}}_cs = _ct{{_id}}_j * {{stride}}\n        for _ct{{_id}}_oc in range({{out_channels}}):\n            {{output}}[:, _ct{{_id}}_oc, _ct{{_id}}_rs:_ct{{_id}}_rs+{{kernel_size}}, _ct{{_id}}_cs:_ct{{_id}}_cs+{{kernel_size}}] += np.sum({{input}}[:, :, _ct{{_id}}_i, _ct{{_id}}_j][:, :, None, None] * _ct{{_id}}_w[:, _ct{{_id}}_oc, :, :][None, :, :, :], axis=1)\n{{output}} = {{output}} + _ct{{_id}}_b[None, :, None, None]",
+  "imports": ["import numpy as np"]
+}
