@@ -700,6 +700,17 @@
 
         for (const node of sorted) {
             const def = node._atomicDef || node._molecularDef;
+
+            // Handle native subgraph nodes: recursively compile inner graph
+            if (node.subgraph && !def) {
+                const innerResult = compileSubgraph(node, varNames, linksMap);
+                for (const imp of innerResult.imports) allImports.add(imp);
+                codeLines.push(`# [${node.title || 'Subgraph'}] node:${node.id}`);
+                codeLines.push(innerResult.code);
+                codeLines.push('');
+                continue;
+            }
+
             if (!def) continue;
 
             if (def.imports) {
@@ -764,6 +775,121 @@
         script += `\nprint("Model execution complete.")`;
 
         return script;
+    }
+
+    function compileSubgraph(subNode, parentVarNames, parentLinks) {
+        const innerGraph = subNode.subgraph;
+        const innerNodes = innerGraph._nodes || [];
+        const innerLinks = innerGraph.links || {};
+
+        // Map subgraph input names to parent variable names
+        const inputVarMap = {}; // inputName → parent variable name
+        if (subNode.inputs) {
+            for (let i = 0; i < subNode.inputs.length; i++) {
+                const inp = subNode.inputs[i];
+                const linkId = (inp && inp.link != null) ? inp.link : null;
+                if (linkId !== null && parentLinks[linkId]) {
+                    const link = parentLinks[linkId];
+                    const srcVar = parentVarNames[`${link.origin_id}:${link.origin_slot}`];
+                    if (srcVar) inputVarMap[inp.name] = srcVar;
+                }
+            }
+        }
+
+        // Map subgraph output names to parent variable names
+        const outputVarMap = {}; // outputName → parent variable name
+        if (subNode.outputs) {
+            for (let i = 0; i < subNode.outputs.length; i++) {
+                const out = subNode.outputs[i];
+                outputVarMap[out.name] = parentVarNames[`${subNode.id}:${i}`];
+            }
+        }
+
+        // Compile the inner graph
+        const sorted = topologicalSort(innerNodes, innerLinks);
+        const varNames = {};
+        const usedNames = new Set();
+        const skipTypes = new Set(['graph/input', 'graph/output']);
+
+        // Assign vars for inner nodes
+        for (const n of sorted) {
+            if (skipTypes.has(n.type)) continue;
+            const def = n._atomicDef || n._molecularDef;
+            if (!def) continue;
+            for (let i = 0; i < def.outputs.length; i++) {
+                const defId = def.id || def.name?.toLowerCase().replace(/\s+/g, '_') || 'node';
+                const base = sanitizeName(`${defId}_s${subNode.id}_${n.id}_${def.outputs[i].name}`);
+                let vn = base; let c = 2;
+                while (usedNames.has(vn)) vn = `${base}_${c++}`;
+                usedNames.add(vn);
+                varNames[`${n.id}:${i}`] = vn;
+            }
+        }
+
+        // For graph/output nodes, use the parent's output variable name
+        for (const n of sorted) {
+            if (n.type !== 'graph/output') continue;
+            const outName = n.properties?.name;
+            if (outName && outputVarMap[outName]) {
+                // The graph/output's input comes from an inner node — find it
+                if (n.inputs && n.inputs[0] && n.inputs[0].link != null) {
+                    const link = innerLinks[n.inputs[0].link];
+                    if (link) {
+                        varNames[`${link.origin_id}:${link.origin_slot}`] = outputVarMap[outName];
+                    }
+                }
+            }
+        }
+
+        const codeLines = [];
+        const allImports = new Set();
+
+        for (const n of sorted) {
+            if (skipTypes.has(n.type)) continue;
+            const def = n._atomicDef || n._molecularDef;
+            if (!def) continue;
+            if (def.imports) def.imports.forEach(i => allImports.add(i));
+
+            const subs = { '_id': `s${subNode.id}_${n.id}` };
+
+            for (let i = 0; i < def.outputs.length; i++) {
+                subs[def.outputs[i].name] = varNames[`${n.id}:${i}`];
+            }
+
+            for (let i = 0; i < def.inputs.length; i++) {
+                const inputName = def.inputs[i].name;
+                const linkId = (n.inputs[i] && n.inputs[i].link != null) ? n.inputs[i].link : null;
+                if (linkId !== null && innerLinks[linkId]) {
+                    const link = innerLinks[linkId];
+                    // Check if source is a graph/input node
+                    const srcNode = innerGraph.getNodeById(link.origin_id);
+                    if (srcNode && srcNode.type === 'graph/input') {
+                        const giName = srcNode.properties?.name;
+                        subs[inputName] = inputVarMap[giName] || `None  # disconnected subgraph input: ${giName}`;
+                    } else {
+                        subs[inputName] = varNames[`${link.origin_id}:${link.origin_slot}`] || 'None';
+                    }
+                } else {
+                    subs[inputName] = 'None  # disconnected';
+                }
+            }
+
+            if (def.properties) {
+                for (const prop of def.properties) {
+                    let val = n.properties[prop.name];
+                    if (val === undefined) val = prop.default;
+                    subs[prop.name] = (prop.type === 'bool') ? (val ? 'True' : 'False') : String(val);
+                }
+            }
+
+            let code = def.code;
+            for (const [key, value] of Object.entries(subs)) {
+                code = code.replace(new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, 'g'), value);
+            }
+            codeLines.push(code);
+        }
+
+        return { code: codeLines.join('\n'), imports: Array.from(allImports) };
     }
 
     function escapeRegex(str) {
@@ -1150,67 +1276,97 @@
         return nodeEl;
     }
 
-    // ---- Explode Molecular into Atomics ----
+    // ---- Explode: Pull subgraph contents into parent graph ----
 
     function explodeMolecular(node) {
-        const def = node._molecularDef;
-        if (!def || !def.graph) {
-            updateStatus('This molecular has no expandable graph definition');
+        // Handle native subgraph nodes (graph/subgraph)
+        if (node.subgraph) {
+            explodeSubgraph(node);
             return;
         }
 
-        const subNodes = def.graph.nodes;
-        const subLinks = def.graph.links;
-        const rawInputMap = def.graph.input_map || {};
-        const rawOutputMap = def.graph.output_map || {};
-
-        // Normalize maps: ensure values are always arrays of {node_id, slot}
-        const inputMap = {};
-        for (const [k, v] of Object.entries(rawInputMap)) {
-            inputMap[k] = Array.isArray(v) ? v : [v];
+        // Handle old-style molecular nodes with graph definitions
+        const def = node._molecularDef;
+        if (!def || !def.graph) {
+            updateStatus('This component has no expandable definition');
+            return;
         }
-        const outputMap = {};
-        for (const [k, v] of Object.entries(rawOutputMap)) {
-            outputMap[k] = Array.isArray(v) ? v : [v];
-        }
+        explodeMolecularLegacy(node, def);
+    }
 
+    function explodeSubgraph(node) {
+        const innerGraph = node.subgraph;
+        const label = node.title || 'Subgraph';
         const baseX = node.pos[0];
         const baseY = node.pos[1];
         const idRemap = {};
 
-        // Create all internal nodes
-        for (const sn of subNodes) {
-            const newNode = LiteGraph.createNode(sn.type);
-            if (!newNode) { console.warn('Cannot create node type:', sn.type); continue; }
+        // Find graph/input and graph/output nodes (these define the interface)
+        const gInputNodes = innerGraph.findNodesByType('graph/input') || [];
+        const gOutputNodes = innerGraph.findNodesByType('graph/output') || [];
 
-            newNode.pos = [baseX + (sn.pos?.[0] || 0), baseY + (sn.pos?.[1] || 0)];
-            if (sn.properties) {
-                for (const [k, v] of Object.entries(sn.properties)) {
+        // Map input names to their connections in the inner graph
+        const inputWireMap = {}; // inputName → [{innerNodeId, innerSlot}]
+        for (const gi of gInputNodes) {
+            const name = gi.properties.name;
+            inputWireMap[name] = [];
+            if (gi.outputs && gi.outputs[0] && gi.outputs[0].links) {
+                for (const linkId of gi.outputs[0].links) {
+                    const link = innerGraph.links[linkId];
+                    if (link) {
+                        inputWireMap[name].push({ nodeId: link.target_id, slot: link.target_slot });
+                    }
+                }
+            }
+        }
+
+        // Map output names to their source in the inner graph
+        const outputWireMap = {}; // outputName → {innerNodeId, innerSlot}
+        for (const go of gOutputNodes) {
+            const name = go.properties.name;
+            if (go.inputs && go.inputs[0] && go.inputs[0].link != null) {
+                const link = innerGraph.links[go.inputs[0].link];
+                if (link) {
+                    outputWireMap[name] = { nodeId: link.origin_id, slot: link.origin_slot };
+                }
+            }
+        }
+
+        // Copy all non-interface nodes to parent graph
+        const skipTypes = new Set(['graph/input', 'graph/output']);
+        const innerNodes = innerGraph._nodes.filter(n => !skipTypes.has(n.type));
+
+        for (const n of innerNodes) {
+            const newNode = LiteGraph.createNode(n.type);
+            if (!newNode) continue;
+            newNode.pos = [baseX + n.pos[0], baseY + n.pos[1]];
+            if (n.properties) {
+                for (const [k, v] of Object.entries(n.properties)) {
                     newNode.properties[k] = v;
-                    // Update widget values to match
                     if (newNode.widgets) {
                         const w = newNode.widgets.find(w => w.name === k);
                         if (w) w.value = v;
                     }
                 }
             }
-            if (sn.title) newNode.title = sn.title;
+            if (n.title) newNode.title = n.title;
             graph.add(newNode);
-            idRemap[sn.id] = newNode.id;
+            idRemap[n.id] = newNode.id;
         }
 
-        // Create internal links
-        if (subLinks) {
-            for (const sl of subLinks) {
-                const fromNode = graph.getNodeById(idRemap[sl[1]]);
-                const toNode = graph.getNodeById(idRemap[sl[3]]);
-                if (fromNode && toNode) {
-                    fromNode.connect(sl[2], toNode, sl[4]);
-                }
+        // Recreate internal links (between non-interface nodes)
+        for (const linkId in innerGraph.links) {
+            const link = innerGraph.links[linkId];
+            if (!link) continue;
+            if (!idRemap[link.origin_id] || !idRemap[link.target_id]) continue;
+            const fromNode = graph.getNodeById(idRemap[link.origin_id]);
+            const toNode = graph.getNodeById(idRemap[link.target_id]);
+            if (fromNode && toNode) {
+                fromNode.connect(link.origin_slot, toNode, link.target_slot);
             }
         }
 
-        // Reconnect external inputs (supports one-to-many via array maps)
+        // Reconnect external inputs
         if (node.inputs) {
             for (let i = 0; i < node.inputs.length; i++) {
                 const inp = node.inputs[i];
@@ -1218,50 +1374,42 @@
                 const link = graph.links[inp.link];
                 if (!link) continue;
 
-                const mappings = inputMap[inp.name];
-                if (!mappings) continue;
-
                 const srcNode = graph.getNodeById(link.origin_id);
                 if (!srcNode) continue;
 
-                for (const mapping of mappings) {
-                    const dstNode = graph.getNodeById(idRemap[mapping.node_id]);
-                    if (dstNode) {
-                        srcNode.connect(link.origin_slot, dstNode, mapping.slot);
-                    }
+                const targets = inputWireMap[inp.name] || [];
+                for (const t of targets) {
+                    const dstNode = graph.getNodeById(idRemap[t.nodeId]);
+                    if (dstNode) srcNode.connect(link.origin_slot, dstNode, t.slot);
                 }
             }
         }
 
-        // Reconnect external outputs (supports many-from-one)
+        // Reconnect external outputs
         if (node.outputs) {
             for (let i = 0; i < node.outputs.length; i++) {
                 const out = node.outputs[i];
                 if (!out.links || out.links.length === 0) continue;
 
-                const mappings = outputMap[out.name];
-                if (!mappings || mappings.length === 0) continue;
-                const mapping = mappings[0]; // output comes from one internal node
+                const source = outputWireMap[out.name];
+                if (!source) continue;
 
-                const srcNode = graph.getNodeById(idRemap[mapping.node_id]);
-                if (!srcNode) continue;
+                const innerSrc = graph.getNodeById(idRemap[source.nodeId]);
+                if (!innerSrc) continue;
 
                 for (const linkId of [...out.links]) {
                     const link = graph.links[linkId];
                     if (!link) continue;
                     const dstNode = graph.getNodeById(link.target_id);
-                    if (dstNode) {
-                        srcNode.connect(mapping.slot, dstNode, link.target_slot);
-                    }
+                    if (dstNode) innerSrc.connect(source.slot, dstNode, link.target_slot);
                 }
             }
         }
 
-        // Remove the original molecular node
-        const label = node.title || def.name;
+        // Remove subgraph node
         graph.remove(node);
 
-        // Wrap exploded nodes in a group container
+        // Wrap in group
         const createdNodes = Object.values(idRemap).map(id => graph.getNodeById(id)).filter(Boolean);
         if (createdNodes.length > 0) {
             let gx1 = Infinity, gy1 = Infinity, gx2 = -Infinity, gy2 = -Infinity;
@@ -1272,14 +1420,82 @@
                 gy2 = Math.max(gy2, n.pos[1] + (n.size[1] || 100));
             }
             const pad = 30;
-            const group = new LGraphGroup();
-            group.title = label;
-            group.pos = [gx1 - pad, gy1 - pad - 20];
-            group.size = [gx2 - gx1 + pad * 2, gy2 - gy1 + pad * 2 + 20];
-            group.color = "#335577";
-            graph.add(group);
+            const grp = new LGraphGroup();
+            grp.title = label;
+            grp.pos = [gx1 - pad, gy1 - pad - 20];
+            grp.size = [gx2 - gx1 + pad * 2, gy2 - gy1 + pad * 2 + 20];
+            grp.color = "#335577";
+            graph.add(grp);
         }
 
+        scheduleCompile();
+        updateStatus(`Exploded "${label}" → ${innerNodes.length} nodes`);
+    }
+
+    // Legacy explode for old-style molecular nodes with graph field
+    function explodeMolecularLegacy(node, def) {
+        const subNodes = def.graph.nodes;
+        const subLinks = def.graph.links;
+        const rawInputMap = def.graph.input_map || {};
+        const rawOutputMap = def.graph.output_map || {};
+        const inputMap = {};
+        for (const [k, v] of Object.entries(rawInputMap)) inputMap[k] = Array.isArray(v) ? v : [v];
+        const outputMap = {};
+        for (const [k, v] of Object.entries(rawOutputMap)) outputMap[k] = Array.isArray(v) ? v : [v];
+
+        const baseX = node.pos[0];
+        const baseY = node.pos[1];
+        const idRemap = {};
+
+        for (const sn of subNodes) {
+            const newNode = LiteGraph.createNode(sn.type);
+            if (!newNode) continue;
+            newNode.pos = [baseX + (sn.pos?.[0] || 0), baseY + (sn.pos?.[1] || 0)];
+            if (sn.properties) {
+                for (const [k, v] of Object.entries(sn.properties)) {
+                    newNode.properties[k] = v;
+                    if (newNode.widgets) { const w = newNode.widgets.find(w => w.name === k); if (w) w.value = v; }
+                }
+            }
+            if (sn.title) newNode.title = sn.title;
+            graph.add(newNode);
+            idRemap[sn.id] = newNode.id;
+        }
+
+        if (subLinks) {
+            for (const sl of subLinks) {
+                const f = graph.getNodeById(idRemap[sl[1]]), t = graph.getNodeById(idRemap[sl[3]]);
+                if (f && t) f.connect(sl[2], t, sl[4]);
+            }
+        }
+
+        if (node.inputs) {
+            for (let i = 0; i < node.inputs.length; i++) {
+                const inp = node.inputs[i]; if (inp.link == null) continue;
+                const link = graph.links[inp.link]; if (!link) continue;
+                const mappings = inputMap[inp.name]; if (!mappings) continue;
+                const src = graph.getNodeById(link.origin_id); if (!src) continue;
+                for (const m of mappings) { const d = graph.getNodeById(idRemap[m.node_id]); if (d) src.connect(link.origin_slot, d, m.slot); }
+            }
+        }
+
+        if (node.outputs) {
+            for (let i = 0; i < node.outputs.length; i++) {
+                const out = node.outputs[i]; if (!out.links || !out.links.length) continue;
+                const mappings = outputMap[out.name]; if (!mappings || !mappings.length) continue;
+                const src = graph.getNodeById(idRemap[mappings[0].node_id]); if (!src) continue;
+                for (const lid of [...out.links]) { const l = graph.links[lid]; if (!l) continue; const d = graph.getNodeById(l.target_id); if (d) src.connect(mappings[0].slot, d, l.target_slot); }
+            }
+        }
+
+        const label = node.title || def.name;
+        graph.remove(node);
+        const created = Object.values(idRemap).map(id => graph.getNodeById(id)).filter(Boolean);
+        if (created.length) {
+            let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity;
+            for (const n of created) { x1=Math.min(x1,n.pos[0]); y1=Math.min(y1,n.pos[1]); x2=Math.max(x2,n.pos[0]+(n.size[0]||200)); y2=Math.max(y2,n.pos[1]+(n.size[1]||100)); }
+            const g=new LGraphGroup(); g.title=label; g.pos=[x1-30,y1-50]; g.size=[x2-x1+60,y2-y1+80]; g.color="#335577"; graph.add(g);
+        }
         scheduleCompile();
         updateStatus(`Exploded "${label}" → ${subNodes.length} nodes`);
     }
@@ -1364,8 +1580,12 @@
             }
         }});
 
-        // Explode option for molecular nodes
-        if (node._molecularDef) {
+        // Explode option for subgraph or molecular nodes
+        if (node.subgraph) {
+            options.push({ content: 'Open Subgraph', callback: () => graphCanvas.openSubgraph(node.subgraph) });
+            options.push({ content: 'Explode', callback: () => explodeMolecular(node) });
+            options.push({ content: 'Save to File', callback: () => saveMolecularToFile(node) });
+        } else if (node._molecularDef) {
             const hasDef = node._molecularDef.graph;
             options.push({
                 content: hasDef ? 'Explode' : 'Explode (no definition)',
@@ -1393,52 +1613,28 @@
     // Disable default LiteGraph search box (it shows built-in types)
     graphCanvas.allow_searchbox = false;
 
-    // ---- Create Molecular from Selection ----
+    // ---- Condense: Create Subgraph from Selection ----
+    // Uses LiteGraph's native graph/subgraph node with graph/input and
+    // graph/output nodes inside to define the interface.
 
     function createMolecularFromSelection(selectedNodes) {
         const name = prompt('Component name:');
         if (!name || !name.trim()) return;
 
         const cleanName = name.trim();
-        const id = cleanName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         const selectedIds = new Set(selectedNodes.map(n => n.id));
 
-        // Bounding box for relative positioning
-        let minX = Infinity, minY = Infinity, cx = 0, cy = 0;
-        for (const n of selectedNodes) {
-            if (n.pos[0] < minX) minX = n.pos[0];
-            if (n.pos[1] < minY) minY = n.pos[1];
-            cx += n.pos[0]; cy += n.pos[1];
-        }
+        // Find center of selection for placing the subgraph node
+        let cx = 0, cy = 0;
+        for (const n of selectedNodes) { cx += n.pos[0]; cy += n.pos[1]; }
         cx /= selectedNodes.length;
         cy /= selectedNodes.length;
 
-        // Build internal node list
-        const internalNodes = [];
-        const idMap = {};
-        let seqId = 1;
-
-        for (const n of selectedNodes) {
-            idMap[n.id] = seqId;
-            const nodeDef = {
-                id: seqId,
-                type: n.type,
-                pos: [Math.round(n.pos[0] - minX), Math.round(n.pos[1] - minY)],
-                properties: { ...n.properties }
-            };
-            if (n.title) nodeDef.title = n.title;
-            internalNodes.push(nodeDef);
-            seqId++;
-        }
-
-        // Scan wires to find internal links, external inputs, external outputs
-        const internalLinks = [];
-        let linkSeq = 1;
-        const externalInputs = {};     // inputName -> [{node_id, slot}]
-        const externalOutputs = {};    // outputName -> {node_id, slot}
-        const incomingWires = [];      // [{srcNodeId, srcSlot, inputName}]
-        const outgoingWires = [];      // [{outputName, dstNodeId, dstSlot}]
+        // Analyze boundary wires
+        const incomingWires = []; // wires from outside → selected node
+        const outgoingWires = []; // wires from selected node → outside
         const inputNameCount = {};
+        const outputNameCount = {};
 
         for (const n of selectedNodes) {
             if (n.inputs) {
@@ -1447,21 +1643,15 @@
                     if (inp.link == null) continue;
                     const link = graph.links[inp.link];
                     if (!link) continue;
-
-                    if (selectedIds.has(link.origin_id)) {
-                        internalLinks.push([linkSeq++, idMap[link.origin_id], link.origin_slot, idMap[n.id], i, inp.type || 'tensor']);
-                    } else {
-                        // Deduplicate input names if multiple nodes have same-named inputs
+                    if (!selectedIds.has(link.origin_id)) {
                         let inputName = inp.name || 'input';
-                        if (inputNameCount[inputName]) {
-                            inputNameCount[inputName]++;
-                            inputName = `${inputName}_${inputNameCount[inputName]}`;
-                        } else {
-                            inputNameCount[inputName] = 1;
-                        }
-                        if (!externalInputs[inputName]) externalInputs[inputName] = [];
-                        externalInputs[inputName].push({ node_id: idMap[n.id], slot: i });
-                        incomingWires.push({ srcNodeId: link.origin_id, srcSlot: link.origin_slot, inputName });
+                        inputNameCount[inputName] = (inputNameCount[inputName] || 0) + 1;
+                        if (inputNameCount[inputName] > 1) inputName += '_' + inputNameCount[inputName];
+                        incomingWires.push({
+                            name: inputName, type: inp.type || 'tensor',
+                            srcNodeId: link.origin_id, srcSlot: link.origin_slot,
+                            dstNodeId: n.id, dstSlot: i
+                        });
                     }
                 }
             }
@@ -1472,237 +1662,154 @@
                     for (const linkId of out.links) {
                         const link = graph.links[linkId];
                         if (link && !selectedIds.has(link.target_id)) {
-                            const outputName = out.name || 'output';
-                            if (!externalOutputs[outputName]) {
-                                externalOutputs[outputName] = { node_id: idMap[n.id], slot: i };
-                            }
-                            outgoingWires.push({ outputName, dstNodeId: link.target_id, dstSlot: link.target_slot });
+                            let outputName = out.name || 'output';
+                            outputNameCount[outputName] = (outputNameCount[outputName] || 0) + 1;
+                            if (outputNameCount[outputName] > 1) outputName += '_' + outputNameCount[outputName];
+                            outgoingWires.push({
+                                name: outputName, type: out.type || 'tensor',
+                                srcNodeId: n.id, srcSlot: i,
+                                dstNodeId: link.target_id, dstSlot: link.target_slot
+                            });
                         }
                     }
                 }
             }
         }
 
-        // Build code template by mini-compiling the sub-graph
-        const inputs = Object.keys(externalInputs).map(n => ({ name: n, type: 'tensor' }));
-        const outputs = Object.keys(externalOutputs).map(n => ({ name: n, type: 'tensor' }));
-        const codeResult = compileMolecularCode(selectedNodes, selectedIds, inputs, outputs);
+        // Create the subgraph node
+        const subNode = LiteGraph.createNode('graph/subgraph');
+        if (!subNode) { updateStatus('Error: subgraph type not available'); return; }
+        subNode.title = cleanName;
+        subNode.pos = [cx - 70, cy - 30];
+        graph.add(subNode);
 
-        const molecularDef = {
-            name: cleanName,
-            id: id,
-            description: `Custom molecular: ${cleanName}`,
-            inputs: inputs,
-            outputs: outputs,
-            properties: [],
-            code: codeResult.code,
-            imports: codeResult.imports,
-            graph: {
-                nodes: internalNodes,
-                links: internalLinks,
-                input_map: externalInputs,
-                output_map: externalOutputs
+        const innerGraph = subNode.subgraph;
+
+        // Move selected nodes into the inner graph
+        const idRemap = {}; // old id → new inner node id
+        const nodeMinX = Math.min(...selectedNodes.map(n => n.pos[0]));
+        const nodeMinY = Math.min(...selectedNodes.map(n => n.pos[1]));
+
+        for (const n of selectedNodes) {
+            // Serialize and recreate in inner graph
+            const innerNode = LiteGraph.createNode(n.type);
+            if (!innerNode) continue;
+            innerNode.pos = [200 + n.pos[0] - nodeMinX, 80 + n.pos[1] - nodeMinY];
+            if (n.properties) {
+                for (const [k, v] of Object.entries(n.properties)) {
+                    innerNode.properties[k] = v;
+                    if (innerNode.widgets) {
+                        const w = innerNode.widgets.find(w => w.name === k);
+                        if (w) w.value = v;
+                    }
+                }
             }
-        };
-
-        // Register the new molecular type dynamically
-        const meta = { id, name: cleanName, description: molecularDef.description, color: '#c678dd' };
-        molecularRegistry[id] = molecularDef;
-        registerMolecular(meta, molecularDef);
-
-        // Add to palette
-        const paletteEl = document.getElementById('molecular-palette');
-        // Clear placeholder text if present
-        if (paletteEl.querySelector('div[style]')) {
-            const placeholder = paletteEl.querySelector('div[style*="color:#888"]');
-            if (placeholder) placeholder.remove();
+            if (n.title) innerNode.title = n.title;
+            innerGraph.add(innerNode);
+            idRemap[n.id] = innerNode.id;
         }
-        const nodeEl = document.createElement('div');
-        nodeEl.className = 'palette-node';
-        nodeEl.style.borderLeftColor = meta.color;
-        nodeEl.innerHTML = `<div>${cleanName}</div><div class="palette-node-desc">${molecularDef.description}</div>`;
-        nodeEl.addEventListener('click', () => addNodeToGraph(`molecular/${id}`));
-        paletteEl.appendChild(nodeEl);
 
-        // Create the new molecular node at the center of the selection
-        const newNode = LiteGraph.createNode(`molecular/${id}`);
-        if (!newNode) { updateStatus('Error: could not create molecular node'); return; }
-        newNode.pos = [cx - 100, cy - 30];
-        graph.add(newNode);
+        // Recreate internal links in the inner graph
+        for (const n of selectedNodes) {
+            if (!n.inputs) continue;
+            for (let i = 0; i < n.inputs.length; i++) {
+                const inp = n.inputs[i];
+                if (inp.link == null) continue;
+                const link = graph.links[inp.link];
+                if (!link || !selectedIds.has(link.origin_id)) continue;
 
-        // Reconnect incoming wires to the new node's input ports
-        const inputNames = inputs.map(i => i.name);
+                const fromNode = innerGraph.getNodeById(idRemap[link.origin_id]);
+                const toNode = innerGraph.getNodeById(idRemap[n.id]);
+                if (fromNode && toNode) {
+                    fromNode.connect(link.origin_slot, toNode, i);
+                }
+            }
+        }
+
+        // Create graph/input nodes for each incoming wire
+        const inputSlotMap = {}; // wire.name → subgraph input slot index
+        let inputY = 50;
+        for (const wire of incomingWires) {
+            if (!(wire.name in inputSlotMap)) {
+                const ginput = LiteGraph.createNode('graph/input');
+                ginput.pos = [10, inputY];
+                ginput.setProperty('name', wire.name);
+                ginput.setProperty('type', wire.type);
+                innerGraph.add(ginput);
+                inputSlotMap[wire.name] = Object.keys(inputSlotMap).length;
+                inputY += 100;
+            }
+            // Connect graph/input to the inner destination node
+            const ginputs = innerGraph.findNodesByType('graph/input');
+            const gInputNode = ginputs.find(g => g.properties.name === wire.name);
+            const innerDst = innerGraph.getNodeById(idRemap[wire.dstNodeId]);
+            if (gInputNode && innerDst) {
+                gInputNode.connect(0, innerDst, wire.dstSlot);
+            }
+        }
+
+        // Create graph/output nodes for each outgoing wire
+        const outputSlotMap = {};
+        let outputY = 50;
+        const maxX = Math.max(...selectedNodes.map(n => n.pos[0] - nodeMinX + 400));
+        for (const wire of outgoingWires) {
+            if (!(wire.name in outputSlotMap)) {
+                const goutput = LiteGraph.createNode('graph/output');
+                goutput.pos = [maxX, outputY];
+                goutput.setProperty('name', wire.name);
+                goutput.setProperty('type', wire.type);
+                innerGraph.add(goutput);
+                outputSlotMap[wire.name] = Object.keys(outputSlotMap).length;
+                outputY += 100;
+            }
+            // Connect inner source node to graph/output
+            const goutputs = innerGraph.findNodesByType('graph/output');
+            const gOutputNode = goutputs.find(g => g.properties.name === wire.name);
+            const innerSrc = innerGraph.getNodeById(idRemap[wire.srcNodeId]);
+            if (gOutputNode && innerSrc) {
+                innerSrc.connect(wire.srcSlot, gOutputNode, 0);
+            }
+        }
+
+        // Reconnect external wires to the subgraph node
         for (const wire of incomingWires) {
             const srcNode = graph.getNodeById(wire.srcNodeId);
-            const slotIdx = inputNames.indexOf(wire.inputName);
-            if (srcNode && slotIdx >= 0) {
-                srcNode.connect(wire.srcSlot, newNode, slotIdx);
+            const slotIdx = inputSlotMap[wire.name];
+            if (srcNode && slotIdx !== undefined) {
+                srcNode.connect(wire.srcSlot, subNode, slotIdx);
             }
         }
 
-        // Reconnect outgoing wires from the new node's output ports
-        const outputNames = outputs.map(o => o.name);
         for (const wire of outgoingWires) {
             const dstNode = graph.getNodeById(wire.dstNodeId);
-            const slotIdx = outputNames.indexOf(wire.outputName);
-            if (dstNode && slotIdx >= 0) {
-                newNode.connect(slotIdx, dstNode, wire.dstSlot);
+            const slotIdx = outputSlotMap[wire.name];
+            if (dstNode && slotIdx !== undefined) {
+                subNode.connect(slotIdx, dstNode, wire.dstSlot);
             }
         }
 
-        // Remove original selected nodes
+        // Remove original selected nodes from parent graph
         for (const n of selectedNodes) {
             graph.remove(n);
         }
 
         scheduleCompile();
-        updateStatus(`Condensed ${internalNodes.length} nodes → "${cleanName}"`);
+        updateStatus(`Condensed ${selectedNodes.length} nodes → "${cleanName}" (double-click to open)`);
     }
 
-    function compileMolecularCode(nodes, nodeIds, extInputs, extOutputs) {
-        // Mini-compile a sub-graph into a code template with handlebars
-        const sorted = [];
-        const visited = new Set();
-
-        // Simple topo sort within selection
-        function visit(n) {
-            if (visited.has(n.id)) return;
-            visited.add(n.id);
-            if (n.inputs) {
-                for (const inp of n.inputs) {
-                    if (inp.link == null) continue;
-                    const link = graph.links[inp.link];
-                    if (link && nodeIds.has(link.origin_id)) {
-                        const srcNode = graph.getNodeById(link.origin_id);
-                        if (srcNode) visit(srcNode);
-                    }
-                }
-            }
-            sorted.push(n);
-        }
-        for (const n of nodes) visit(n);
-
-        // Assign internal variable names
-        const varNames = {};
-        const usedNames = new Set();
-        for (const n of sorted) {
-            const def = n._atomicDef || n._molecularDef;
-            if (!def || !def.outputs) continue;
-            for (let i = 0; i < def.outputs.length; i++) {
-                const defId = def.id || 'n';
-                const base = sanitizeName(`_m{{_id}}_${defId}_${def.outputs[i].name}`);
-                let vn = base;
-                let c = 2;
-                while (usedNames.has(vn)) vn = `${base}_${c++}`;
-                usedNames.add(vn);
-                varNames[`${n.id}:${i}`] = vn;
-            }
-        }
-
-        // Check which outputs are the molecular's external outputs and remap to handlebars
-        const outputNodeSlots = {};
-        for (const n of sorted) {
-            const def = n._atomicDef || n._molecularDef;
-            if (!def || !n.outputs) continue;
-            for (let i = 0; i < n.outputs.length; i++) {
-                const out = n.outputs[i];
-                if (!out.links) continue;
-                for (const linkId of out.links) {
-                    const link = graph.links[linkId];
-                    if (link && !nodeIds.has(link.target_id)) {
-                        // This output goes external — find matching extOutput name
-                        for (const eo of extOutputs) {
-                            varNames[`${n.id}:${i}`] = `{{${eo.name}}}`;
-                        }
-                    }
-                }
-            }
-        }
-
-        const codeLines = [];
-        const allImports = new Set();
-
-        for (const n of sorted) {
-            const def = n._atomicDef || n._molecularDef;
-            if (!def) continue;
-            if (def.imports) def.imports.forEach(i => allImports.add(i));
-
-            const subs = { '_id': '{{_id}}' };
-
-            // Outputs
-            if (def.outputs) {
-                for (let i = 0; i < def.outputs.length; i++) {
-                    subs[def.outputs[i].name] = varNames[`${n.id}:${i}`] || `_unknown_${i}`;
-                }
-            }
-
-            // Inputs
-            if (def.inputs) {
-                for (let i = 0; i < def.inputs.length; i++) {
-                    const inputName = def.inputs[i].name;
-                    const linkId = (n.inputs[i] && n.inputs[i].link != null) ? n.inputs[i].link : null;
-                    if (linkId !== null && graph.links[linkId]) {
-                        const link = graph.links[linkId];
-                        if (nodeIds.has(link.origin_id)) {
-                            subs[inputName] = varNames[`${link.origin_id}:${link.origin_slot}`] || 'None';
-                        } else {
-                            // External input — use handlebars for the matching ext input
-                            for (const ei of extInputs) {
-                                if (ei.name === inputName || extInputs.length === 1) {
-                                    subs[inputName] = `{{${ei.name}}}`;
-                                    break;
-                                }
-                            }
-                            if (!subs[inputName]) subs[inputName] = `{{${inputName}}}`;
-                        }
-                    } else {
-                        subs[inputName] = `None`;
-                    }
-                }
-            }
-
-            // Properties
-            if (def.properties) {
-                for (const prop of def.properties) {
-                    let val = n.properties[prop.name];
-                    if (val === undefined) val = prop.default;
-                    subs[prop.name] = (prop.type === 'bool') ? (val ? 'True' : 'False') : String(val);
-                }
-            }
-
-            let code = def.code;
-            for (const [key, value] of Object.entries(subs)) {
-                code = code.replace(new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, 'g'), value);
-            }
-            codeLines.push(code);
-        }
-
-        return { code: codeLines.join('\n'), imports: Array.from(allImports) };
-    }
-
-    // ---- Save Molecular to File ----
+    // ---- Save Subgraph to File ----
 
     function saveMolecularToFile(node) {
-        const def = node._molecularDef;
-        const meta = node._molecularMeta;
-        if (!def) return;
-
-        const exportDef = { ...def };
-        if (meta) {
-            exportDef.name = meta.name;
-            exportDef.id = meta.id;
-            exportDef.description = meta.description;
-        }
-
-        const json = JSON.stringify(exportDef, null, 2);
+        const data = node.serialize ? node.serialize() : {};
+        const json = JSON.stringify(data, null, 2);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${exportDef.id || 'molecular'}.json`;
+        a.download = `${(node.title || 'component').toLowerCase().replace(/\s+/g, '_')}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        updateStatus(`Saved "${exportDef.name}" to file`);
+        updateStatus(`Saved "${node.title || 'component'}" to file`);
     }
 
     // ---- Graph Change Listeners ----
