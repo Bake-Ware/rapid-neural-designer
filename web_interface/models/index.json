@@ -3,6 +3,13 @@
   "description": "Rapid Neural Designer - Saved Model Library",
   "groups": [
     {
+      "name": "Experimental",
+      "experimental": true,
+      "models": [
+        { "id": "droga", "name": "DROGA Run 6c", "description": "5-tier hierarchy (L/M1/M2/M3/H), orthogonal transforms, GAT memory, predictive coding, frozen GPT-2 decoder", "file": "experimental/droga.json", "color": "#ff4444" }
+      ]
+    },
+    {
       "name": "Transformers",
       "models": [
         { "id": "llama_mini", "name": "Mini LLaMA", "description": "4-layer, dim=288, 6 heads, RoPE + SwiGLU", "file": "llama_mini.json", "color": "#e056a0" },

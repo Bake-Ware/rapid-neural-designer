@@ -25,6 +25,7 @@
     { "id": "gqa_attention", "name": "GQA Attention", "description": "Grouped Query Attention with RoPE (Qwen-style)", "file": "gqa_attention.json", "color": "#6bb5ff" },
     { "id": "rope_attention", "name": "RoPE Attention", "description": "Multi-head attention with Rotary Positional Encoding", "file": "rope_attention.json", "color": "#6bb5ff" },
     { "id": "gat_layer", "name": "GAT Layer", "description": "Graph Attention Network layer", "file": "gat_layer.json", "color": "#6bb5ff" },
+    { "id": "orthogonal_transform", "name": "Orthogonal Transform", "description": "Fixed orthogonal rotation Q from SO(d) — non-learned, norm-preserving", "file": "orthogonal_transform.json", "color": "#ff4444" },
     { "id": "transformer_block", "name": "Transformer Block", "description": "LLaMA-style: RMSNorm -> RoPE Attn -> Residual -> RMSNorm -> SwiGLU -> Residual", "file": "transformer_block.json", "color": "#e056a0" },
     { "id": "llada_block", "name": "LLaDA Block", "description": "Diffusion transformer: bidirectional attention + SwiGLU", "file": "llada_block.json", "color": "#e056a0" },
     { "id": "qwen_block", "name": "Qwen Block", "description": "Qwen-style: GQA + RoPE + SwiGLU", "file": "qwen_block.json", "color": "#e056a0" },

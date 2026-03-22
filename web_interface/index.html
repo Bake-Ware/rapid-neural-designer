@@ -1678,6 +1678,14 @@
             const groups = index.groups || [{ name: null, models: index.models || [] }];
 
             for (const group of groups) {
+                // Skip experimental groups if models folder doesn't exist
+                if (group.experimental && group.models.length > 0) {
+                    try {
+                        const probe = await fetch(`models/${group.models[0].file}`, { method: 'HEAD' });
+                        if (!probe.ok) continue; // experimental folder not present, skip
+                    } catch { continue; }
+                }
+
                 if (group.name) {
                     // Render as collapsible subcategory
                     const catEl = document.createElement('div');

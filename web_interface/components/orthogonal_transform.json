@@ -1,0 +1,17 @@
+{
+  "name": "Orthogonal Transform",
+  "id": "orthogonal_transform",
+  "description": "Fixed orthogonal rotation matrix Q from SO(d) via QR decomposition. Non-learned, norm-preserving basis rotation for inter-tier communication.",
+  "inputs": [
+    { "name": "input", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "output", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "dim", "type": "int", "default": 768, "description": "Input/output dimension (square matrix)" },
+    { "name": "seed", "type": "int", "default": 42, "description": "Random seed for deterministic Q generation" }
+  ],
+  "code": "np.random.seed({{seed}})\n_orth{{_id}}_A = np.random.randn({{dim}}, {{dim}}).astype(np.float32)\n_orth{{_id}}_Q, _orth{{_id}}_R = np.linalg.qr(_orth{{_id}}_A)\n# Sign correction: ensure det(Q) = +1 (proper rotation in SO(d))\n_orth{{_id}}_signs = np.sign(np.diag(_orth{{_id}}_R))\n_orth{{_id}}_Q = _orth{{_id}}_Q * _orth{{_id}}_signs\nif np.linalg.det(_orth{{_id}}_Q) < 0:\n    _orth{{_id}}_Q[:, 0] *= -1\n{{output}} = np.matmul({{input}}, _orth{{_id}}_Q.T)",
+  "imports": ["import numpy as np"]
+}

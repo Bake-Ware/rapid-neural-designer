@@ -43,3 +43,10 @@ Thumbs.db
 experiments/
 outputs/
 checkpoints/
+
+# Experimental models (private research)
+web_interface/models/experimental/
+
+# Generated/compiled output
+web_interface/*_compiled.py
+web_interface/test_droga_compile.py
