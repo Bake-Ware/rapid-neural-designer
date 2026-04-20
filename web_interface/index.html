@@ -5,6 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rapid Neural Designer</title>
 
+    <!-- Socket.IO for real-time collaboration (must load before Monaco's AMD loader) -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+    <!-- Three.js r150 (global build + transmission + examples/js addons) -->
+    <!-- Must load before ANY AMD loader (LiteGraph or Monaco) to avoid define() hijack -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/build/three.min.js"></script>
+    <!-- Temporarily hide define() so addons register on THREE global -->
+    <script>window.__savedDefine = window.define; window.define = undefined;</script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script>
+        window.define = window.__savedDefine; delete window.__savedDefine;
+        window.THREE_OrbitControls = THREE.OrbitControls;
+        window.THREE_EffectComposer = THREE.EffectComposer;
+        window.THREE_RenderPass = THREE.RenderPass;
+        window.THREE_UnrealBloomPass = THREE.UnrealBloomPass;
+    </script>
+
     <!-- LiteGraph.js for node-based visual programming -->
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css">
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/build/litegraph.min.js"></script>
@@ -310,6 +333,86 @@
             color: #999;
         }
 
+        /* === Room indicator === */
+        #room-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #999;
+        }
+        #room-indicator .room-name {
+            color: #4ec9b0;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 2px 8px;
+            border-radius: 3px;
+            background: rgba(78, 201, 176, 0.1);
+            border: 1px solid rgba(78, 201, 176, 0.2);
+            transition: all 0.15s;
+        }
+        #room-indicator .room-name:hover {
+            background: rgba(78, 201, 176, 0.2);
+            border-color: rgba(78, 201, 176, 0.4);
+        }
+        #room-indicator .room-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #666;
+        }
+        #room-indicator .room-status.connected {
+            background: #4ec9b0;
+            box-shadow: 0 0 4px rgba(78, 201, 176, 0.5);
+        }
+        #room-join-dialog {
+            display: none;
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2d2d30;
+            border: 1px solid #3e3e42;
+            border-radius: 6px;
+            padding: 20px;
+            z-index: 2000;
+            min-width: 300px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        #room-join-dialog.visible { display: block; }
+        #room-join-dialog h3 { margin-bottom: 12px; font-size: 14px; color: #007acc; }
+        #room-join-dialog input {
+            width: 100%;
+            padding: 6px 10px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 3px;
+            color: #fff;
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+        #room-join-dialog .dialog-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        #room-join-dialog button {
+            padding: 5px 14px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        #room-join-dialog .btn-primary {
+            background: #007acc;
+            color: #fff;
+        }
+        #room-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 1999;
+        }
+        #room-overlay.visible { display: block; }
+
         /* Custom LiteGraph dark theme */
         .litegraph { background-color: #1e1e1e !important; }
         .litecontextmenu { background: #252526 !important; border: 1px solid #3e3e42 !important; }
@@ -323,6 +426,7 @@
         <h1>RND</h1>
         <button class="tab active" onclick="switchTab('graph')">Designer</button>
         <button class="tab" onclick="switchTab('code')">Code</button>
+        <button class="tab" onclick="switchTab('3d')">3D</button>
         <div class="toolbar-sep"></div>
         <button onclick="saveGraph()">Save</button>
         <button onclick="loadGraph()">Load</button>
@@ -330,8 +434,25 @@
         <div class="toolbar-sep"></div>
         <button onclick="toggleCollapseAll()">Collapse All</button>
         <div class="toolbar-spacer"></div>
+        <div id="room-indicator">
+            <div class="room-status" id="room-status-dot"></div>
+            <span id="room-label">No room</span>
+            <span class="room-name" id="room-name-btn" onclick="showRoomDialog()" title="Click to create or join a room">Connect</span>
+        </div>
+        <div class="toolbar-sep"></div>
         <button onclick="copyCode()">Copy Code</button>
         <button onclick="downloadCode()">Download .py</button>
+    </div>
+
+    <!-- Room join/create dialog -->
+    <div id="room-overlay" onclick="hideRoomDialog()"></div>
+    <div id="room-join-dialog">
+        <h3>Collaboration Room</h3>
+        <input type="text" id="room-join-input" placeholder="Type a room name or leave blank for random" onkeydown="if(event.key==='Enter')createOrJoinRoom()">
+        <div class="dialog-buttons">
+            <button onclick="hideRoomDialog()">Cancel</button>
+            <button class="btn-primary" onclick="createOrJoinRoom()">Go</button>
+        </div>
     </div>
 
     <div id="container">
@@ -396,6 +517,58 @@
                         <button onclick="clearExecutionOutput()" style="background:transparent;padding:2px 8px;">X</button>
                     </div>
                     <div id="execution-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3D Tab -->
+        <div id="3d-tab" class="tab-content">
+            <div style="width:100%;height:100%;position:relative;">
+                <canvas id="canvas3d" style="width:100%;height:100%;display:block;"></canvas>
+                <div id="three-hud" style="position:absolute;top:8px;left:12px;display:flex;align-items:center;gap:10px;z-index:10;">
+                    <div id="three-breadcrumb" style="font-size:12px;color:#888;"></div>
+                    <span style="flex:1"></span>
+                </div>
+                <div id="three-tooltip" style="position:absolute;display:none;background:rgba(30,30,35,0.95);backdrop-filter:blur(8px);border:1px solid rgba(0,122,204,0.4);border-radius:6px;padding:10px 14px;font-size:12px;color:#ccc;pointer-events:none;z-index:20;max-width:280px;">
+                    <div class="tt3-title" style="color:#fff;font-weight:600;margin-bottom:4px;font-size:13px;"></div>
+                    <div class="tt3-type" style="color:#007acc;font-size:11px;margin-bottom:6px;"></div>
+                    <div class="tt3-prop" style="color:#888;font-size:11px;white-space:pre-line;"></div>
+                    <div class="tt3-hint" style="color:#555;font-size:10px;margin-top:6px;border-top:1px solid rgba(255,255,255,0.05);padding-top:5px;"></div>
+                </div>
+                <div id="three-zoom-indicator" style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,122,204,0.15);border:1px solid rgba(0,122,204,0.3);border-radius:20px;padding:6px 16px;font-size:11px;color:#007acc;opacity:0;transition:opacity 0.3s;pointer-events:none;"></div>
+                <div id="three-conn-mode" style="position:absolute;top:40px;left:50%;transform:translateX(-50%);background:rgba(255,152,0,0.2);border:1px solid rgba(255,152,0,0.5);border-radius:6px;padding:8px 18px;font-size:12px;color:#ffb74d;display:none;z-index:10;">
+                    Connecting from: <span id="three-conn-source">?</span> — Click target node
+                    <span onclick="t3_cancelConnection()" style="cursor:pointer;text-decoration:underline;margin-left:8px;color:#ff8a65;">Cancel</span>
+                </div>
+                <!-- 3D Property Panel -->
+                <div id="t3-prop-panel" style="position:absolute;right:-320px;top:0;width:300px;height:100%;background:rgba(20,20,28,0.95);backdrop-filter:blur(12px);border-left:1px solid rgba(0,122,204,0.25);z-index:30;transition:right 0.3s cubic-bezier(0.4,0,0.2,1);overflow-y:auto;font-size:12px;">
+                    <div style="padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:rgba(20,20,28,0.98);z-index:1;">
+                        <div>
+                            <div id="t3-prop-title" style="font-size:14px;font-weight:600;color:#fff;"></div>
+                            <div id="t3-prop-type" style="font-size:11px;color:#007acc;margin-top:2px;"></div>
+                        </div>
+                        <span onclick="t3_closePropPanel()" style="cursor:pointer;color:#666;font-size:18px;padding:2px 6px;">&times;</span>
+                    </div>
+                    <div id="t3-prop-body" style="padding:8px 14px 14px;"></div>
+                </div>
+                <!-- 3D Controls Panel -->
+                <div id="t3-controls" style="position:absolute;bottom:12px;left:12px;background:rgba(20,20,28,0.85);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 14px;z-index:15;font-size:11px;color:#888;min-width:200px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <input type="checkbox" id="t3c-grid" checked onchange="t3_toggleGrid(this.checked)" style="accent-color:#007acc;">
+                        <label for="t3c-grid" style="cursor:pointer;">Grid</label>
+                    </div>
+                    <div style="margin-bottom:6px;">
+                        <label style="display:flex;justify-content:space-between;">Spacing <span id="t3c-spacing-val">140</span></label>
+                        <input type="range" id="t3c-spacing" min="60" max="300" value="140" step="10" oninput="t3_setSpacing(+this.value)" style="width:100%;accent-color:#007acc;">
+                    </div>
+                    <div style="margin-bottom:6px;">
+                        <label style="display:flex;justify-content:space-between;">Refraction <span id="t3c-refract-val">0.95</span></label>
+                        <input type="range" id="t3c-refract" min="0" max="100" value="95" step="1" oninput="t3_setRefraction(+this.value/100)" style="width:100%;accent-color:#007acc;">
+                    </div>
+                    <div>
+                        <label style="display:flex;justify-content:space-between;">Bloom <span id="t3c-bloom-val">0.4</span></label>
+                        <input type="range" id="t3c-bloom" min="0" max="200" value="40" step="5" oninput="t3_setBloom(+this.value/100)" style="width:100%;accent-color:#007acc;">
+                    </div>
                 </div>
             </div>
         </div>
@@ -750,7 +923,16 @@
     }
 
     setTimeout(resizeCanvas, 100);
-    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+        if (t3 && document.getElementById('3d-tab').classList.contains('active')) {
+            const c = document.getElementById('canvas3d').parentElement;
+            t3.renderer.setSize(c.clientWidth, c.clientHeight);
+            t3.composer.setSize(c.clientWidth, c.clientHeight);
+            t3.camera.aspect = c.clientWidth / c.clientHeight;
+            t3.camera.updateProjectionMatrix();
+        }
+    });
 
     // ---- Utility ----
 
@@ -1367,9 +1549,11 @@
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         event.target.classList.add('active');
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        document.getElementById(tabName + '-tab').classList.add('active');
+        const tabId = tabName === '3d' ? '3d-tab' : tabName + '-tab';
+        document.getElementById(tabId).classList.add('active');
         if (tabName === 'graph') setTimeout(resizeCanvas, 50);
         if (tabName === 'code') compileGraph();
+        if (tabName === '3d') setTimeout(() => t3_init(), 50);
     }
 
     // ---- File Operations ----
@@ -2346,6 +2530,127 @@
     graph.onNodeRemoved = () => scheduleCompile();
     graph.onConnectionChange = () => scheduleCompile();
 
+    // ---- Room / WebSocket Collaboration ----
+
+    let currentRoom = null;
+    let socket = null;
+    let ignoreNextModelUpdate = false;  // prevent echo when WE pushed the model
+
+    function showRoomDialog() {
+        document.getElementById('room-overlay').classList.add('visible');
+        document.getElementById('room-join-dialog').classList.add('visible');
+        document.getElementById('room-join-input').focus();
+    }
+
+    function hideRoomDialog() {
+        document.getElementById('room-overlay').classList.remove('visible');
+        document.getElementById('room-join-dialog').classList.remove('visible');
+        document.getElementById('room-join-input').value = '';
+    }
+
+    async function createOrJoinRoom() {
+        const name = document.getElementById('room-join-input').value.trim().toLowerCase();
+        updateStatus(name ? `Connecting to room: ${name}...` : 'Creating room...');
+        try {
+            const resp = await fetch(`${BACKEND_URL}/api/room`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(name ? { name } : {}),
+            });
+            const data = await resp.json();
+            if (data.room) {
+                joinRoom(data.room);
+                hideRoomDialog();
+            } else {
+                updateStatus('Failed to create/join room');
+            }
+        } catch (err) {
+            updateStatus('Failed to connect: ' + err.message);
+        }
+    }
+
+    function joinRoom(roomName) {
+        // Disconnect from previous room
+        if (socket) {
+            if (currentRoom) socket.emit('leave_room', { room: currentRoom });
+            socket.disconnect();
+            socket = null;
+        }
+
+        currentRoom = roomName;
+
+        // Update UI immediately
+        document.getElementById('room-label').textContent = '';
+        const btn = document.getElementById('room-name-btn');
+        btn.textContent = roomName;
+        btn.title = `Room: ${roomName} — click to change`;
+        updateStatus(`Joining room: ${roomName}...`);
+
+        // Connect SocketIO — try websocket first, fall back to polling
+        socket = io(BACKEND_URL, {
+            transports: ['polling', 'websocket'],
+            withCredentials: false,
+        });
+
+        socket.on('connect', () => {
+            console.log('[Room] SocketIO connected, joining room:', roomName);
+            socket.emit('join_room', { room: roomName });
+            document.getElementById('room-status-dot').classList.add('connected');
+            updateStatus(`Room: ${roomName} (connected)`);
+        });
+
+        socket.on('connect_error', (err) => {
+            console.error('[Room] SocketIO connect error:', err);
+            updateStatus(`Room: ${roomName} (WS error — polling fallback)`);
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.log('[Room] SocketIO disconnected:', reason);
+            document.getElementById('room-status-dot').classList.remove('connected');
+            updateStatus(`Room: ${roomName} (disconnected)`);
+        });
+
+        socket.on('model_updated', (data) => {
+            console.log('[Room] Received model_updated event');
+            if (data.model) {
+                try {
+                    graph.configure(data.model);
+                    scheduleCompile();
+                    updateStatus(`Room: ${roomName} — model updated`);
+                } catch (err) {
+                    console.error('[Room] Failed to apply model update:', err);
+                    updateStatus('Error applying model update');
+                }
+            }
+        });
+
+        // Push current graph state to room so it's available via API
+        pushModelToRoom();
+    }
+
+    async function pushModelToRoom() {
+        if (!currentRoom) return;
+        try {
+            const model = graph.serialize();
+            await fetch(`${BACKEND_URL}/api/room/${currentRoom}/model`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model }),
+            });
+            console.log('[Room] Pushed model to room:', currentRoom);
+        } catch (err) {
+            console.error('[Room] Failed to push model to room:', err);
+        }
+    }
+
+    // Double-click room name to copy to clipboard
+    document.getElementById('room-name-btn').addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        if (currentRoom) {
+            navigator.clipboard.writeText(currentRoom).then(() => updateStatus(`Copied room name: ${currentRoom}`));
+        }
+    });
+
     // ---- Initialize ----
     async function init() {
         try {
@@ -2360,6 +2665,1329 @@
         graph.start();
         compileGraph();
         updateStatus('Ready');
+    }
+
+    // ========================================================================
+    //  3D VIEW — Three.js spatial neural architecture explorer
+    //  Shares the same graph object as the 2D designer
+    // ========================================================================
+
+    const T3_COLORS = {
+        atomic: 0x2196F3, molecular: 0x9C27B0, data: 0x4CAF50,
+        output: 0xFF5722, link: 0x007acc, linkGlow: 0x00bfff, bg: 0x0a0a10,
+        port_in: 0x66bb6a, port_out: 0xef5350,
+        transporter: 0x00ccff,
+    };
+
+    function t3_nodeColor(type) {
+        if (!type) return 0x666666;
+        if (type === 'interface/input')            return 0x00ccaa;
+        if (type === 'interface/output')           return 0xffaa44;
+        if (type === 'graph/subgraph')             return T3_COLORS.molecular;
+        if (type.startsWith('atomic/data/input'))  return T3_COLORS.data;
+        if (type.startsWith('atomic/data/output')) return T3_COLORS.output;
+        if (type.startsWith('atomic/init/'))        return 0x78909C;
+        if (type.startsWith('atomic/'))            return T3_COLORS.atomic;
+        if (type.startsWith('molecular/'))         return T3_COLORS.molecular;
+        return 0x666666;
+    }
+
+    let t3 = null;
+
+    function t3_init() {
+        const canvas = document.getElementById('canvas3d');
+        if (!canvas || typeof THREE === 'undefined') {
+            // Three.js not loaded yet, retry
+            setTimeout(t3_init, 200);
+            return;
+        }
+        const container = canvas.parentElement;
+
+        if (!t3) {
+            // First init
+            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer.setClearColor(T3_COLORS.bg);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+
+            const scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(T3_COLORS.bg, 0.0008);
+
+            const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
+            camera.position.set(0, 300, 500);
+
+            const controls = new THREE_OrbitControls(camera, canvas);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.08;
+            controls.rotateSpeed = 0.5;
+            controls.zoomSpeed = 1.2;
+            controls.minDistance = 20;
+            controls.maxDistance = 5000;
+
+            // Lighting
+            scene.add(new THREE.AmbientLight(0x334466, 0.8));
+            const dl = new THREE.DirectionalLight(0xffffff, 1.0);
+            dl.position.set(200, 400, 300);
+            dl.castShadow = true;
+            dl.shadow.mapSize.set(2048, 2048);
+            scene.add(dl);
+            const dl2 = new THREE.DirectionalLight(0x4488cc, 0.3);
+            dl2.position.set(-200, 200, -100);
+            scene.add(dl2);
+            scene.add(new THREE.PointLight(0x007acc, 0.5, 800));
+
+            // Environment map for glass reflections (generated procedurally)
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            pmremGenerator.compileEquirectangularShader();
+            // Create a simple env scene with colored lights for reflections
+            const envScene = new THREE.Scene();
+            envScene.add(new THREE.AmbientLight(0x111122, 1));
+            const envLight1 = new THREE.PointLight(0x4488ff, 8, 100);
+            envLight1.position.set(10, 20, 10);
+            envScene.add(envLight1);
+            const envLight2 = new THREE.PointLight(0xff4488, 5, 100);
+            envLight2.position.set(-15, 10, -10);
+            envScene.add(envLight2);
+            const envLight3 = new THREE.PointLight(0x44ff88, 4, 100);
+            envLight3.position.set(0, -10, 15);
+            envScene.add(envLight3);
+            // Add a big dark sphere as background
+            envScene.add(new THREE.Mesh(
+                new THREE.SphereGeometry(50, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0x0a0a15, side: THREE.BackSide })
+            ));
+            const envMap = pmremGenerator.fromScene(envScene, 0.04).texture;
+            scene.environment = envMap;
+            pmremGenerator.dispose();
+
+            // Grid
+            const gridMesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(2000, 2000),
+                new THREE.MeshStandardMaterial({ color: 0x0d0d15, roughness: 0.9 })
+            );
+            gridMesh.rotation.x = -Math.PI / 2;
+            gridMesh.position.y = -2;
+            gridMesh.receiveShadow = true;
+            gridMesh.userData.isGrid = true;
+            scene.add(gridMesh);
+            const gridHelper = new THREE.GridHelper(2000, 80, 0x1a1a30, 0x12121e);
+            gridHelper.userData.isGrid = true;
+            scene.add(gridHelper);
+
+            t3_raycaster = new THREE.Raycaster();
+            t3_mouse = new THREE.Vector2();
+
+            // Bloom post-processing
+            const composer = new THREE_EffectComposer(renderer);
+            composer.addPass(new THREE_RenderPass(scene, camera));
+            const bloomPass = new THREE_UnrealBloomPass(
+                new THREE.Vector2(container.clientWidth, container.clientHeight),
+                0.4,   // strength
+                0.6,   // radius
+                0.7    // threshold
+            );
+            composer.addPass(bloomPass);
+
+            t3 = {
+                renderer, scene, camera, controls, composer, bloomPass,
+                clock: new THREE.Clock(),
+                currentLevel: null,
+                navigationStack: [],
+                nodeMeshes: [],
+                hoveredMesh: null,
+                selectedMesh: null,
+                connectionSource: null,
+                animating: false,
+                running: false,
+                componentDefs: {},  // We'll reuse from 2D registry
+            };
+
+            // Input handlers on the canvas
+            canvas.addEventListener('mousemove', t3_onMouseMove);
+            canvas.addEventListener('click', t3_onClick);
+            canvas.addEventListener('dblclick', t3_onDblClick);
+
+            // Keyboard (only active when 3D tab visible)
+            window.addEventListener('keydown', (e) => {
+                if (!document.getElementById('3d-tab').classList.contains('active')) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    if (t3.connectionSource) t3_cancelConnection();
+                    else if (t3.selectedMesh) t3_deselectNode();
+                    else t3_goBack();
+                } else if (e.key === 'Delete') {
+                    const inInput = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT');
+                    if (!inInput && t3.selectedMesh) { e.preventDefault(); t3_deleteNode(); }
+                }
+            });
+        }
+
+        // Resize
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        t3.renderer.setPixelRatio(window.devicePixelRatio);
+        t3.renderer.setSize(w, h);
+        t3.composer.setSize(w, h);
+        t3.camera.aspect = w / h;
+        t3.camera.updateProjectionMatrix();
+
+        // Build component defs map from the existing 2D registries
+        t3_buildComponentDefs();
+
+        // Load current graph into 3D
+        t3_loadGraph();
+
+        // Start render loop if not running
+        if (!t3.running) {
+            t3.running = true;
+            t3_animate();
+        }
+    }
+
+    function t3_buildComponentDefs() {
+        // Map from atomicRegistry + molecularRegistry
+        t3.componentDefs = {};
+        for (const [id, def] of Object.entries(atomicRegistry)) {
+            t3.componentDefs[id] = def;
+        }
+        for (const [id, def] of Object.entries(molecularRegistry)) {
+            t3.componentDefs['molecular/' + id] = def;
+        }
+    }
+
+    function t3_hasSubgraph(type, nodeData) {
+        if (type === 'graph/subgraph' && nodeData && nodeData.subgraph) return true;
+        const def = t3.componentDefs[type];
+        return def && def.graph && def.graph.nodes && def.graph.nodes.length > 0;
+    }
+
+    function t3_getSubgraph(type, nodeData) {
+        if (type === 'graph/subgraph' && nodeData && nodeData.subgraph) return nodeData.subgraph;
+        const def = t3.componentDefs[type];
+        return (def && def.graph) ? def.graph : null;
+    }
+
+    function t3_loadGraph() {
+        // Clear old level
+        if (t3.currentLevel) {
+            t3.scene.remove(t3.currentLevel.group);
+        }
+        t3.navigationStack = [];
+        t3.nodeMeshes = [];
+        t3.hoveredMesh = null;
+        t3.selectedMesh = null;
+
+        // Serialize from the shared LiteGraph graph object
+        const graphData = activeGraph().serialize();
+        const level = t3_buildLevel(graphData, 'Model');
+        t3.scene.add(level.group);
+        t3.currentLevel = level;
+        t3.nodeMeshes = level.meshes;
+
+        // Position camera
+        const bounds = t3_computeBounds(level.meshes);
+        const dist = Math.max(bounds.size * 1.5, 300);
+        t3.camera.position.set(bounds.center.x, dist * 0.6, bounds.center.z + dist * 0.7);
+        t3.controls.target.copy(bounds.center);
+        t3.controls.update();
+
+        t3_updateBreadcrumb();
+    }
+
+    // ---- Build level from graph data ----
+    function t3_buildLevel(graphData, title) {
+        const group = new THREE.Group();
+        const nodes = graphData.nodes || [];
+        const links = graphData.links || [];
+        const meshMap = {};
+        const meshes = [];
+
+        const posScale = t3_nodeSpacing / 140;  // 1.0 at default 140
+        nodes.forEach((node, i) => {
+            const mesh = t3_createNodeMesh(node, i, nodes.length);
+            if (node.pos) {
+                mesh.position.x = (node.pos[0] - 400) * 0.4 * posScale;
+                mesh.position.z = ((node.pos[1] || 0) - 200) * 0.4 * posScale;
+            }
+            group.add(mesh);
+            meshMap[node.id] = mesh;
+            meshes.push(mesh);
+        });
+
+        const linkGroups = [];
+        links.forEach(link => {
+            const fromId = link[1], originSlot = link[2], toId = link[3], targetSlot = link[4];
+            if (meshMap[fromId] && meshMap[toId]) {
+                const fromMesh = meshMap[fromId];
+                const toMesh = meshMap[toId];
+                const fromPos = fromMesh.position.clone();
+                const outPads = fromMesh.userData.outputPadPositions || [];
+                if (outPads[originSlot]) fromPos.add(outPads[originSlot]);
+                const toPos = toMesh.position.clone();
+                const inPads = toMesh.userData.inputPadPositions || [];
+                if (inPads[targetSlot]) toPos.add(inPads[targetSlot]);
+                const lg = t3_createLink(fromPos, toPos);
+                group.add(lg);
+                linkGroups.push(lg);
+            }
+        });
+
+        // Subgraph interface nodes - from input_map/output_map OR _parentInputs/_parentOutputs
+        const interfaceMeshes = [];
+        const inputNames = graphData.input_map ? Object.keys(graphData.input_map) : (graphData._parentInputs || []);
+        const outputNames = graphData.output_map ? Object.keys(graphData.output_map) : (graphData._parentOutputs || []);
+
+        if (inputNames.length > 0 || outputNames.length > 0) {
+            let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+            meshes.forEach(m => {
+                minX = Math.min(minX, m.position.x); maxX = Math.max(maxX, m.position.x);
+                minZ = Math.min(minZ, m.position.z); maxZ = Math.max(maxZ, m.position.z);
+            });
+            const cx = (minX + maxX) / 2;
+
+            inputNames.forEach((name, i) => {
+                const fakeNode = {
+                    id: -100 - i,
+                    type: 'interface/input',
+                    title: name,
+                    properties: { name, direction: 'input' },
+                    inputs: [],
+                    outputs: [{ name, type: 'tensor' }],
+                };
+                const iMesh = t3_createNodeMesh(fakeNode, i, inputNames.length);
+                iMesh.position.set(cx + (i - (inputNames.length-1)/2) * 50, iMesh.userData.baseY, minZ - 70 * posScale);
+                group.add(iMesh);
+                interfaceMeshes.push(iMesh);
+            });
+
+            outputNames.forEach((name, i) => {
+                const fakeNode = {
+                    id: -200 - i,
+                    type: 'interface/output',
+                    title: name,
+                    properties: { name, direction: 'output' },
+                    inputs: [{ name, type: 'tensor' }],
+                    outputs: [],
+                };
+                const oMesh = t3_createNodeMesh(fakeNode, i, outputNames.length);
+                oMesh.position.set(cx + (i - (outputNames.length-1)/2) * 50, oMesh.userData.baseY, maxZ + 70 * posScale);
+                group.add(oMesh);
+                interfaceMeshes.push(oMesh);
+            });
+        }
+
+        return { group, meshes: [...meshes, ...interfaceMeshes], linkGroups, title, graphData, nodeMeshesOnly: meshes, transporterGroups: [] };
+    }
+
+    function t3_createNodeMesh(node, index, total) {
+        const type = node.type || '';
+        const color = t3_nodeColor(type);
+        const hasSub = t3_hasSubgraph(type, node);
+
+        const spacing = t3_nodeSpacing;
+        const x = (index - (total - 1) / 2) * spacing;
+
+        let mesh;
+
+        if (hasSub) {
+            // === SNOW GLOBE NODE ===
+            const domeRadius = 35;
+            const y = domeRadius + 3;
+
+            // Invisible raycast shell
+            const hitGeo = new THREE.SphereGeometry(domeRadius, 1, 1);
+            mesh = new THREE.Mesh(hitGeo, new THREE.MeshBasicMaterial({ visible: false }));
+
+            // --- Glass dome (outer shell) ---
+            const domeGeo = new THREE.SphereGeometry(domeRadius, 48, 32);
+            const domeMat = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                roughness: 0.0,
+                metalness: 0.0,
+                transmission: 0.95,
+                thickness: 2.0,
+                ior: 1.45,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.0,
+                reflectivity: 0.9,
+                envMapIntensity: 1.5,
+                transparent: true,
+                opacity: 1.0,
+                side: THREE.FrontSide,
+                depthWrite: false,
+            });
+            const dome = new THREE.Mesh(domeGeo, domeMat);
+            mesh.add(dome);
+
+            // (tint shell removed - clear glass)
+
+            // (inner refraction shell removed)
+
+            // --- Small specular catch light (supplement env reflections) ---
+            const specMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false });
+            const spec1 = new THREE.Mesh(new THREE.SphereGeometry(domeRadius * 0.08, 6, 6), specMat);
+            spec1.position.set(domeRadius * 0.4, domeRadius * 0.6, domeRadius * 0.3);
+            mesh.add(spec1);
+
+            // Rim ring (neutral metallic)
+            const rimGeo = new THREE.TorusGeometry(domeRadius, 1.0, 12, 48);
+            const rimMat = new THREE.MeshStandardMaterial({ color: 0x888899, roughness: 0.1, metalness: 0.95, transparent: true, opacity: 0.5 });
+            const rim = new THREE.Mesh(rimGeo, rimMat);
+            rim.rotation.x = Math.PI / 2;
+            mesh.add(rim);
+
+            // Base pedestal
+            const baseGeo = new THREE.CylinderGeometry(domeRadius * 0.5, domeRadius * 0.65, 5, 24);
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.4, metalness: 0.7 });
+            const pedestal = new THREE.Mesh(baseGeo, baseMat);
+            pedestal.position.y = -domeRadius - 2.5;
+            pedestal.castShadow = true;
+            mesh.add(pedestal);
+
+            // --- Plasma haze (animated inner atmosphere) ---
+            const plasmaParticles = [];
+            const plasmaGroup = new THREE.Group();
+            const plasmaGeo = new THREE.SphereGeometry(0.35, 4, 4);
+            for (let i = 0; i < 150; i++) {
+                // Purple-violet range with high brightness for bloom
+                const pColor = new THREE.Color().setHSL(0.75 + Math.random() * 0.12 - 0.06, 0.7 + Math.random() * 0.3, 0.55 + Math.random() * 0.35);
+                const pMat = new THREE.MeshBasicMaterial({
+                    color: pColor,
+                    transparent: true,
+                    opacity: 0.08 + Math.random() * 0.12,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false,
+                });
+                const p = new THREE.Mesh(plasmaGeo, pMat);
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                const r = Math.random() * domeRadius * 0.8;
+                p.position.set(
+                    r * Math.sin(phi) * Math.cos(theta),
+                    r * Math.sin(phi) * Math.sin(theta),
+                    r * Math.cos(phi)
+                );
+                plasmaGroup.add(p);
+                plasmaParticles.push({
+                    mesh: p,
+                    basePos: p.position.clone(),
+                    speed: 0.15 + Math.random() * 0.4,
+                    phase: Math.random() * Math.PI * 2,
+                    drift: new THREE.Vector3(
+                        (Math.random() - 0.5) * 5,
+                        (Math.random() - 0.5) * 5,
+                        (Math.random() - 0.5) * 5
+                    ),
+                });
+            }
+            mesh.add(plasmaGroup);
+
+            // --- Build mini graph inside ---
+            const subGraph = t3_getSubgraph(type, node);
+            const miniGroup = new THREE.Group();
+            if (subGraph && subGraph.nodes) {
+                const miniNodes = subGraph.nodes;
+                const miniLinks = subGraph.links || [];
+
+                let sMinX = Infinity, sMaxX = -Infinity, sMinY = Infinity, sMaxY = -Infinity;
+                miniNodes.forEach(n => {
+                    const px = n.pos ? n.pos[0] : 0;
+                    const py = n.pos ? n.pos[1] : 0;
+                    sMinX = Math.min(sMinX, px); sMaxX = Math.max(sMaxX, px);
+                    sMinY = Math.min(sMinY, py); sMaxY = Math.max(sMaxY, py);
+                });
+                const rangeX = Math.max(sMaxX - sMinX, 1);
+                const rangeY = Math.max(sMaxY - sMinY, 1);
+                const fitRadius = domeRadius * 0.6;
+
+                const miniMeshMap = {};
+                miniNodes.forEach((n, i) => {
+                    const nType = n.type || '';
+                    const nColor = t3_nodeColor(nType);
+                    const nHasSub = t3_hasSubgraph(nType, n);
+                    const nRadius = nHasSub ? 3 : 2;
+
+                    let nMesh;
+                    if (nHasSub) {
+                        // Tiny glass globe (empty)
+                        const gGeo = new THREE.SphereGeometry(nRadius, 12, 10);
+                        const gMat = new THREE.MeshPhysicalMaterial({
+                            color: 0xffffff, roughness: 0.0, metalness: 0.0,
+                            transmission: 0.9, thickness: 0.5, ior: 1.4,
+                            transparent: true, opacity: 1.0,
+                            clearcoat: 1.0, clearcoatRoughness: 0.0,
+                            depthWrite: false,
+                        });
+                        nMesh = new THREE.Mesh(gGeo, gMat);
+                        // Tiny rim
+                        const tRim = new THREE.Mesh(
+                            new THREE.TorusGeometry(nRadius, 0.15, 6, 16),
+                            new THREE.MeshBasicMaterial({ color: nColor, transparent: true, opacity: 0.4 })
+                        );
+                        tRim.rotation.x = Math.PI / 2;
+                        nMesh.add(tRim);
+                        // Tiny specular dot
+                        const tSpec = new THREE.Mesh(
+                            new THREE.SphereGeometry(nRadius * 0.2, 4, 4),
+                            new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending })
+                        );
+                        tSpec.position.set(nRadius * 0.4, nRadius * 0.5, nRadius * 0.3);
+                        nMesh.add(tSpec);
+                    } else {
+                        const nGeo = new THREE.SphereGeometry(nRadius, 8, 6);
+                        const nMat = new THREE.MeshStandardMaterial({
+                            color: nColor, roughness: 0.15, metalness: 0.8,
+                            emissive: nColor, emissiveIntensity: 0.5,
+                        });
+                        nMesh = new THREE.Mesh(nGeo, nMat);
+                    }
+
+                    const nx = rangeX > 1 ? ((n.pos ? n.pos[0] : 0) - sMinX) / rangeX * 2 - 1 : 0;
+                    const ny = rangeY > 1 ? ((n.pos ? n.pos[1] : 0) - sMinY) / rangeY * 2 - 1 : 0;
+                    nMesh.position.set(nx * fitRadius, -ny * fitRadius * 0.6, 0);
+
+                    miniGroup.add(nMesh);
+                    miniMeshMap[n.id] = nMesh;
+                });
+
+                miniLinks.forEach(link => {
+                    const from = miniMeshMap[link[1]];
+                    const to = miniMeshMap[link[3]];
+                    if (from && to) {
+                        const geo = new THREE.BufferGeometry().setFromPoints([from.position.clone(), to.position.clone()]);
+                        const mat = new THREE.LineBasicMaterial({ color: T3_COLORS.linkGlow, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending });
+                        miniGroup.add(new THREE.Line(geo, mat));
+                    }
+                });
+            }
+            mesh.add(miniGroup);
+
+            mesh.userData = {
+                nodeData: node, nodeType: type, baseColor: color, hasSub: true,
+                baseY: y, isUmbilical: false, portMeshes: [],
+                dome, domeMat, rim, rimMat, miniGroup, domeRadius,
+                plasmaParticles, plasmaGroup,
+            };
+            mesh.material = domeMat;
+
+            mesh.position.set(x, y, 0);
+            mesh.castShadow = true;
+
+        } else if (type === 'interface/input' || type === 'interface/output') {
+            // === INTERFACE CONE NODE (subgraph input/output port) ===
+            const isInput = (type === 'interface/input');
+            const coneColor = isInput ? 0x00ccaa : 0xffaa44;
+            const y = 12;
+
+            // Use a Group so we can rotate the cone without affecting particles
+            mesh = new THREE.Group();
+
+            const coneGeo = new THREE.ConeGeometry(12, 20, 16);
+            const coneMat = new THREE.MeshStandardMaterial({
+                color: coneColor, emissive: coneColor, emissiveIntensity: 0.15,
+                metalness: 0.9, roughness: 0.1, transparent: true, opacity: 0.7,
+                side: THREE.DoubleSide,
+            });
+            const cone = new THREE.Mesh(coneGeo, coneMat);
+            if (isInput) cone.rotation.x = Math.PI; // point DOWN for inputs
+            mesh.add(cone);
+
+            // Transporter particles - separate from cone rotation
+            // Input: particles above cone (y = 15 to 75), falling down into tip
+            // Output: particles above cone (y = 15 to 75), rising up from tip
+            const tParticles = [];
+            const pStartMin = 15;
+            const pStartMax = 75;
+            for (let pi = 0; pi < 25; pi++) {
+                const pGeo = new THREE.SphereGeometry(0.4, 4, 4);
+                const pMat = new THREE.MeshBasicMaterial({ color: coneColor, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
+                const p = new THREE.Mesh(pGeo, pMat);
+                const pAngle = Math.random() * Math.PI * 2;
+                const pRadius = 2 + Math.random() * 8;
+                const startY = pStartMin + Math.random() * (pStartMax - pStartMin);
+                p.position.set(Math.cos(pAngle) * pRadius, startY, Math.sin(pAngle) * pRadius);
+                mesh.add(p); // added to group, NOT to cone
+                tParticles.push({ mesh: p, radius: pRadius, speed: 20 + Math.random() * 40, phase: Math.random() * Math.PI * 2, minY: pStartMin, maxY: pStartMax });
+            }
+
+            mesh.position.set(x, y, 0);
+            // For raycasting, use the cone as the hit target
+            mesh.userData = {
+                nodeData: node, nodeType: type, baseColor: coneColor, hasSub: false, baseY: y,
+                isUmbilical: false, portMeshes: [],
+                isTransporterNode: true, transporterDirection: isInput ? 'input' : 'output',
+                transporterParticles: tParticles,
+            };
+            // Need material for highlight system
+            mesh.material = coneMat;
+
+        } else {
+            // === REGULAR ATOMIC NODE ===
+            const baseSize = 22;
+            const y = baseSize / 2 + 5;
+
+            const geo = new THREE.SphereGeometry(baseSize * 0.7, 16, 12);
+            const mat = new THREE.MeshStandardMaterial({
+                color, roughness: 0.3, metalness: 0.6, transparent: true, opacity: 0.85,
+            });
+
+            mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, y, 0);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.userData = { nodeData: node, nodeType: type, baseColor: color, hasSub: false, baseY: y, isUmbilical: false, portMeshes: [] };
+        }
+
+        // Connection base ring with flat port pads (skip for transporter cone nodes)
+        mesh.userData.inputPadPositions = [];
+        mesh.userData.outputPadPositions = [];
+        const inputs = node.inputs || [];
+        const outputs = node.outputs || [];
+
+        const nodeRadius = hasSub ? (mesh.userData.domeRadius || 35) : 22 * 0.7;
+        const ringRadius = nodeRadius + 6;
+        const baseY = hasSub ? -(mesh.userData.domeRadius || 35) - 4.5 : -(22 * 0.7) + 2;
+        const totalPorts = inputs.length + outputs.length;
+
+        if (totalPorts > 0 && !mesh.userData.isTransporterNode) {
+            // Base ring
+            const bRingGeo = new THREE.TorusGeometry(ringRadius, 0.6, 8, 48);
+            const bRingMat = new THREE.MeshStandardMaterial({
+                color: 0x444455, roughness: 0.3, metalness: 0.8,
+                transparent: true, opacity: 0.6,
+            });
+            const bRing = new THREE.Mesh(bRingGeo, bRingMat);
+            bRing.rotation.x = Math.PI / 2;
+            bRing.position.y = baseY;
+            mesh.add(bRing);
+
+            // Place input pads on the back semicircle (PI to 2*PI)
+            inputs.forEach((inp, i) => {
+                const angle = Math.PI + (Math.PI / (inputs.length + 1)) * (i + 1);
+                const padX = Math.cos(angle) * ringRadius;
+                const padZ = Math.sin(angle) * ringRadius;
+
+                // Flat disc pad
+                const padGeo = new THREE.CircleGeometry(3.5, 16);
+                const padMat = new THREE.MeshStandardMaterial({
+                    color: T3_COLORS.port_in,
+                    emissive: T3_COLORS.port_in,
+                    emissiveIntensity: 0.3,
+                    roughness: 0.2,
+                    metalness: 0.7,
+                    side: THREE.DoubleSide,
+                });
+                const pad = new THREE.Mesh(padGeo, padMat);
+                pad.rotation.x = -Math.PI / 2;
+                pad.position.set(padX, baseY + 0.5, padZ);
+                mesh.add(pad);
+
+                // Glow ring around pad
+                const glowGeo = new THREE.TorusGeometry(3.5, 0.3, 6, 16);
+                const glowMat = new THREE.MeshBasicMaterial({
+                    color: T3_COLORS.port_in,
+                    transparent: true,
+                    opacity: 0.2,
+                    blending: THREE.AdditiveBlending,
+                });
+                const glow = new THREE.Mesh(glowGeo, glowMat);
+                glow.rotation.x = Math.PI / 2;
+                glow.position.set(padX, baseY + 0.6, padZ);
+                mesh.add(glow);
+
+                // Tiny label
+                const pLabel = t3_createTextSprite(inp.name || 'in');
+                pLabel.position.set(padX, baseY - 4, padZ);
+                pLabel.scale.set(25, 8, 1);
+                mesh.add(pLabel);
+
+                mesh.userData.portMeshes.push(pad);
+                mesh.userData.inputPadPositions.push(new THREE.Vector3(padX, baseY + 0.5, padZ));
+            });
+
+            // Place output pads on the front semicircle (0 to PI)
+            outputs.forEach((out, i) => {
+                const angle = 0 + (Math.PI / (outputs.length + 1)) * (i + 1);
+                const padX = Math.cos(angle) * ringRadius;
+                const padZ = Math.sin(angle) * ringRadius;
+
+                const padGeo = new THREE.CircleGeometry(3.5, 16);
+                const padMat = new THREE.MeshStandardMaterial({
+                    color: T3_COLORS.port_out,
+                    emissive: T3_COLORS.port_out,
+                    emissiveIntensity: 0.3,
+                    roughness: 0.2,
+                    metalness: 0.7,
+                    side: THREE.DoubleSide,
+                });
+                const pad = new THREE.Mesh(padGeo, padMat);
+                pad.rotation.x = -Math.PI / 2;
+                pad.position.set(padX, baseY + 0.5, padZ);
+                mesh.add(pad);
+
+                const glowGeo = new THREE.TorusGeometry(3.5, 0.3, 6, 16);
+                const glowMat = new THREE.MeshBasicMaterial({
+                    color: T3_COLORS.port_out,
+                    transparent: true,
+                    opacity: 0.2,
+                    blending: THREE.AdditiveBlending,
+                });
+                const glow = new THREE.Mesh(glowGeo, glowMat);
+                glow.rotation.x = Math.PI / 2;
+                glow.position.set(padX, baseY + 0.6, padZ);
+                mesh.add(glow);
+
+                const pLabel = t3_createTextSprite(out.name || 'out');
+                pLabel.position.set(padX, baseY - 4, padZ);
+                pLabel.scale.set(25, 8, 1);
+                mesh.add(pLabel);
+
+                mesh.userData.portMeshes.push(pad);
+                mesh.userData.outputPadPositions.push(new THREE.Vector3(padX, baseY + 0.5, padZ));
+            });
+        }
+
+        // Label below
+        const label = t3_createTextSprite(node.title || type.split('/').pop());
+        const lc = label._lineCount || 1;
+        const labelH = 22 * Math.max(lc, 1);
+        const labelY = hasSub ? -(mesh.userData.domeRadius || 35) - 8 - labelH/2 : (22 * 0.6 + 10);
+        label.position.set(0, labelY, 0);
+        label.scale.set(70, labelH, 1);
+        mesh.add(label);
+
+        return mesh;
+    }
+
+    function t3_createTextSprite(text) {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        const fontSize = 38;
+        ctx.font = `bold ${fontSize}px Segoe UI, sans-serif`;
+        ctx.textAlign = 'center';
+
+        // Word-wrap text
+        const maxWidth = 480;
+        const words = text.split(/[\s_]+/);
+        const lines = [];
+        let line = '';
+        for (const word of words) {
+            const test = line ? line + ' ' + word : word;
+            if (ctx.measureText(test).width > maxWidth && line) {
+                lines.push(line);
+                line = word;
+            } else {
+                line = test;
+            }
+        }
+        if (line) lines.push(line);
+
+        const lineHeight = fontSize * 1.2;
+        const totalHeight = lines.length * lineHeight;
+        const startY = (c.height - totalHeight) / 2 + fontSize * 0.4;
+
+        lines.forEach((ln, i) => {
+            const ly = startY + i * lineHeight;
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillText(ln, 258, ly + 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(ln, 256, ly);
+        });
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.minFilter = THREE.LinearFilter;
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+        // Scale taller for multi-line
+        sprite._lineCount = lines.length;
+        return sprite;
+    }
+
+    function t3_createLink(fromPos, toPos) {
+        const group = new THREE.Group();
+        const from = fromPos.clone();
+        const to = toPos.clone();
+        const mid = from.clone().lerp(to, 0.5);
+        mid.y += 30 + from.distanceTo(to) * 0.15;
+
+        const curve = new THREE.QuadraticBezierCurve3(from, mid, to);
+        const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(32));
+        group.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: T3_COLORS.link, transparent: true, opacity: 0.5 })));
+
+        const particle = new THREE.Mesh(
+            new THREE.SphereGeometry(1.5, 6, 6),
+            new THREE.MeshBasicMaterial({ color: T3_COLORS.linkGlow, transparent: true, opacity: 0.8 })
+        );
+        group.add(particle);
+        group.userData = { curve, particle, speed: 0.3 + Math.random() * 0.2, t: Math.random() };
+        return group;
+    }
+
+    // (t3_createTransporter removed - input/output nodes render as regular nodes)
+
+    // ---- Navigation ----
+    function t3_computeBounds(meshes) {
+        if (meshes.length === 0) return { center: new THREE.Vector3(0, 30, 0), size: 100 };
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        meshes.forEach(m => {
+            minX = Math.min(minX, m.position.x + (m.parent ? m.parent.position.x : 0));
+            maxX = Math.max(maxX, m.position.x + (m.parent ? m.parent.position.x : 0));
+            minZ = Math.min(minZ, m.position.z + (m.parent ? m.parent.position.z : 0));
+            maxZ = Math.max(maxZ, m.position.z + (m.parent ? m.parent.position.z : 0));
+        });
+        return {
+            center: new THREE.Vector3((minX + maxX) / 2, 30, (minZ + maxZ) / 2),
+            size: Math.max(maxX - minX, maxZ - minZ, 50),
+        };
+    }
+
+    function t3_animateCamera(targetPos, targetLookAt, dur) {
+        return new Promise(resolve => {
+            const sp = t3.camera.position.clone();
+            const st = t3.controls.target.clone();
+            const start = performance.now();
+            function step(now) {
+                let p = Math.min((now - start) / dur, 1);
+                p = p < 0.5 ? 4*p*p*p : 1 - Math.pow(-2*p + 2, 3) / 2;
+                t3.camera.position.lerpVectors(sp, targetPos, p);
+                t3.controls.target.lerpVectors(st, targetLookAt, p);
+                t3.controls.update();
+                if (p < 1) requestAnimationFrame(step); else resolve();
+            }
+            requestAnimationFrame(step);
+        });
+    }
+
+    async function t3_enterNode(mesh) {
+        if (t3.animating || !mesh.userData.hasSub) return;
+        const type = mesh.userData.nodeType;
+        const nodeData = mesh.userData.nodeData;
+
+        // Get subgraph: either from LiteGraph subgraph node or from component def
+        let subGraph;
+        if (type === 'graph/subgraph' && nodeData.subgraph) {
+            subGraph = Object.assign({}, nodeData.subgraph);
+        } else {
+            const def = t3.componentDefs[type];
+            if (!def || !def.graph) return;
+            subGraph = def.graph;
+        }
+
+        // Build interface maps from CONNECTED inputs/outputs only
+        if (!subGraph.input_map && nodeData.inputs && nodeData.inputs.length > 0) {
+            subGraph._parentInputs = nodeData.inputs
+                .filter(inp => inp.link != null)  // only if actually connected
+                .map(inp => inp.name || 'input');
+        }
+        if (!subGraph.output_map && nodeData.outputs && nodeData.outputs.length > 0) {
+            subGraph._parentOutputs = nodeData.outputs
+                .filter(out => out.links && out.links.length > 0)  // only if actually connected
+                .map(out => out.name || 'output');
+        }
+        // Also filter input_map/output_map by connections
+        if (subGraph.input_map && nodeData.inputs) {
+            const connected = {};
+            const mapKeys = Object.keys(subGraph.input_map);
+            nodeData.inputs.forEach((inp, idx) => {
+                if (inp.link != null && mapKeys[idx]) connected[mapKeys[idx]] = subGraph.input_map[mapKeys[idx]];
+            });
+            subGraph = Object.assign({}, subGraph, { input_map: Object.keys(connected).length > 0 ? connected : null });
+        }
+        if (subGraph.output_map && nodeData.outputs) {
+            const connected = {};
+            const mapKeys = Object.keys(subGraph.output_map);
+            nodeData.outputs.forEach((out, idx) => {
+                if (out.links && out.links.length > 0 && mapKeys[idx]) connected[mapKeys[idx]] = subGraph.output_map[mapKeys[idx]];
+            });
+            subGraph = Object.assign({}, subGraph, { output_map: Object.keys(connected).length > 0 ? connected : null });
+        }
+
+        t3.navigationStack.push({
+            level: t3.currentLevel,
+            cameraPos: t3.camera.position.clone(),
+            controlsTarget: t3.controls.target.clone(),
+        });
+
+        t3.animating = true;
+        t3_closePropPanel();
+
+        t3.scene.remove(t3.currentLevel.group);
+        const newLevel = t3_buildLevel(subGraph, nodeData.title || type.split('/').pop());
+        t3.scene.add(newLevel.group);
+        t3.currentLevel = newLevel;
+        t3.nodeMeshes = newLevel.meshes;
+
+        const bounds = t3_computeBounds(newLevel.nodeMeshesOnly || newLevel.meshes);
+        const dist = Math.max(bounds.size * 1.8, 300);
+        await t3_animateCamera(
+            new THREE.Vector3(bounds.center.x, dist * 0.7, bounds.center.z + dist * 0.8),
+            bounds.center, 500
+        );
+
+        t3.animating = false;
+        t3_deselectNode();
+        t3_updateBreadcrumb();
+    }
+
+    async function t3_goBack() {
+        if (t3.animating || t3.navigationStack.length === 0) return;
+        t3.animating = true;
+        const prev = t3.navigationStack.pop();
+        t3.scene.remove(t3.currentLevel.group);
+        t3.scene.add(prev.level.group);
+        t3.currentLevel = prev.level;
+        t3.nodeMeshes = prev.level.meshes;
+        await t3_animateCamera(prev.cameraPos, prev.controlsTarget, 500);
+        t3.animating = false;
+        t3_updateBreadcrumb();
+    }
+
+    function t3_updateBreadcrumb() {
+        const el = document.getElementById('three-breadcrumb');
+        if (!el) return;
+        let html = `<span style="cursor:pointer" onclick="t3_navigateToLevel(0)">Root</span>`;
+        t3.navigationStack.forEach((e, i) => {
+            html += ` <span style="color:#555">›</span> <span style="cursor:pointer" onclick="t3_navigateToLevel(${i+1})">${e.level.title||'Level'}</span>`;
+        });
+        if (t3.currentLevel) {
+            html += ` <span style="color:#555">›</span> <span style="color:#007acc">${t3.currentLevel.title||'Current'}</span>`;
+        }
+        el.innerHTML = html;
+    }
+
+    async function t3_navigateToLevel(depth) {
+        while (t3.navigationStack.length >= depth && t3.navigationStack.length > 0) await t3_goBack();
+    }
+
+    // ---- Zoom-out to go back ----
+    function t3_checkZoomOut() {
+        if (t3.animating || t3.navigationStack.length === 0 || !t3.currentLevel) return;
+        const bounds = t3_computeBounds(t3.currentLevel.nodeMeshesOnly || t3.currentLevel.meshes);
+        const dist = t3.camera.position.distanceTo(bounds.center);
+        const threshold = Math.max(bounds.size * 2.5, 300);
+        const indicator = document.getElementById('three-zoom-indicator');
+
+        if (dist > threshold) {
+            const overshoot = (dist - threshold) / (threshold * 0.5);
+            indicator.style.opacity = Math.min(overshoot * 2, 1);
+            indicator.textContent = overshoot >= 0.95 ? 'Zooming out...' : 'Zoom out more to go back...';
+            if (overshoot >= 1) {
+                indicator.style.opacity = 0;
+                t3_deselectNode();
+                t3_goBack();
+            }
+        } else {
+            indicator.style.opacity = 0;
+        }
+    }
+
+    // ---- Hover / Selection ----
+    let t3_raycaster = null;
+    let t3_mouse = null;
+
+    function t3_highlight(mesh) {
+        if (mesh.userData.domeMat) {
+            mesh.userData.domeMat.thickness = 4.0;
+            mesh.userData.domeMat.envMapIntensity = 2.5;
+            mesh.userData.rimMat.opacity = 0.7;
+        } else if (mesh.material && mesh.material.emissive) {
+            mesh.material.emissive.setHex(mesh.userData.baseColor);
+            mesh.material.emissiveIntensity = 0.3;
+        }
+        mesh.scale.set(1.05, 1.05, 1.05);
+    }
+
+    function t3_unhighlight(mesh) {
+        if (mesh.userData.domeMat) {
+            mesh.userData.domeMat.thickness = 2.0;
+            mesh.userData.domeMat.envMapIntensity = 1.5;
+            mesh.userData.rimMat.opacity = 0.4;
+        } else if (mesh.material && mesh.material.emissive) {
+            mesh.material.emissive.setHex(0x000000);
+            mesh.material.emissiveIntensity = 0;
+        }
+        mesh.scale.set(1, 1, 1);
+    }
+
+    function t3_onMouseMove(e) {
+        const rect = e.target.getBoundingClientRect();
+        t3_mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        t3_mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        t3_raycaster.setFromCamera(t3_mouse, t3.camera);
+        const hits = t3_raycaster.intersectObjects(t3.nodeMeshes, true);
+
+        if (t3.hoveredMesh && t3.hoveredMesh !== t3.selectedMesh) {
+            t3_unhighlight(t3.hoveredMesh);
+        }
+
+        const tooltip = document.getElementById('three-tooltip');
+        if (hits.length > 0) {
+            // Walk up to find the mesh with nodeData (handles Group children)
+            let hitObj = hits[0].object;
+            while (hitObj && (!hitObj.userData || !hitObj.userData.nodeData) && hitObj.parent) hitObj = hitObj.parent;
+            t3.hoveredMesh = hitObj;
+            if (t3.hoveredMesh !== t3.selectedMesh) {
+                t3_highlight(t3.hoveredMesh);
+            }
+            e.target.style.cursor = t3.hoveredMesh.userData.hasSub ? 'pointer' : 'default';
+
+            // Tooltip
+            const d = t3.hoveredMesh.userData.nodeData;
+            tooltip.querySelector('.tt3-title').textContent = d.title || d.type;
+            tooltip.querySelector('.tt3-type').textContent = t3.hoveredMesh.userData.nodeType;
+            const props = d.properties || {};
+            tooltip.querySelector('.tt3-prop').textContent = Object.entries(props).slice(0, 5).map(([k,v]) => `${k}: ${v}`).join('\n');
+            tooltip.querySelector('.tt3-hint').textContent = t3.hoveredMesh.userData.hasSub
+                ? 'Double-click to enter | Shift+click to link'
+                : (t3.hoveredMesh.userData.isUmbilical ? 'Portal (click to inspect)' : 'Click to edit | Shift+click to link');
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX - document.getElementById('3d-tab').getBoundingClientRect().left + 15) + 'px';
+            tooltip.style.top = (e.clientY - document.getElementById('3d-tab').getBoundingClientRect().top + 15) + 'px';
+        } else {
+            t3.hoveredMesh = null;
+            e.target.style.cursor = 'grab';
+            tooltip.style.display = 'none';
+        }
+    }
+
+    let t3_clickTimer = null;
+    function t3_onClick(e) {
+        if (e.shiftKey && t3.hoveredMesh) {
+            if (t3_clickTimer) { clearTimeout(t3_clickTimer); t3_clickTimer = null; }
+            if (t3.connectionSource) t3_completeConnection(t3.hoveredMesh);
+            else t3_startConnection(t3.hoveredMesh);
+            return;
+        }
+        if (t3.connectionSource && !t3.hoveredMesh) { t3_cancelConnection(); return; }
+
+        if (t3_clickTimer) clearTimeout(t3_clickTimer);
+        t3_clickTimer = setTimeout(() => {
+            if (t3.connectionSource && t3.hoveredMesh) {
+                t3_completeConnection(t3.hoveredMesh);
+            } else if (t3.hoveredMesh) {
+                t3_selectNode(t3.hoveredMesh);
+            } else {
+                t3_deselectNode();
+            }
+        }, 250);
+    }
+
+    function t3_onDblClick(e) {
+        if (t3_clickTimer) { clearTimeout(t3_clickTimer); t3_clickTimer = null; }
+        if (t3.hoveredMesh && t3.hoveredMesh.userData.hasSub) {
+            t3_deselectNode();
+            t3_cancelConnection();
+            t3_enterNode(t3.hoveredMesh);
+        }
+    }
+
+    function t3_selectNode(mesh) {
+        t3_deselectNode();
+        t3.selectedMesh = mesh;
+        t3_highlight(mesh);
+        t3_openPropPanel(mesh);
+    }
+
+    function t3_deselectNode() {
+        if (t3.selectedMesh) {
+            t3_unhighlight(t3.selectedMesh);
+            t3.selectedMesh = null;
+        }
+        t3_closePropPanel();
+    }
+
+    // ---- Property Panel ----
+    function t3_openPropPanel(mesh) {
+        const panel = document.getElementById('t3-prop-panel');
+        const data = mesh.userData.nodeData;
+        const type = mesh.userData.nodeType;
+        const def = t3.componentDefs[type];
+
+        document.getElementById('t3-prop-title').textContent = data.title || type.split('/').pop();
+        document.getElementById('t3-prop-type').textContent = type;
+
+        const body = document.getElementById('t3-prop-body');
+        body.innerHTML = '';
+
+        // Title field
+        const titleRow = document.createElement('div');
+        titleRow.style.cssText = 'margin-bottom:10px;';
+        titleRow.innerHTML = '<div style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Title</div>';
+        const titleInp = document.createElement('input');
+        titleInp.style.cssText = 'width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:6px 8px;color:#ddd;font-size:12px;font-family:Consolas,monospace;outline:none;';
+        titleInp.value = data.title || '';
+        titleInp.addEventListener('change', () => { data.title = titleInp.value; t3_rebuildLabel(mesh, data.title); t3_syncToGraph(); });
+        titleInp.addEventListener('focus', () => titleInp.style.borderColor = '#007acc');
+        titleInp.addEventListener('blur', () => titleInp.style.borderColor = 'rgba(255,255,255,0.1)');
+        titleRow.appendChild(titleInp);
+        body.appendChild(titleRow);
+
+        // Properties
+        const propDefs = (def && def.properties) ? def.properties : [];
+        const props = data.properties || {};
+
+        const fields = propDefs.length > 0 ? propDefs : Object.entries(props).map(([k, v]) => ({ name: k, type: typeof v, default: v, description: '' }));
+
+        fields.forEach(pd => {
+            const val = props[pd.name] !== undefined ? props[pd.name] : pd.default;
+            const row = document.createElement('div');
+            row.style.cssText = 'margin-bottom:10px;';
+            row.innerHTML = `<div style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">${pd.name}</div>` +
+                (pd.description ? `<div style="color:#555;font-size:10px;font-style:italic;margin-bottom:4px;">${pd.description}</div>` : '');
+
+            if (pd.type === 'bool' || pd.type === 'boolean') {
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = !!val;
+                cb.style.cssText = 'accent-color:#007acc;';
+                cb.addEventListener('change', () => { props[pd.name] = cb.checked; data.properties = props; t3_syncToGraph(); });
+                row.appendChild(cb);
+            } else if (pd.type === 'choice' && pd.options) {
+                const sel = document.createElement('select');
+                sel.style.cssText = 'width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:6px 8px;color:#ddd;font-size:12px;outline:none;';
+                pd.options.forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; if (o === val) opt.selected = true; sel.appendChild(opt); });
+                sel.addEventListener('change', () => { props[pd.name] = sel.value; data.properties = props; t3_syncToGraph(); });
+                row.appendChild(sel);
+            } else {
+                const inp = document.createElement('input');
+                inp.style.cssText = 'width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:6px 8px;color:#ddd;font-size:12px;font-family:Consolas,monospace;outline:none;';
+                inp.value = val !== undefined && val !== null ? val : '';
+                inp.addEventListener('focus', () => inp.style.borderColor = '#007acc');
+                inp.addEventListener('blur', () => inp.style.borderColor = 'rgba(255,255,255,0.1)');
+                inp.addEventListener('change', () => {
+                    let v = inp.value;
+                    if (pd.type === 'int') v = parseInt(v) || 0;
+                    else if (pd.type === 'float' || pd.type === 'number') v = parseFloat(v) || 0;
+                    props[pd.name] = v;
+                    data.properties = props;
+                    t3_syncToGraph();
+                });
+                row.appendChild(inp);
+            }
+            body.appendChild(row);
+        });
+
+        panel.style.right = '0px';
+    }
+
+    function t3_closePropPanel() {
+        document.getElementById('t3-prop-panel').style.right = '-320px';
+    }
+
+    function t3_rebuildLabel(mesh, text) {
+        const toRemove = [];
+        mesh.children.forEach(c => { if (c.isSprite) toRemove.push(c); });
+        toRemove.forEach(c => mesh.remove(c));
+        const hasSub = mesh.userData.hasSub;
+        const label = t3_createTextSprite(text || mesh.userData.nodeType.split('/').pop());
+        const lc = label._lineCount || 1;
+        const labelH = 22 * Math.max(lc, 1);
+        const labelY = hasSub ? -(mesh.userData.domeRadius || 35) - 8 - labelH/2 : (22 * 0.6 + 10);
+        label.position.set(0, labelY, 0);
+        label.scale.set(70, labelH, 1);
+        mesh.add(label);
+    }
+
+    function t3_syncToGraph() {
+        // Sync changes back to the 2D LiteGraph at root level
+        if (t3.navigationStack.length === 0 && t3.currentLevel) {
+            activeGraph().configure(t3.currentLevel.graphData);
+            scheduleCompile();
+        }
+    }
+
+    // ---- Connections ----
+    function t3_startConnection(mesh) {
+        t3.connectionSource = mesh;
+        const title = mesh.userData.nodeData.title || mesh.userData.nodeType;
+        document.getElementById('three-conn-source').textContent = title;
+        document.getElementById('three-conn-mode').style.display = 'block';
+        mesh.material.emissive.setHex(0xff9800);
+        mesh.material.emissiveIntensity = 0.4;
+    }
+
+    function t3_cancelConnection() {
+        if (t3.connectionSource) {
+            t3.connectionSource.material.emissive.setHex(0x000000);
+            t3.connectionSource.material.emissiveIntensity = 0;
+            t3.connectionSource = null;
+        }
+        document.getElementById('three-conn-mode').style.display = 'none';
+    }
+
+    function t3_completeConnection(targetMesh) {
+        if (!t3.connectionSource || t3.connectionSource === targetMesh || !t3.currentLevel) return;
+        const src = t3.connectionSource.userData.nodeData;
+        const tgt = targetMesh.userData.nodeData;
+        const gd = t3.currentLevel.graphData;
+
+        let maxLinkId = 0;
+        (gd.links || []).forEach(l => { if (l[0] > maxLinkId) maxLinkId = l[0]; });
+        const lid = maxLinkId + 1;
+        if (!gd.links) gd.links = [];
+        gd.links.push([lid, src.id, 0, tgt.id, 0, 'tensor']);
+        if (gd.last_link_id !== undefined) gd.last_link_id = lid;
+
+        // Visual link
+        const lg = t3_createLink(t3.connectionSource.position.clone(), targetMesh.position.clone());
+        t3.currentLevel.group.add(lg);
+        t3.currentLevel.linkGroups.push(lg);
+
+        t3_cancelConnection();
+
+        // Sync back to 2D graph if at root level
+        if (t3.navigationStack.length === 0) {
+            activeGraph().configure(gd);
+            scheduleCompile();
+        }
+    }
+
+    // ---- Delete ----
+    function t3_deleteNode() {
+        if (!t3.selectedMesh || !t3.currentLevel) return;
+        const nd = t3.selectedMesh.userData.nodeData;
+        const gd = t3.currentLevel.graphData;
+
+        if (gd.links) gd.links = gd.links.filter(l => l[1] !== nd.id && l[3] !== nd.id);
+        if (gd.nodes) gd.nodes = gd.nodes.filter(n => n.id !== nd.id);
+
+        t3.currentLevel.group.remove(t3.selectedMesh);
+        t3.currentLevel.meshes = t3.currentLevel.meshes.filter(m => m !== t3.selectedMesh);
+        t3.nodeMeshes = t3.currentLevel.meshes;
+        t3_deselectNode();
+
+        // Rebuild links visually (simpler than tracking which to remove)
+        t3.currentLevel.linkGroups.forEach(lg => t3.currentLevel.group.remove(lg));
+        t3.currentLevel.linkGroups = [];
+        const meshMap = {};
+        t3.currentLevel.meshes.forEach(m => { if (m.userData.nodeData) meshMap[m.userData.nodeData.id] = m; });
+        (gd.links || []).forEach(link => {
+            if (meshMap[link[1]] && meshMap[link[3]]) {
+                const fromMesh = meshMap[link[1]];
+                const toMesh = meshMap[link[3]];
+                const fromPos = fromMesh.position.clone();
+                const outPads = fromMesh.userData.outputPadPositions || [];
+                if (outPads[link[2]]) fromPos.add(outPads[link[2]]);
+                const toPos = toMesh.position.clone();
+                const inPads = toMesh.userData.inputPadPositions || [];
+                if (inPads[link[4]]) toPos.add(inPads[link[4]]);
+                const lg = t3_createLink(fromPos, toPos);
+                t3.currentLevel.group.add(lg);
+                t3.currentLevel.linkGroups.push(lg);
+            }
+        });
+
+        if (t3.navigationStack.length === 0) {
+            activeGraph().configure(gd);
+            scheduleCompile();
+        }
+    }
+
+    // ---- 3D Controls ----
+    let t3_nodeSpacing = 140;
+
+    function t3_toggleGrid(show) {
+        if (!t3) return;
+        t3.scene.traverse(obj => { if (obj.userData && obj.userData.isGrid) obj.visible = show; });
+    }
+
+    function t3_setSpacing(val) {
+        t3_nodeSpacing = val;
+        document.getElementById('t3c-spacing-val').textContent = val;
+        if (!t3 || !t3.currentLevel) return;
+        // Rebuild current level in place
+        const gd = t3.currentLevel.graphData;
+        const title = t3.currentLevel.title;
+        t3.scene.remove(t3.currentLevel.group);
+        const newLevel = t3_buildLevel(gd, title);
+        t3.scene.add(newLevel.group);
+        t3.currentLevel = newLevel;
+        t3.nodeMeshes = newLevel.meshes;
+    }
+
+    function t3_setRefraction(val) {
+        document.getElementById('t3c-refract-val').textContent = val.toFixed(2);
+        if (!t3 || !t3.currentLevel) return;
+        // Update all dome materials in the current level
+        (t3.currentLevel.nodeMeshesOnly || t3.currentLevel.meshes).forEach(mesh => {
+            if (mesh.userData.domeMat) {
+                mesh.userData.domeMat.transmission = val;
+                mesh.userData.domeMat.needsUpdate = true;
+            }
+        });
+    }
+
+    function t3_setBloom(val) {
+        document.getElementById('t3c-bloom-val').textContent = val.toFixed(2);
+        if (t3 && t3.bloomPass) {
+            t3.bloomPass.strength = val;
+        }
+    }
+
+    // ---- Animation loop ----
+    function t3_animate() {
+        requestAnimationFrame(t3_animate);
+        if (!document.getElementById('3d-tab').classList.contains('active')) return;
+
+        const elapsed = t3.clock.getElapsedTime();
+        t3.controls.update();
+        t3_checkZoomOut();
+
+        if (t3.currentLevel) {
+            t3.currentLevel.meshes.forEach((mesh, i) => {
+                // Interface cone particles
+                if (mesh.userData.transporterParticles) {
+                    const isInp = mesh.userData.transporterDirection === 'input';
+                    mesh.userData.transporterParticles.forEach(p => {
+                        // Input: fall down (toward cone tip), Output: rise up (away from cone tip)
+                        if (isInp) {
+                            p.mesh.position.y -= p.speed * 0.012;
+                            if (p.mesh.position.y < p.minY) p.mesh.position.y = p.maxY;
+                        } else {
+                            p.mesh.position.y += p.speed * 0.012;
+                            if (p.mesh.position.y > p.maxY) p.mesh.position.y = p.minY;
+                        }
+                        const swirl = elapsed * 1.5 + p.phase;
+                        p.mesh.position.x = Math.cos(swirl) * p.radius;
+                        p.mesh.position.z = Math.sin(swirl) * p.radius;
+                        p.mesh.material.opacity = 0.3 + Math.sin(elapsed * 3 + p.phase) * 0.3;
+                    });
+                }
+                // Snow globe: rotate mini graph + animate plasma
+                if (mesh.userData.miniGroup) {
+                    mesh.userData.miniGroup.rotation.y = elapsed * 0.15 + i;
+                }
+                if (mesh.userData.plasmaParticles) {
+                    mesh.userData.plasmaParticles.forEach(p => {
+                        const t = elapsed * p.speed + p.phase;
+                        p.mesh.position.x = p.basePos.x + Math.sin(t) * p.drift.x;
+                        p.mesh.position.y = p.basePos.y + Math.cos(t * 0.7) * p.drift.y;
+                        p.mesh.position.z = p.basePos.z + Math.sin(t * 1.3) * p.drift.z;
+                        p.mesh.material.opacity = 0.04 + Math.sin(t * 2) * 0.04;
+                        // Keep inside dome
+                        const dist = p.mesh.position.length();
+                        const maxR = (mesh.userData.domeRadius || 35) * 0.8;
+                        if (dist > maxR) p.mesh.position.multiplyScalar(maxR / dist);
+                    });
+                    mesh.userData.plasmaGroup.rotation.y = elapsed * 0.05;
+                }
+            });
+
+            t3.currentLevel.linkGroups.forEach(lg => {
+                const ud = lg.userData;
+                ud.t = (ud.t + ud.speed * 0.01) % 1;
+                const pt = ud.curve.getPoint(ud.t);
+                ud.particle.position.copy(pt);
+                ud.particle.material.opacity = 0.5 + Math.sin(ud.t * Math.PI) * 0.5;
+            });
+        }
+
+
+        t3.composer.render();
     }
 
     init();

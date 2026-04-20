@@ -1,0 +1,1667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RND 3D — Neural Architecture Explorer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; color: #fff; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        #canvas3d { width: 100vw; height: 100vh; display: block; }
+
+        #hud {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 38px;
+            background: rgba(20, 20, 25, 0.85);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 122, 204, 0.3);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            z-index: 100;
+            gap: 12px;
+        }
+
+        #hud h1 { font-size: 13px; color: #007acc; font-weight: 600; }
+        #hud .sep { width: 1px; height: 18px; background: rgba(255,255,255,0.1); }
+
+        #breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: #888;
+        }
+        #breadcrumb span { cursor: pointer; transition: color 0.15s; }
+        #breadcrumb span:hover { color: #fff; }
+        #breadcrumb .bc-arrow { color: #555; cursor: default; }
+        #breadcrumb .bc-current { color: #007acc; }
+
+        .hud-spacer { flex: 1; }
+
+        #node-info {
+            font-size: 11px;
+            color: #666;
+            text-align: right;
+        }
+
+        #tooltip {
+            position: fixed;
+            display: none;
+            background: rgba(30, 30, 35, 0.95);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 122, 204, 0.4);
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-size: 12px;
+            color: #ccc;
+            pointer-events: none;
+            z-index: 200;
+            max-width: 280px;
+        }
+        #tooltip .tt-title { color: #fff; font-weight: 600; margin-bottom: 4px; font-size: 13px; }
+        #tooltip .tt-type { color: #007acc; font-size: 11px; margin-bottom: 6px; }
+        #tooltip .tt-prop { color: #888; font-size: 11px; }
+        #tooltip .tt-hint { color: #555; font-size: 10px; margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 5px; }
+
+        #loading {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 300;
+        }
+        #loading .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(0,122,204,0.2);
+            border-top-color: #007acc;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #instructions {
+            position: fixed;
+            bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 25, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            padding: 10px 18px;
+            font-size: 11px;
+            color: #666;
+            z-index: 100;
+            text-align: center;
+            transition: opacity 0.5s;
+        }
+        #instructions kbd {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 3px;
+            padding: 1px 5px;
+            font-family: inherit;
+            color: #999;
+        }
+
+        /* Property Editor Panel */
+        #prop-panel {
+            position: fixed;
+            right: -340px;
+            top: 46px;
+            width: 320px;
+            max-height: calc(100vh - 60px);
+            background: rgba(20, 20, 28, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 122, 204, 0.25);
+            border-right: none;
+            border-radius: 8px 0 0 8px;
+            padding: 0;
+            z-index: 150;
+            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        #prop-panel.open { right: 0; }
+
+        #prop-panel .panel-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            background: rgba(20, 20, 28, 0.98);
+            z-index: 1;
+        }
+        #prop-panel .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+        #prop-panel .panel-type {
+            font-size: 11px;
+            color: #007acc;
+            margin-top: 2px;
+        }
+        #prop-panel .panel-close {
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        #prop-panel .panel-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+
+        #prop-panel .panel-body { padding: 8px 16px 16px; }
+
+        .prop-row {
+            margin-bottom: 10px;
+        }
+        .prop-label {
+            color: #888;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+        }
+        .prop-desc {
+            color: #555;
+            font-size: 10px;
+            margin-bottom: 4px;
+            font-style: italic;
+        }
+        .prop-input {
+            width: 100%;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            padding: 6px 8px;
+            color: #ddd;
+            font-size: 12px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .prop-input:focus {
+            border-color: #007acc;
+        }
+        .prop-input.bool-toggle {
+            width: auto;
+            cursor: pointer;
+            accent-color: #007acc;
+        }
+        select.prop-input {
+            cursor: pointer;
+        }
+
+        /* Connection mode indicator */
+        #connection-mode {
+            position: fixed;
+            top: 46px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 152, 0, 0.2);
+            border: 1px solid rgba(255, 152, 0, 0.5);
+            border-radius: 6px;
+            padding: 8px 18px;
+            font-size: 12px;
+            color: #ffb74d;
+            z-index: 150;
+            display: none;
+            text-align: center;
+        }
+        #connection-mode.active { display: block; }
+        #connection-mode .cancel-link { cursor: pointer; text-decoration: underline; margin-left: 8px; color: #ff8a65; }
+
+        /* Add Node palette */
+        #add-palette {
+            position: fixed;
+            left: 50%; top: 50%;
+            transform: translate(-50%, -50%);
+            width: 420px;
+            max-height: 500px;
+            background: rgba(20, 20, 28, 0.97);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(0, 122, 204, 0.3);
+            border-radius: 10px;
+            z-index: 300;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #add-palette.open { display: flex; }
+        #add-palette-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 299;
+            display: none;
+        }
+        #add-palette-overlay.open { display: block; }
+
+        #add-palette .pal-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        #add-palette .pal-search {
+            width: 100%;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #ddd;
+            font-size: 13px;
+            outline: none;
+        }
+        #add-palette .pal-search:focus { border-color: #007acc; }
+        #add-palette .pal-search::placeholder { color: #555; }
+
+        #add-palette .pal-list {
+            overflow-y: auto;
+            flex: 1;
+            padding: 4px 0;
+        }
+        #add-palette .pal-category {
+            padding: 6px 16px 2px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #555;
+        }
+        #add-palette .pal-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.1s;
+        }
+        #add-palette .pal-item:hover { background: rgba(0, 122, 204, 0.15); }
+        #add-palette .pal-item .pal-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        #add-palette .pal-item .pal-name { color: #ddd; font-size: 13px; }
+        #add-palette .pal-item .pal-type { color: #666; font-size: 11px; margin-left: auto; }
+
+        /* HUD buttons */
+        .hud-btn {
+            background: rgba(0, 122, 204, 0.15);
+            border: 1px solid rgba(0, 122, 204, 0.3);
+            color: #7cc;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .hud-btn:hover { background: rgba(0, 122, 204, 0.3); color: #fff; }
+
+        /* Zoom-out indicator */
+        #zoom-indicator {
+            position: fixed;
+            bottom: 60px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 122, 204, 0.15);
+            border: 1px solid rgba(0, 122, 204, 0.3);
+            border-radius: 20px;
+            padding: 6px 16px;
+            font-size: 11px;
+            color: #007acc;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        #zoom-indicator.visible { opacity: 1; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas3d"></canvas>
+
+    <div id="hud">
+        <h1>RND 3D</h1>
+        <div class="sep"></div>
+        <div id="breadcrumb">
+            <span class="bc-current">Root</span>
+        </div>
+        <div class="hud-spacer"></div>
+        <button class="hud-btn" onclick="openAddPalette()">+ Add Node</button>
+        <div class="sep"></div>
+        <div id="node-info"></div>
+    </div>
+
+    <div id="tooltip">
+        <div class="tt-title"></div>
+        <div class="tt-type"></div>
+        <div class="tt-prop"></div>
+        <div class="tt-hint">Double-click to enter</div>
+    </div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div style="color:#888;font-size:13px;">Loading neural architecture...</div>
+    </div>
+
+    <div id="instructions">
+        <kbd>Orbit</kbd> Left drag &nbsp;&nbsp;
+        <kbd>Pan</kbd> Right drag &nbsp;&nbsp;
+        <kbd>Zoom</kbd> Scroll &nbsp;&nbsp;
+        <kbd>Enter</kbd> Double-click &nbsp;&nbsp;
+        <kbd>Edit</kbd> Click &nbsp;&nbsp;
+        <kbd>Link</kbd> Shift+Click &nbsp;&nbsp;
+        <kbd>Add</kbd> Tab &nbsp;&nbsp;
+        <kbd>Delete</kbd> Del &nbsp;&nbsp;
+        <kbd>Back</kbd> Esc / Zoom out
+    </div>
+
+    <div id="zoom-indicator">Zoom out more to go back...</div>
+
+    <div id="connection-mode">
+        Connecting from: <span id="conn-source-name">?</span>
+        — Click a target node to link
+        <span class="cancel-link" onclick="cancelConnection()">Cancel</span>
+    </div>
+
+    <div id="add-palette-overlay" onclick="closeAddPalette()"></div>
+    <div id="add-palette">
+        <div class="pal-header">
+            <input type="text" class="pal-search" id="pal-search" placeholder="Search nodes..." oninput="filterPalette()">
+        </div>
+        <div class="pal-list" id="pal-list"></div>
+    </div>
+
+    <div id="prop-panel">
+        <div class="panel-header">
+            <div>
+                <div class="panel-title" id="prop-title">Node</div>
+                <div class="panel-type" id="prop-type">type</div>
+            </div>
+            <button class="panel-close" onclick="closePropPanel()">&times;</button>
+        </div>
+        <div class="panel-body" id="prop-body"></div>
+    </div>
+
+    <!-- Three.js r128 (last global/UMD build) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for r128 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+    // ============================================================
+    //  RND 3D — Neural Architecture Spatial Explorer
+    // ============================================================
+
+    const BACKEND_URL = (() => {
+        const h = window.location.hostname;
+        if (h === 'localhost' || h === '127.0.0.1') return 'http://localhost:5000';
+        return 'https://rndbackend.bake.systems';
+    })();
+
+    // ---- Color palette ----
+    const COLORS = {
+        atomic:    0x2196F3,  // blue
+        molecular: 0x9C27B0,  // purple
+        data:      0x4CAF50,  // green
+        output:    0xFF5722,  // orange
+        link:      0x007acc,
+        linkGlow:  0x00bfff,
+        umbilical: 0x00ff88,
+        bg:        0x0a0a10,
+        grid:      0x1a1a2e,
+    };
+
+    function nodeColor(type) {
+        if (!type) return 0x666666;
+        if (type.startsWith('atomic/data/input'))  return COLORS.data;
+        if (type.startsWith('atomic/data/output')) return COLORS.output;
+        if (type.startsWith('atomic/'))            return COLORS.atomic;
+        if (type.startsWith('molecular/'))         return COLORS.molecular;
+        return 0x666666;
+    }
+
+    // ---- Scene setup ----
+    const canvas = document.getElementById('canvas3d');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(COLORS.bg);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(COLORS.bg, 0.0008);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
+    camera.position.set(0, 300, 500);
+
+    const controls = new THREE.OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.rotateSpeed = 0.5;
+    controls.zoomSpeed = 1.2;
+    controls.minDistance = 20;
+    controls.maxDistance = 2000;
+
+    // ---- Lighting ----
+    const ambientLight = new THREE.AmbientLight(0x334466, 0.6);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(200, 400, 300);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(2048, 2048);
+    dirLight.shadow.camera.near = 10;
+    dirLight.shadow.camera.far = 1500;
+    dirLight.shadow.camera.left = -600;
+    dirLight.shadow.camera.right = 600;
+    dirLight.shadow.camera.top = 600;
+    dirLight.shadow.camera.bottom = -600;
+    scene.add(dirLight);
+
+    const pointLight = new THREE.PointLight(0x007acc, 0.4, 800);
+    pointLight.position.set(0, 200, 0);
+    scene.add(pointLight);
+
+    // ---- Grid floor ----
+    function createGrid() {
+        const gridGroup = new THREE.Group();
+        const gridGeo = new THREE.PlaneGeometry(2000, 2000);
+        const gridMat = new THREE.MeshStandardMaterial({
+            color: 0x0d0d15,
+            roughness: 0.9,
+            metalness: 0.1,
+        });
+        const gridMesh = new THREE.Mesh(gridGeo, gridMat);
+        gridMesh.rotation.x = -Math.PI / 2;
+        gridMesh.position.y = -2;
+        gridMesh.receiveShadow = true;
+        gridGroup.add(gridMesh);
+
+        const gridHelper = new THREE.GridHelper(2000, 80, 0x1a1a30, 0x12121e);
+        gridHelper.position.y = -1;
+        gridGroup.add(gridHelper);
+
+        return gridGroup;
+    }
+    scene.add(createGrid());
+
+    // ---- State ----
+    let componentDefs = {};      // type -> component json definition
+    let currentLevel = null;     // { nodes: [...], links: [...], meshes: [...], group: THREE.Group }
+    let navigationStack = [];    // stack of { level, cameraPos, controlsTarget }
+    let nodeMeshes = [];         // all clickable meshes in current view
+    let hoveredMesh = null;
+    let animating = false;
+
+    // ---- Raycaster ----
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    // ---- Load component definitions ----
+    async function loadComponentDefs() {
+        try {
+            const resp = await fetch(`${BACKEND_URL}/api/instructions`);
+            const data = await resp.json();
+
+            // Load full component JSONs for subgraph data
+            const compIndex = await fetch('components/index.json').then(r => r.json());
+            for (const comp of compIndex.components || []) {
+                try {
+                    const def = await fetch(`components/${comp.file}`).then(r => r.json());
+                    componentDefs[`molecular/${comp.id}`] = def;
+                } catch(e) {}
+            }
+
+            // Load atomic defs
+            const atomIndex = await fetch('atomics/index.json').then(r => r.json());
+            for (const [catKey, cat] of Object.entries(atomIndex.categories || {})) {
+                for (const fname of cat.files || []) {
+                    try {
+                        const items = await fetch(`atomics/${fname}`).then(r => r.json());
+                        const arr = Array.isArray(items) ? items : (items.components || []);
+                        for (const a of arr) {
+                            componentDefs[`atomic/${catKey}/${a.id}`] = a;
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            return data;
+        } catch(e) {
+            console.error('Failed to load component defs:', e);
+            return null;
+        }
+    }
+
+    // ---- Node mesh creation ----
+    function createNodeMesh(node, index, totalNodes) {
+        const type = node.type || '';
+        const color = nodeColor(type);
+        const hasSub = hasSubgraph(type);
+
+        // Size based on whether it has children
+        const baseSize = hasSub ? 35 : 22;
+
+        // Position: arrange in a line or grid
+        const spacing = 120;
+        const x = (index - (totalNodes - 1) / 2) * spacing;
+        const y = baseSize / 2 + 5;
+        const z = 0;
+
+        // Main body - rounded box approximation
+        const geo = hasSub
+            ? new THREE.BoxGeometry(baseSize * 2, baseSize, baseSize * 2, 2, 2, 2)
+            : new THREE.SphereGeometry(baseSize * 0.7, 16, 12);
+
+        const mat = new THREE.MeshStandardMaterial({
+            color: color,
+            roughness: 0.3,
+            metalness: 0.6,
+            transparent: true,
+            opacity: 0.85,
+        });
+
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        // Store node data on mesh
+        mesh.userData = {
+            nodeData: node,
+            nodeType: type,
+            baseColor: color,
+            hasSub: hasSub,
+            baseY: y,
+        };
+
+        // Glow ring for molecular nodes
+        if (hasSub) {
+            const ringGeo = new THREE.TorusGeometry(baseSize * 1.1, 1.2, 8, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.3 });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 0;
+            mesh.add(ring);
+            mesh.userData.ring = ring;
+        }
+
+        // Label sprite
+        const label = createTextSprite(node.title || node.type.split('/').pop(), color);
+        label.position.set(0, hasSub ? baseSize * 0.7 + 12 : baseSize * 0.6 + 10, 0);
+        label.scale.set(60, 20, 1);
+        mesh.add(label);
+
+        return mesh;
+    }
+
+    function createTextSprite(text, tintColor) {
+        const canvas2d = document.createElement('canvas');
+        canvas2d.width = 512;
+        canvas2d.height = 128;
+        const ctx = canvas2d.getContext('2d');
+
+        ctx.clearRect(0, 0, 512, 128);
+        ctx.font = 'bold 42px Segoe UI, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Text shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillText(text, 258, 66);
+
+        // Main text
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(text, 256, 64);
+
+        const tex = new THREE.CanvasTexture(canvas2d);
+        tex.minFilter = THREE.LinearFilter;
+
+        const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+        return new THREE.Sprite(mat);
+    }
+
+    // ---- Link / connection rendering ----
+    function createLink(fromMesh, toMesh, linkData) {
+        const group = new THREE.Group();
+
+        const from = fromMesh.position.clone();
+        const to = toMesh.position.clone();
+
+        // Curve upward
+        const mid = from.clone().lerp(to, 0.5);
+        mid.y += 30 + from.distanceTo(to) * 0.15;
+
+        const curve = new THREE.QuadraticBezierCurve3(from, mid, to);
+        const points = curve.getPoints(32);
+        const geo = new THREE.BufferGeometry().setFromPoints(points);
+
+        const mat = new THREE.LineBasicMaterial({
+            color: COLORS.link,
+            transparent: true,
+            opacity: 0.5,
+            linewidth: 1,
+        });
+
+        const line = new THREE.Line(geo, mat);
+        group.add(line);
+
+        // Flow particles along the link
+        const particleGeo = new THREE.SphereGeometry(1.5, 6, 6);
+        const particleMat = new THREE.MeshBasicMaterial({ color: COLORS.linkGlow, transparent: true, opacity: 0.8 });
+        const particle = new THREE.Mesh(particleGeo, particleMat);
+        group.add(particle);
+
+        group.userData = { curve, particle, speed: 0.3 + Math.random() * 0.2, t: Math.random() };
+
+        return group;
+    }
+
+    // ---- Umbilical cords (input/output portals) ----
+    function createUmbilical(position, label, isInput) {
+        const group = new THREE.Group();
+        group.position.copy(position);
+
+        // Portal ring
+        const torusGeo = new THREE.TorusGeometry(12, 2.5, 12, 32);
+        const torusMat = new THREE.MeshStandardMaterial({
+            color: isInput ? 0x00ff88 : 0xff6644,
+            emissive: isInput ? 0x004422 : 0x441100,
+            roughness: 0.2,
+            metalness: 0.8,
+            transparent: true,
+            opacity: 0.9,
+        });
+        const torus = new THREE.Mesh(torusGeo, torusMat);
+        torus.rotation.x = Math.PI / 2;
+        group.add(torus);
+
+        // Inner glow disc
+        const discGeo = new THREE.CircleGeometry(10, 24);
+        const discMat = new THREE.MeshBasicMaterial({
+            color: isInput ? 0x00ff88 : 0xff6644,
+            transparent: true,
+            opacity: 0.15,
+            side: THREE.DoubleSide,
+        });
+        const disc = new THREE.Mesh(discGeo, discMat);
+        disc.rotation.x = Math.PI / 2;
+        group.add(disc);
+
+        // Vertical beam
+        const beamGeo = new THREE.CylinderGeometry(1, 1, 200, 8);
+        const beamMat = new THREE.MeshBasicMaterial({
+            color: isInput ? 0x00ff88 : 0xff6644,
+            transparent: true,
+            opacity: 0.08,
+        });
+        const beam = new THREE.Mesh(beamGeo, beamMat);
+        beam.position.y = 100;
+        group.add(beam);
+
+        // Label
+        const sprite = createTextSprite(label, isInput ? 0x00ff88 : 0xff6644);
+        sprite.position.set(0, -20, 0);
+        sprite.scale.set(50, 16, 1);
+        group.add(sprite);
+
+        group.userData = { torus, disc, isInput, pulsePhase: Math.random() * Math.PI * 2 };
+
+        return group;
+    }
+
+    // ---- Check if a node type has a subgraph ----
+    function hasSubgraph(type) {
+        const def = componentDefs[type];
+        return def && def.graph && def.graph.nodes && def.graph.nodes.length > 0;
+    }
+
+    // ---- Build a level from graph data ----
+    function buildLevel(graphData, title) {
+        const group = new THREE.Group();
+        const nodes = graphData.nodes || [];
+        const links = graphData.links || [];
+
+        // Build node meshes
+        const meshMap = {};  // node id -> mesh
+        const meshes = [];
+
+        // Layout: arrange nodes using their pos if available, else auto-layout
+        const hasPos = nodes.some(n => n.pos && n.pos[0] !== 0);
+
+        nodes.forEach((node, i) => {
+            const mesh = createNodeMesh(node, i, nodes.length);
+
+            if (hasPos && node.pos) {
+                // Use 2D pos, map to 3D: x stays, z from y
+                mesh.position.x = (node.pos[0] - 400) * 0.4;
+                mesh.position.z = (node.pos[1] - 200) * 0.4;
+            }
+
+            group.add(mesh);
+            meshMap[node.id] = mesh;
+            meshes.push(mesh);
+        });
+
+        // Build links
+        const linkGroups = [];
+        links.forEach(link => {
+            // link format: [link_id, origin_node, origin_slot, target_node, target_slot, type]
+            const fromId = link[1];
+            const toId = link[3];
+            if (meshMap[fromId] && meshMap[toId]) {
+                const linkGroup = createLink(meshMap[fromId], meshMap[toId], link);
+                group.add(linkGroup);
+                linkGroups.push(linkGroup);
+            }
+        });
+
+        // If we're inside a node, add umbilicals
+        const inputMap = graphData.input_map;
+        const outputMap = graphData.output_map;
+
+        if (inputMap || outputMap) {
+            // Calculate bounds
+            let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+            meshes.forEach(m => {
+                minX = Math.min(minX, m.position.x);
+                maxX = Math.max(maxX, m.position.x);
+                minZ = Math.min(minZ, m.position.z);
+                maxZ = Math.max(maxZ, m.position.z);
+            });
+            const cx = (minX + maxX) / 2;
+
+            if (inputMap) {
+                Object.keys(inputMap).forEach((name, i) => {
+                    const umb = createUmbilical(
+                        new THREE.Vector3(cx + (i - 0.5) * 60, 0, minZ - 100),
+                        name, true
+                    );
+                    group.add(umb);
+                });
+            }
+            if (outputMap) {
+                const entries = typeof outputMap === 'object' ? Object.keys(outputMap) : [];
+                entries.forEach((name, i) => {
+                    const umb = createUmbilical(
+                        new THREE.Vector3(cx + (i - 0.5) * 60, 0, maxZ + 100),
+                        name, false
+                    );
+                    group.add(umb);
+                });
+            }
+        }
+
+        return { group, meshes, linkGroups, title, graphData };
+    }
+
+    // ---- Enter a node (fly inside) ----
+    async function enterNode(mesh) {
+        if (animating) return;
+        const nodeData = mesh.userData.nodeData;
+        const type = mesh.userData.nodeType;
+
+        if (!hasSubgraph(type)) return;
+
+        const def = componentDefs[type];
+        const subGraph = def.graph;
+
+        // Save current state
+        navigationStack.push({
+            level: currentLevel,
+            cameraPos: camera.position.clone(),
+            controlsTarget: controls.target.clone(),
+        });
+
+        // Animate camera toward the node
+        animating = true;
+        const targetPos = mesh.position.clone();
+
+        await animateCamera(targetPos.clone().add(new THREE.Vector3(0, 20, 10)), targetPos, 600);
+
+        // Remove old level
+        scene.remove(currentLevel.group);
+
+        // Build new level from subgraph
+        const newLevel = buildLevel(subGraph, nodeData.title || type.split('/').pop());
+        scene.add(newLevel.group);
+        currentLevel = newLevel;
+        nodeMeshes = newLevel.meshes;
+
+        // Position camera above new level
+        const bounds = computeBounds(newLevel.meshes);
+        const center = bounds.center;
+        const dist = Math.max(bounds.size * 1.5, 200);
+
+        await animateCamera(
+            new THREE.Vector3(center.x, dist * 0.7, center.z + dist * 0.8),
+            center,
+            600
+        );
+
+        animating = false;
+        updateBreadcrumb();
+        updateNodeInfo();
+    }
+
+    // ---- Go back up ----
+    async function goBack() {
+        if (animating || navigationStack.length === 0) return;
+        animating = true;
+
+        const prev = navigationStack.pop();
+
+        // Remove current level
+        scene.remove(currentLevel.group);
+
+        // Restore previous
+        scene.add(prev.level.group);
+        currentLevel = prev.level;
+        nodeMeshes = prev.level.meshes;
+
+        await animateCamera(prev.cameraPos, prev.controlsTarget, 600);
+
+        animating = false;
+        updateBreadcrumb();
+        updateNodeInfo();
+    }
+
+    // ---- Camera animation ----
+    function animateCamera(targetPosition, targetLookAt, duration) {
+        return new Promise(resolve => {
+            const startPos = camera.position.clone();
+            const startTarget = controls.target.clone();
+            const startTime = performance.now();
+
+            function step(now) {
+                const elapsed = now - startTime;
+                let t = Math.min(elapsed / duration, 1);
+                // Ease in-out cubic
+                t = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+                camera.position.lerpVectors(startPos, targetPosition, t);
+                controls.target.lerpVectors(startTarget, targetLookAt, t);
+                controls.update();
+
+                if (elapsed < duration) {
+                    requestAnimationFrame(step);
+                } else {
+                    resolve();
+                }
+            }
+            requestAnimationFrame(step);
+        });
+    }
+
+    // ---- Compute bounds of meshes ----
+    function computeBounds(meshes) {
+        if (meshes.length === 0) return { center: new THREE.Vector3(), size: 100 };
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        meshes.forEach(m => {
+            minX = Math.min(minX, m.position.x);
+            maxX = Math.max(maxX, m.position.x);
+            minZ = Math.min(minZ, m.position.z);
+            maxZ = Math.max(maxZ, m.position.z);
+        });
+        return {
+            center: new THREE.Vector3((minX + maxX) / 2, 30, (minZ + maxZ) / 2),
+            size: Math.max(maxX - minX, maxZ - minZ, 50),
+        };
+    }
+
+    // ---- Breadcrumb ----
+    function updateBreadcrumb() {
+        const el = document.getElementById('breadcrumb');
+        let html = '';
+
+        // Root
+        html += `<span onclick="navigateToLevel(0)">Root</span>`;
+
+        navigationStack.forEach((entry, i) => {
+            html += `<span class="bc-arrow">&rsaquo;</span>`;
+            html += `<span onclick="navigateToLevel(${i + 1})">${entry.level.title || 'Level'}</span>`;
+        });
+
+        if (currentLevel) {
+            html += `<span class="bc-arrow">&rsaquo;</span>`;
+            html += `<span class="bc-current">${currentLevel.title || 'Current'}</span>`;
+        }
+
+        el.innerHTML = html;
+    }
+
+    async function navigateToLevel(targetDepth) {
+        while (navigationStack.length >= targetDepth && navigationStack.length > 0) {
+            await goBack();
+        }
+    }
+
+    function updateNodeInfo() {
+        const el = document.getElementById('node-info');
+        const depth = navigationStack.length;
+        const nodeCount = currentLevel ? currentLevel.meshes.length : 0;
+        el.textContent = `Depth: ${depth} | Nodes: ${nodeCount}`;
+    }
+
+    // ---- Tooltip ----
+    function showTooltip(mesh, x, y) {
+        const tt = document.getElementById('tooltip');
+        const data = mesh.userData.nodeData;
+        const type = mesh.userData.nodeType;
+
+        tt.querySelector('.tt-title').textContent = data.title || type.split('/').pop();
+        tt.querySelector('.tt-type').textContent = type;
+
+        // Properties
+        const props = data.properties || {};
+        const propLines = Object.entries(props)
+            .filter(([k,v]) => v !== undefined && v !== null)
+            .slice(0, 5)
+            .map(([k,v]) => `${k}: ${v}`)
+            .join('\n');
+        tt.querySelector('.tt-prop').textContent = propLines;
+
+        tt.querySelector('.tt-hint').textContent = mesh.userData.hasSub
+            ? 'Double-click to enter'
+            : 'Atomic node (no subgraph)';
+
+        tt.style.display = 'block';
+        tt.style.left = (x + 15) + 'px';
+        tt.style.top = (y + 15) + 'px';
+    }
+
+    function hideTooltip() {
+        document.getElementById('tooltip').style.display = 'none';
+    }
+
+    // ---- Hover / highlight ----
+    function updateHover(x, y) {
+        mouse.x = (x / window.innerWidth) * 2 - 1;
+        mouse.y = -(y / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(nodeMeshes, false);
+
+        // Reset previous hover
+        if (hoveredMesh) {
+            hoveredMesh.material.emissive.setHex(0x000000);
+            hoveredMesh.scale.set(1, 1, 1);
+            if (hoveredMesh.userData.ring) {
+                hoveredMesh.userData.ring.material.opacity = 0.3;
+            }
+        }
+
+        if (intersects.length > 0) {
+            hoveredMesh = intersects[0].object;
+            hoveredMesh.material.emissive.setHex(hoveredMesh.userData.baseColor);
+            hoveredMesh.material.emissiveIntensity = 0.3;
+            hoveredMesh.scale.set(1.08, 1.08, 1.08);
+            if (hoveredMesh.userData.ring) {
+                hoveredMesh.userData.ring.material.opacity = 0.7;
+            }
+            canvas.style.cursor = hoveredMesh.userData.hasSub ? 'pointer' : 'default';
+            showTooltip(hoveredMesh, x, y);
+        } else {
+            hoveredMesh = null;
+            canvas.style.cursor = 'grab';
+            hideTooltip();
+        }
+    }
+
+    // ---- Property Panel ----
+    let selectedMesh = null;
+    let propPanelOpen = false;
+
+    function openPropPanel(mesh) {
+        const panel = document.getElementById('prop-panel');
+        const data = mesh.userData.nodeData;
+        const type = mesh.userData.nodeType;
+        const def = componentDefs[type];
+
+        selectedMesh = mesh;
+
+        document.getElementById('prop-title').textContent = data.title || type.split('/').pop();
+        document.getElementById('prop-type').textContent = type;
+
+        const body = document.getElementById('prop-body');
+        body.innerHTML = '';
+
+        // Title field
+        const titleRow = document.createElement('div');
+        titleRow.className = 'prop-row';
+        titleRow.innerHTML = `<div class="prop-label">Title</div>`;
+        const titleInput = document.createElement('input');
+        titleInput.className = 'prop-input';
+        titleInput.value = data.title || '';
+        titleInput.placeholder = type.split('/').pop();
+        titleInput.addEventListener('change', () => {
+            data.title = titleInput.value || type.split('/').pop();
+            document.getElementById('prop-title').textContent = data.title;
+            // Update 3D label
+            rebuildNodeLabel(mesh, data.title);
+            syncToRoom();
+        });
+        titleRow.appendChild(titleInput);
+        body.appendChild(titleRow);
+
+        // Get property definitions from component def
+        const propDefs = (def && def.properties) ? def.properties : [];
+        const props = data.properties || {};
+
+        // If no prop defs, show raw key-value pairs
+        if (propDefs.length === 0) {
+            Object.entries(props).forEach(([key, val]) => {
+                body.appendChild(createPropField(key, '', typeof val, val, null, (newVal) => {
+                    props[key] = newVal;
+                    data.properties = props;
+                    syncToRoom();
+                }));
+            });
+        } else {
+            propDefs.forEach(pd => {
+                const currentVal = props[pd.name] !== undefined ? props[pd.name] : pd.default;
+                body.appendChild(createPropField(
+                    pd.name,
+                    pd.description || '',
+                    pd.type,
+                    currentVal,
+                    pd.options || null,
+                    (newVal) => {
+                        props[pd.name] = newVal;
+                        data.properties = props;
+                        syncToRoom();
+                    }
+                ));
+            });
+        }
+
+        panel.classList.add('open');
+        propPanelOpen = true;
+
+        // Highlight selected node
+        if (mesh.userData._selectedOutline) return;
+        mesh.userData._selectedOutline = true;
+        mesh.material.emissive.setHex(mesh.userData.baseColor);
+        mesh.material.emissiveIntensity = 0.15;
+    }
+
+    function createPropField(name, description, type, value, options, onChange) {
+        const row = document.createElement('div');
+        row.className = 'prop-row';
+
+        const label = document.createElement('div');
+        label.className = 'prop-label';
+        label.textContent = name;
+        row.appendChild(label);
+
+        if (description) {
+            const desc = document.createElement('div');
+            desc.className = 'prop-desc';
+            desc.textContent = description;
+            row.appendChild(desc);
+        }
+
+        if (type === 'bool' || type === 'boolean') {
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'prop-input bool-toggle';
+            cb.checked = !!value;
+            cb.addEventListener('change', () => onChange(cb.checked));
+            row.appendChild(cb);
+        } else if (type === 'choice' && options) {
+            const sel = document.createElement('select');
+            sel.className = 'prop-input';
+            options.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt;
+                o.textContent = opt;
+                if (opt === value) o.selected = true;
+                sel.appendChild(o);
+            });
+            sel.addEventListener('change', () => onChange(sel.value));
+            row.appendChild(sel);
+        } else {
+            const inp = document.createElement('input');
+            inp.className = 'prop-input';
+            inp.value = value !== undefined && value !== null ? value : '';
+            inp.addEventListener('change', () => {
+                let v = inp.value;
+                if (type === 'int') v = parseInt(v) || 0;
+                else if (type === 'float' || type === 'number') v = parseFloat(v) || 0;
+                onChange(v);
+            });
+            row.appendChild(inp);
+        }
+
+        return row;
+    }
+
+    function closePropPanel() {
+        const panel = document.getElementById('prop-panel');
+        panel.classList.remove('open');
+        propPanelOpen = false;
+        if (selectedMesh) {
+            selectedMesh.material.emissive.setHex(0x000000);
+            selectedMesh.material.emissiveIntensity = 0;
+            selectedMesh.userData._selectedOutline = false;
+            selectedMesh = null;
+        }
+    }
+
+    function rebuildNodeLabel(mesh, text) {
+        // Remove old label sprites
+        const toRemove = [];
+        mesh.children.forEach(c => { if (c.isSprite) toRemove.push(c); });
+        toRemove.forEach(c => mesh.remove(c));
+
+        const hasSub = mesh.userData.hasSub;
+        const baseSize = hasSub ? 35 : 22;
+        const label = createTextSprite(text, mesh.userData.baseColor);
+        label.position.set(0, hasSub ? baseSize * 0.7 + 12 : baseSize * 0.6 + 10, 0);
+        label.scale.set(60, 20, 1);
+        mesh.add(label);
+    }
+
+    function syncToRoom() {
+        // If loaded from a room, push updates back
+        const params = new URLSearchParams(window.location.search);
+        const roomName = params.get('room');
+        if (!roomName || !currentLevel) return;
+
+        // We only sync the root-level graph. For now, rebuild from navigation stack root.
+        const rootLevel = navigationStack.length > 0 ? navigationStack[0].level : currentLevel;
+        const model = rootLevel.graphData;
+
+        fetch(`${BACKEND_URL}/api/room/${roomName}/model`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model }),
+        }).catch(e => console.error('[3D] Failed to sync to room:', e));
+    }
+
+    // ---- Connection Mode ----
+    let connectionSource = null;  // mesh we're connecting FROM
+
+    function startConnection(mesh) {
+        connectionSource = mesh;
+        const title = mesh.userData.nodeData.title || mesh.userData.nodeType.split('/').pop();
+        document.getElementById('conn-source-name').textContent = title;
+        document.getElementById('connection-mode').classList.add('active');
+        // Highlight source
+        mesh.material.emissive.setHex(0xff9800);
+        mesh.material.emissiveIntensity = 0.4;
+    }
+
+    function cancelConnection() {
+        if (connectionSource) {
+            connectionSource.material.emissive.setHex(0x000000);
+            connectionSource.material.emissiveIntensity = 0;
+            connectionSource = null;
+        }
+        document.getElementById('connection-mode').classList.remove('active');
+    }
+
+    function completeConnection(targetMesh) {
+        if (!connectionSource || connectionSource === targetMesh || !currentLevel) return;
+
+        const srcNode = connectionSource.userData.nodeData;
+        const tgtNode = targetMesh.userData.nodeData;
+        const graphData = currentLevel.graphData;
+
+        // Determine next link ID
+        let maxLinkId = 0;
+        (graphData.links || []).forEach(l => { if (l[0] > maxLinkId) maxLinkId = l[0]; });
+        const newLinkId = maxLinkId + 1;
+
+        // Find output slot on source (slot 0) and input slot on target (first open)
+        const srcSlot = 0;
+        const tgtSlot = 0;
+
+        // Create link: [link_id, origin_node, origin_slot, target_node, target_slot, type]
+        const newLink = [newLinkId, srcNode.id, srcSlot, tgtNode.id, tgtSlot, 'tensor'];
+        if (!graphData.links) graphData.links = [];
+        graphData.links.push(newLink);
+
+        // Update node data
+        if (srcNode.outputs && srcNode.outputs[srcSlot]) {
+            if (!srcNode.outputs[srcSlot].links) srcNode.outputs[srcSlot].links = [];
+            srcNode.outputs[srcSlot].links.push(newLinkId);
+        }
+        if (tgtNode.inputs && tgtNode.inputs[tgtSlot]) {
+            tgtNode.inputs[tgtSlot].link = newLinkId;
+        }
+        if (graphData.last_link_id !== undefined) graphData.last_link_id = newLinkId;
+
+        // Create visual link
+        const linkGroup = createLink(connectionSource, targetMesh, newLink);
+        currentLevel.group.add(linkGroup);
+        currentLevel.linkGroups.push(linkGroup);
+
+        cancelConnection();
+        syncToRoom();
+        updateNodeInfo();
+    }
+
+    // ---- Add Node Palette ----
+    let addPaletteItems = [];
+
+    function buildPaletteItems() {
+        addPaletteItems = [];
+        for (const [type, def] of Object.entries(componentDefs)) {
+            addPaletteItems.push({
+                type,
+                name: def.name || type.split('/').pop(),
+                description: def.description || '',
+                color: nodeColor(type),
+                isMolecular: type.startsWith('molecular/'),
+            });
+        }
+        // Sort: molecular first, then atomic by category
+        addPaletteItems.sort((a, b) => {
+            if (a.isMolecular && !b.isMolecular) return -1;
+            if (!a.isMolecular && b.isMolecular) return 1;
+            return a.type.localeCompare(b.type);
+        });
+    }
+
+    function openAddPalette() {
+        if (addPaletteItems.length === 0) buildPaletteItems();
+        document.getElementById('add-palette').classList.add('open');
+        document.getElementById('add-palette-overlay').classList.add('open');
+        const search = document.getElementById('pal-search');
+        search.value = '';
+        search.focus();
+        renderPalette('');
+    }
+
+    function closeAddPalette() {
+        document.getElementById('add-palette').classList.remove('open');
+        document.getElementById('add-palette-overlay').classList.remove('open');
+    }
+
+    function filterPalette() {
+        renderPalette(document.getElementById('pal-search').value.trim().toLowerCase());
+    }
+
+    function renderPalette(query) {
+        const list = document.getElementById('pal-list');
+        list.innerHTML = '';
+
+        let lastCategory = '';
+        const filtered = addPaletteItems.filter(item =>
+            !query || item.name.toLowerCase().includes(query) || item.type.toLowerCase().includes(query)
+        );
+
+        filtered.forEach(item => {
+            const cat = item.isMolecular ? 'Molecular Components' : item.type.split('/').slice(0, 2).join('/');
+            if (cat !== lastCategory) {
+                const catEl = document.createElement('div');
+                catEl.className = 'pal-category';
+                catEl.textContent = cat;
+                list.appendChild(catEl);
+                lastCategory = cat;
+            }
+
+            const el = document.createElement('div');
+            el.className = 'pal-item';
+            el.innerHTML = `
+                <div class="pal-dot" style="background:#${item.color.toString(16).padStart(6,'0')}"></div>
+                <span class="pal-name">${item.name}</span>
+                <span class="pal-type">${item.type}</span>
+            `;
+            el.addEventListener('click', () => addNode(item.type));
+            list.appendChild(el);
+        });
+    }
+
+    function addNode(type) {
+        if (!currentLevel) return;
+        closeAddPalette();
+
+        const def = componentDefs[type];
+        const graphData = currentLevel.graphData;
+
+        // Determine next node ID
+        let maxNodeId = 0;
+        (graphData.nodes || []).forEach(n => { if (n.id > maxNodeId) maxNodeId = n.id; });
+        const newId = maxNodeId + 1;
+
+        // Build default properties
+        const props = {};
+        if (def && def.properties) {
+            def.properties.forEach(pd => { props[pd.name] = pd.default; });
+        }
+
+        // Build inputs/outputs from def
+        const inputs = (def && def.inputs || []).map(inp => ({ name: inp.name, type: inp.type, link: null }));
+        const outputs = (def && def.outputs || []).map(out => ({ name: out.name, type: out.type, links: [] }));
+
+        // Position: place near camera target
+        const target = controls.target.clone();
+        const newNode = {
+            id: newId,
+            type: type,
+            title: def ? def.name : type.split('/').pop(),
+            pos: [Math.round(target.x / 0.4 + 400), Math.round(target.z / 0.4 + 200)],
+            size: [220, 100],
+            flags: {},
+            order: graphData.nodes ? graphData.nodes.length : 0,
+            mode: 0,
+            inputs,
+            outputs,
+            properties: props,
+            widgets_values: Object.values(props),
+        };
+
+        if (!graphData.nodes) graphData.nodes = [];
+        graphData.nodes.push(newNode);
+        if (graphData.last_node_id !== undefined) graphData.last_node_id = newId;
+
+        // Create mesh and add to scene
+        const mesh = createNodeMesh(newNode, currentLevel.meshes.length, currentLevel.meshes.length + 1);
+        // Place at camera look-at with slight random offset
+        mesh.position.set(
+            target.x + (Math.random() - 0.5) * 40,
+            mesh.userData.baseY,
+            target.z + (Math.random() - 0.5) * 40
+        );
+        currentLevel.group.add(mesh);
+        currentLevel.meshes.push(mesh);
+        nodeMeshes = currentLevel.meshes;
+
+        syncToRoom();
+        updateNodeInfo();
+
+        // Open its property panel
+        openPropPanel(mesh);
+    }
+
+    // ---- Delete Node ----
+    function deleteSelectedNode() {
+        if (!selectedMesh || !currentLevel) return;
+        const nodeData = selectedMesh.userData.nodeData;
+        const graphData = currentLevel.graphData;
+
+        // Remove links connected to this node
+        if (graphData.links) {
+            const removeLinks = graphData.links.filter(l => l[1] === nodeData.id || l[3] === nodeData.id);
+            graphData.links = graphData.links.filter(l => l[1] !== nodeData.id && l[3] !== nodeData.id);
+
+            // Remove visual links connected to this node
+            const toRemoveLinkGroups = [];
+            currentLevel.linkGroups.forEach((lg, i) => {
+                const curve = lg.userData.curve;
+                const startPos = curve.getPoint(0);
+                const endPos = curve.getPoint(1);
+                const meshPos = selectedMesh.position;
+                if (startPos.distanceTo(meshPos) < 5 || endPos.distanceTo(meshPos) < 5) {
+                    currentLevel.group.remove(lg);
+                    toRemoveLinkGroups.push(i);
+                }
+            });
+            // Remove in reverse order to keep indices valid
+            toRemoveLinkGroups.reverse().forEach(i => currentLevel.linkGroups.splice(i, 1));
+        }
+
+        // Remove node from graph data
+        graphData.nodes = graphData.nodes.filter(n => n.id !== nodeData.id);
+
+        // Remove mesh from scene
+        currentLevel.group.remove(selectedMesh);
+        currentLevel.meshes = currentLevel.meshes.filter(m => m !== selectedMesh);
+        nodeMeshes = currentLevel.meshes;
+
+        closePropPanel();
+        syncToRoom();
+        updateNodeInfo();
+    }
+
+    // ---- Input ----
+    canvas.addEventListener('mousemove', e => updateHover(e.clientX, e.clientY));
+
+    // Single click: open property panel or complete connection
+    let clickTimer = null;
+    canvas.addEventListener('click', e => {
+        // Shift+click: start or complete connection
+        if (e.shiftKey && hoveredMesh) {
+            if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+            if (connectionSource) {
+                completeConnection(hoveredMesh);
+            } else {
+                startConnection(hoveredMesh);
+            }
+            return;
+        }
+
+        // If in connection mode and click empty space, cancel
+        if (connectionSource && !hoveredMesh) {
+            cancelConnection();
+            return;
+        }
+
+        // Normal click: delay to distinguish from double-click
+        if (clickTimer) clearTimeout(clickTimer);
+        clickTimer = setTimeout(() => {
+            if (connectionSource && hoveredMesh) {
+                completeConnection(hoveredMesh);
+            } else if (hoveredMesh) {
+                openPropPanel(hoveredMesh);
+            } else if (propPanelOpen) {
+                closePropPanel();
+            }
+        }, 250);
+    });
+
+    canvas.addEventListener('dblclick', e => {
+        if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+        if (hoveredMesh && hoveredMesh.userData.hasSub) {
+            closePropPanel();
+            cancelConnection();
+            enterNode(hoveredMesh);
+        }
+    });
+
+    window.addEventListener('keydown', e => {
+        const inInput = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT');
+
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            if (document.getElementById('add-palette').classList.contains('open')) {
+                closeAddPalette();
+            } else if (connectionSource) {
+                cancelConnection();
+            } else if (propPanelOpen) {
+                closePropPanel();
+            } else {
+                goBack();
+            }
+        } else if (e.key === 'Delete' && !inInput) {
+            e.preventDefault();
+            deleteSelectedNode();
+        } else if (e.key === 'Tab' && !inInput) {
+            e.preventDefault();
+            openAddPalette();
+        } else if (e.key === 'Backspace' && !propPanelOpen && !inInput) {
+            e.preventDefault();
+            goBack();
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ---- Zoom-out to go back ----
+    let zoomOutProgress = 0;  // 0 to 1, triggers goBack at 1
+    const ZOOM_OUT_THRESHOLD = 4.0;  // multiplier of level bounds size
+    const zoomIndicator = document.getElementById('zoom-indicator');
+
+    function checkZoomOut() {
+        if (animating || navigationStack.length === 0 || !currentLevel || currentLevel.meshes.length === 0) {
+            zoomOutProgress = 0;
+            zoomIndicator.classList.remove('visible');
+            return;
+        }
+
+        const bounds = computeBounds(currentLevel.meshes);
+        const camDist = camera.position.distanceTo(bounds.center);
+        const threshold = Math.max(bounds.size * ZOOM_OUT_THRESHOLD, 400);
+
+        if (camDist > threshold) {
+            const overshoot = (camDist - threshold) / (threshold * 0.5);
+            zoomOutProgress = Math.min(overshoot, 1);
+            zoomIndicator.classList.add('visible');
+            zoomIndicator.style.opacity = Math.min(zoomOutProgress * 2, 1);
+            zoomIndicator.textContent = zoomOutProgress >= 0.95 ? 'Zooming out...' : 'Zoom out more to go back...';
+
+            if (zoomOutProgress >= 1) {
+                zoomOutProgress = 0;
+                zoomIndicator.classList.remove('visible');
+                closePropPanel();
+                goBack();
+            }
+        } else {
+            zoomOutProgress = 0;
+            zoomIndicator.classList.remove('visible');
+        }
+    }
+
+    // ---- Animation loop ----
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const elapsed = clock.getElapsedTime();
+        const delta = clock.getDelta();
+
+        controls.update();
+
+        // Check zoom-out navigation
+        checkZoomOut();
+
+        // Animate nodes (gentle float)
+        if (currentLevel) {
+            currentLevel.meshes.forEach((mesh, i) => {
+                if (mesh !== selectedMesh) {
+                    mesh.position.y = mesh.userData.baseY + Math.sin(elapsed * 0.5 + i * 0.7) * 2;
+                } else {
+                    // Selected node: gentle pulse instead of float
+                    mesh.position.y = mesh.userData.baseY + Math.sin(elapsed * 1.0) * 1;
+                }
+                if (mesh.userData.ring) {
+                    mesh.userData.ring.rotation.z = elapsed * 0.3;
+                }
+            });
+
+            // Animate link particles
+            currentLevel.linkGroups.forEach(lg => {
+                const ud = lg.userData;
+                ud.t = (ud.t + ud.speed * 0.01) % 1;
+                const pt = ud.curve.getPoint(ud.t);
+                ud.particle.position.copy(pt);
+                ud.particle.material.opacity = 0.5 + Math.sin(ud.t * Math.PI) * 0.5;
+            });
+        }
+
+        // Animate umbilicals
+        scene.traverse(obj => {
+            if (obj.userData && obj.userData.torus) {
+                const phase = obj.userData.pulsePhase;
+                obj.userData.torus.scale.setScalar(1 + Math.sin(elapsed * 2 + phase) * 0.08);
+                obj.userData.disc.material.opacity = 0.1 + Math.sin(elapsed * 3 + phase) * 0.08;
+            }
+        });
+
+        renderer.render(scene, camera);
+    }
+
+    // ---- Room integration ----
+    async function loadFromRoom(roomName) {
+        try {
+            const resp = await fetch(`${BACKEND_URL}/api/room/${roomName}/model`);
+            const data = await resp.json();
+            if (data.model && data.model.nodes && data.model.nodes.length > 0) {
+                return data.model;
+            }
+        } catch(e) {}
+        return null;
+    }
+
+    // ---- Bootstrap ----
+    async function init() {
+        await loadComponentDefs();
+
+        // Check URL params for room
+        const params = new URLSearchParams(window.location.search);
+        const roomName = params.get('room');
+
+        let graphData = null;
+
+        if (roomName) {
+            graphData = await loadFromRoom(roomName);
+        }
+
+        if (!graphData) {
+            // Default demo graph
+            graphData = {
+                nodes: [
+                    { id: 1, type: 'atomic/data/input_tensor', title: 'Token Input', pos: [100, 100], properties: { batch_size: 2, seq_len: 64, dtype: 'int', vocab_size: 32000 } },
+                    { id: 2, type: 'molecular/embedding', title: 'Embedding', pos: [100, 300], properties: { vocab_size: 32000, dim: 512, init_std: 0.02 } },
+                    { id: 3, type: 'molecular/transformer_block', title: 'Transformer 1', pos: [100, 500], properties: { dim: 512, n_heads: 8, hidden_dim: 1376 } },
+                    { id: 4, type: 'molecular/transformer_block', title: 'Transformer 2', pos: [100, 700], properties: { dim: 512, n_heads: 8, hidden_dim: 1376 } },
+                    { id: 5, type: 'molecular/linear', title: 'LM Head', pos: [100, 900], properties: { in_features: 512, out_features: 32000 } },
+                    { id: 6, type: 'atomic/data/output', title: 'Logits', pos: [100, 1100], properties: { label: 'logits' } },
+                ],
+                links: [
+                    [1, 1, 0, 2, 0, 'tensor'],
+                    [2, 2, 0, 3, 0, 'tensor'],
+                    [3, 3, 0, 4, 0, 'tensor'],
+                    [4, 4, 0, 5, 0, 'tensor'],
+                    [5, 5, 0, 6, 0, 'tensor'],
+                ],
+            };
+        }
+
+        currentLevel = buildLevel(graphData, 'Model');
+        scene.add(currentLevel.group);
+        nodeMeshes = currentLevel.meshes;
+
+        // Position camera
+        const bounds = computeBounds(currentLevel.meshes);
+        const center = bounds.center;
+        const dist = Math.max(bounds.size * 1.5, 300);
+        camera.position.set(center.x, dist * 0.6, center.z + dist * 0.7);
+        controls.target.copy(center);
+        controls.update();
+
+        updateBreadcrumb();
+        updateNodeInfo();
+
+        // Hide loading
+        document.getElementById('loading').style.display = 'none';
+
+        // Fade instructions after 8s
+        setTimeout(() => {
+            document.getElementById('instructions').style.opacity = '0';
+            setTimeout(() => document.getElementById('instructions').style.display = 'none', 500);
+        }, 8000);
+
+        animate();
+    }
+
+    init();
+    </script>
+</body>
+</html>
