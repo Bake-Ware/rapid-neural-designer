@@ -45,6 +45,9 @@ GITIGNORE_CONTENT = """\
 .rnd/index.sqlite
 .rnd/index.sqlite-journal
 .rnd/index.sqlite-wal
+.rnd/auth.sqlite
+.rnd/auth.sqlite-journal
+.rnd/auth.sqlite-wal
 __pycache__/
 *.pyc
 """

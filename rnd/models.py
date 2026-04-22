@@ -484,6 +484,7 @@ class Thread:
     state: ThreadState
     created_at: str
     updated_at: str
+    citations: list[Citation] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -494,6 +495,7 @@ class Thread:
             "state": self.state.value,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "citations": [c.to_dict() for c in self.citations],
         }
 
     @classmethod
@@ -506,6 +508,7 @@ class Thread:
             state=ThreadState(data["state"]),
             created_at=data["created_at"],
             updated_at=data["updated_at"],
+            citations=[Citation.from_dict(c) for c in data.get("citations", [])],
         )
 
     @classmethod
@@ -530,13 +533,28 @@ class Statement:
     hypothesis: str
     created_at: str
     updated_at: str
+    citations: list[Citation] = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        return _serialize(asdict(self))
+        return {
+            "id": self.id,
+            "thread_id": self.thread_id,
+            "hypothesis": self.hypothesis,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "citations": [c.to_dict() for c in self.citations],
+        }
 
     @classmethod
     def from_dict(cls, data: dict) -> Statement:
-        return cls(**{f.name: data[f.name] for f in fields(cls)})
+        return cls(
+            id=data["id"],
+            thread_id=data["thread_id"],
+            hypothesis=data["hypothesis"],
+            created_at=data["created_at"],
+            updated_at=data["updated_at"],
+            citations=[Citation.from_dict(c) for c in data.get("citations", [])],
+        )
 
     @classmethod
     def create(cls, thread_id: str, hypothesis: str) -> Statement:
@@ -766,6 +784,7 @@ class Paper:
     thread_ids: list[str]
     sections: list[PaperSection]
     metadata: dict
+    citations: list[Citation]
     created_at: str
     updated_at: str
 
@@ -783,6 +802,7 @@ class Paper:
             },
             "sections": [s.to_dict() for s in self.sections],
             "metadata": self.metadata,
+            "citations": [c.to_dict() for c in self.citations],
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -801,6 +821,7 @@ class Paper:
             thread_ids=scope.get("thread_ids", []),
             sections=[PaperSection.from_dict(s) for s in data.get("sections", [])],
             metadata=data.get("metadata", {}),
+            citations=[Citation.from_dict(c) for c in data.get("citations", [])],
             created_at=data["created_at"],
             updated_at=data["updated_at"],
         )
@@ -820,6 +841,7 @@ class Paper:
             thread_ids=[],
             sections=[],
             metadata={},
+            citations=[],
             created_at=now,
             updated_at=now,
         )

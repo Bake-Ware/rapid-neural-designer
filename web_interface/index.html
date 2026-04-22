@@ -32,9 +32,17 @@
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css">
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/build/litegraph.min.js"></script>
 
-    <!-- Monaco Editor for code display -->
+    <!-- Monaco Editor for code display + paper editing -->
     <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/editor/editor.main.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+
+    <!-- KaTeX + marked.js: hide AMD define to avoid Monaco loader conflict -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <script>window.__rndDefine = window.define; window.define = undefined;</script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script>window.define = window.__rndDefine; delete window.__rndDefine;</script>
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -413,12 +421,385 @@
         }
         #room-overlay.visible { display: block; }
 
+        /* === Paper split editor === */
+        .paper-split { display: flex; height: 100%; gap: 0; }
+        .paper-split .paper-editor-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid #3e3e42; }
+        .paper-split .paper-preview-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .paper-editor-toolbar {
+            display: flex; gap: 2px; padding: 4px 8px; background: #2d2d30; border-bottom: 1px solid #3e3e42; flex-shrink: 0; flex-wrap: wrap;
+        }
+        .paper-editor-toolbar button {
+            padding: 3px 8px; font-size: 11px; background: #3e3e42; border: none; color: #ccc; border-radius: 2px; cursor: pointer; font-family: 'Consolas', monospace;
+        }
+        .paper-editor-toolbar button:hover { background: #505054; color: #fff; }
+        .paper-editor-toolbar .tb-sep { width: 1px; height: 18px; background: #555; margin: 0 4px; }
+        #paper-editor-container { flex: 1; }
+        .paper-preview-header {
+            padding: 6px 14px; background: #2d2d30; border-bottom: 1px solid #3e3e42; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0;
+        }
+        #paper-preview {
+            flex: 1; overflow-y: auto; padding: 24px 28px; background: #1a1a1a;
+            font-family: 'Georgia', 'Times New Roman', serif; font-size: 14px; line-height: 1.8; color: #d4d4d4;
+        }
+        #paper-preview h1 { font-size: 22px; margin: 20px 0 10px; color: #e0e0e0; border-bottom: 1px solid #3e3e42; padding-bottom: 6px; }
+        #paper-preview h2 { font-size: 18px; margin: 18px 0 8px; color: #e0e0e0; }
+        #paper-preview h3 { font-size: 15px; margin: 14px 0 6px; color: #d0d0d0; }
+        #paper-preview p { margin: 8px 0; }
+        #paper-preview code { background: #2d2d30; padding: 2px 5px; border-radius: 2px; font-size: 12px; font-family: 'Consolas', monospace; }
+        #paper-preview pre { background: #2d2d30; padding: 12px; border-radius: 4px; overflow-x: auto; }
+        #paper-preview pre code { background: none; padding: 0; }
+        #paper-preview blockquote { border-left: 3px solid #007acc; padding-left: 14px; color: #999; margin: 8px 0; }
+        #paper-preview .katex-display { margin: 12px 0; overflow-x: auto; }
+        #paper-preview img { max-width: 100%; border-radius: 4px; margin: 8px 0; }
+        #paper-preview table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+        #paper-preview th, #paper-preview td { border: 1px solid #3e3e42; padding: 6px 10px; text-align: left; font-size: 13px; }
+        #paper-preview th { background: #2d2d30; }
+
+        /* Paper section list in landing */
+        .paper-section-item {
+            display: flex; align-items: center; padding: 10px 14px; background: #2d2d30; border: 1px solid #3e3e42;
+            border-radius: 4px; margin-bottom: 4px; cursor: pointer; transition: border-color 0.15s; gap: 10px;
+        }
+        .paper-section-item:hover { border-color: #007acc; }
+        .paper-section-item .psi-num { color: #569cd6; font-weight: 700; font-size: 13px; width: 24px; text-align: center; flex-shrink: 0; }
+        .paper-section-item .psi-title { flex: 1; font-size: 12px; }
+        .paper-section-item .psi-type { font-size: 10px; }
+
+        /* Thread child nodes in nav */
+        .rn-child { padding-left: 14px !important; font-size: 10.5px !important; padding-top: 4px !important; padding-bottom: 4px !important; }
+        .rn-child .rn-icon { font-size: 10px !important; }
+        .rn-child:hover { background: rgba(255,255,255,0.05); }
+
+        /* Collapsible groups in nav */
+        .rn-group {
+            margin: 3px 4px 3px 0;
+            border-left: 3px solid #3e3e42;
+            border-radius: 0 4px 4px 0;
+            background: rgba(255,255,255,0.015);
+        }
+        .rn-group.depth-1 { margin-left: 14px; }
+        .rn-group.depth-2 { margin-left: 10px; background: rgba(255,255,255,0.025); }
+        .rn-group-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 8px 7px 8px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            transition: background 0.15s;
+            user-select: none;
+        }
+        .rn-group-header:hover { background: rgba(255,255,255,0.05); }
+        .rn-group-header .rn-collapse {
+            font-size: 8px;
+            color: #888;
+            transition: transform 0.2s;
+            width: 14px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .rn-group.collapsed .rn-collapse { transform: rotate(-90deg); }
+        .rn-group.collapsed .rn-group-body { display: none; }
+        .rn-group.collapsed { background: transparent; }
+        .rn-group-body { padding: 0 0 4px 4px; }
+        .rn-group-header .rn-gicon {
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        .rn-group-header .rn-glabel {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        /* Color coded left borders */
+        .rn-group.grp-project { border-left-color: #dcdcaa; }
+        .rn-group.grp-thread-open { border-left-color: #6bb5ff; }
+        .rn-group.grp-thread-resolved { border-left-color: #89d185; }
+
+        /* === Auth dialog === */
+        #auth-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 2999;
+        }
+        #auth-overlay.visible { display: block; }
+        #auth-dialog {
+            display: none;
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2d2d30;
+            border: 1px solid #3e3e42;
+            border-radius: 8px;
+            padding: 24px;
+            z-index: 3000;
+            width: 340px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+        }
+        #auth-dialog.visible { display: block; }
+        #auth-dialog h3 { margin-bottom: 16px; font-size: 15px; color: #007acc; }
+        #auth-dialog .auth-field { margin-bottom: 12px; }
+        #auth-dialog .auth-field label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 4px; }
+        #auth-dialog .auth-field input {
+            width: 100%; padding: 8px 10px; background: #1e1e1e; border: 1px solid #3e3e42;
+            border-radius: 3px; color: #fff; font-size: 13px;
+        }
+        #auth-dialog .auth-field input:focus { outline: none; border-color: #007acc; }
+        #auth-dialog .auth-error { color: #f48771; font-size: 11px; margin-bottom: 8px; min-height: 16px; }
+        #auth-dialog .auth-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+        #auth-dialog .auth-actions button { padding: 6px 16px; border-radius: 3px; font-size: 12px; }
+        #auth-dialog .auth-primary { background: #007acc; color: #fff; }
+        #auth-dialog .auth-primary:hover { background: #006bb3; }
+        #auth-dialog .auth-toggle { font-size: 11px; color: #007acc; cursor: pointer; text-align: center; margin-top: 12px; }
+        #auth-dialog .auth-toggle:hover { text-decoration: underline; }
+        #auth-user-badge {
+            display: none; align-items: center; gap: 6px; font-size: 11px; color: #ccc;
+            padding: 2px 8px; border-radius: 3px; background: rgba(255,255,255,0.05);
+        }
+        #auth-user-badge.visible { display: flex; }
+        #auth-user-badge .auth-username { color: #4ec9b0; font-weight: 600; }
+        #auth-user-badge .auth-logout { color: #888; cursor: pointer; font-size: 10px; }
+        #auth-user-badge .auth-logout:hover { color: #f48771; }
+
         /* Custom LiteGraph dark theme */
         .litegraph { background-color: #1e1e1e !important; }
         .litecontextmenu { background: #252526 !important; border: 1px solid #3e3e42 !important; }
         .litecontextmenu .litemenu-entry { color: #cccccc !important; }
         .litecontextmenu .litemenu-entry:hover { background: #007acc !important; color: white !important; }
         .litecontextmenu .litemenu-entry.disabled { color: #666 !important; pointer-events: none; }
+
+        /* === Research Tab === */
+        #research-tab { flex-direction: row; }
+        #research-nav {
+            width: 260px;
+            background: #252526;
+            border-right: 1px solid #3e3e42;
+            overflow-y: auto;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        #research-nav .rn-section {
+            border-bottom: 1px solid #3e3e42;
+        }
+        #research-nav .rn-section-header {
+            background: #2d2d30;
+            padding: 10px 14px;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        #research-nav .rn-section-header:hover { background: #3e3e42; }
+        .rn-section-header .rn-arrow { font-size: 10px; color: #888; transition: transform 0.2s; }
+        .rn-section.collapsed .rn-section-body { display: none; }
+        .rn-section.collapsed .rn-arrow { transform: rotate(-90deg); }
+        .rn-section-body { padding: 0; }
+
+        .rn-item {
+            padding: 7px 14px 7px 18px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background 0.15s;
+            border-left: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .rn-item:hover { background: #3e3e42; }
+        .rn-item.active { background: #37373d; border-left-color: #007acc; }
+        .rn-item .rn-icon {
+            width: 18px;
+            text-align: center;
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+        .rn-item .rn-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rn-item .rn-badge {
+            font-size: 9px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.08);
+            color: #888;
+        }
+        .rn-item .rn-badge.open { background: rgba(0,122,204,0.2); color: #4ec9b0; }
+        .rn-item .rn-badge.resolved { background: rgba(14,122,13,0.2); color: #89d185; }
+        .rn-item .rn-badge.complete { background: rgba(14,122,13,0.2); color: #89d185; }
+
+        .rn-add-btn {
+            padding: 5px 14px;
+            font-size: 10px;
+            color: #555;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s;
+        }
+        .rn-add-btn:hover { color: #007acc; background: rgba(0,122,204,0.08); }
+
+        #research-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #research-header {
+            background: #2d2d30;
+            padding: 12px 20px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #research-header h2 { font-size: 14px; font-weight: 600; color: #e0e0e0; }
+        #research-header .rh-actions { display: flex; gap: 6px; }
+        #research-header .rh-actions button {
+            background: #007acc;
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        #research-header .rh-actions button:hover { background: #006bb3; }
+
+        #research-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+        }
+
+        /* Research detail views */
+        .rd-field { margin-bottom: 14px; }
+        .rd-field label {
+            display: block;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        .rd-field .rd-value {
+            font-size: 13px;
+            color: #d4d4d4;
+            line-height: 1.5;
+        }
+        .rd-field input, .rd-field textarea, .rd-field select {
+            width: 100%;
+            padding: 6px 10px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 3px;
+            color: #d4d4d4;
+            font-size: 12px;
+            font-family: inherit;
+        }
+        .rd-field textarea { min-height: 80px; resize: vertical; }
+        .rd-field input:focus, .rd-field textarea:focus, .rd-field select:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+
+        .rd-card {
+            background: #2d2d30;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+        .rd-card:hover { border-color: #007acc; }
+        .rd-card h4 { font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #e0e0e0; }
+        .rd-card p { font-size: 11px; color: #999; line-height: 1.4; }
+
+        .rd-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .rd-tag {
+            display: inline-block;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            margin: 2px 4px 2px 0;
+        }
+        .rd-tag.supports { background: rgba(14,122,13,0.2); color: #89d185; }
+        .rd-tag.contradicts { background: rgba(244,135,113,0.2); color: #f48771; }
+        .rd-tag.irrelevant { background: rgba(255,255,255,0.08); color: #999; }
+        .rd-tag.weak { background: rgba(204,167,0,0.2); color: #cca700; }
+        .rd-tag.moderate { background: rgba(0,122,204,0.2); color: #6bb5ff; }
+        .rd-tag.strong { background: rgba(14,122,13,0.2); color: #89d185; }
+
+        .rd-btn-row { display: flex; gap: 8px; margin-top: 12px; }
+        .rd-btn {
+            padding: 5px 14px;
+            border-radius: 3px;
+            font-size: 11px;
+            cursor: pointer;
+            border: 1px solid #3e3e42;
+            background: #2d2d30;
+            color: #ccc;
+            transition: all 0.15s;
+        }
+        .rd-btn:hover { background: #3e3e42; color: #fff; }
+        .rd-btn.primary { background: #007acc; color: #fff; border-color: #007acc; }
+        .rd-btn.primary:hover { background: #006bb3; }
+        .rd-btn.success { background: #0e7a0d; color: #fff; border-color: #0e7a0d; }
+        .rd-btn.success:hover { background: #0c6b0b; }
+
+        /* Disclosure content area */
+        .rd-content-editor {
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 3px;
+            padding: 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            color: #d4d4d4;
+            min-height: 200px;
+            resize: vertical;
+            width: 100%;
+            line-height: 1.6;
+        }
+
+        /* Welcome / overview panel */
+        .rd-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .rd-stat-card {
+            background: #2d2d30;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 16px;
+            text-align: center;
+        }
+        .rd-stat-card .rd-stat-num {
+            font-size: 28px;
+            font-weight: 700;
+            color: #007acc;
+        }
+        .rd-stat-card .rd-stat-label {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
     </style>
 </head>
 <body>
@@ -427,6 +808,7 @@
         <button class="tab active" onclick="switchTab('graph')">Designer</button>
         <button class="tab" onclick="switchTab('code')">Code</button>
         <button class="tab" onclick="switchTab('3d')">3D</button>
+        <button class="tab" onclick="switchTab('research')">Research</button>
         <div class="toolbar-sep"></div>
         <button onclick="saveGraph()">Save</button>
         <button onclick="loadGraph()">Load</button>
@@ -442,6 +824,36 @@
         <div class="toolbar-sep"></div>
         <button onclick="copyCode()">Copy Code</button>
         <button onclick="downloadCode()">Download .py</button>
+        <div class="toolbar-sep"></div>
+        <div id="auth-user-badge">
+            <span class="auth-username" id="auth-display-name"></span>
+            <span class="auth-logout" onclick="authLogout()">logout</span>
+        </div>
+        <button id="auth-login-btn" onclick="authShowDialog()">Login</button>
+    </div>
+
+    <!-- Auth dialog -->
+    <div id="auth-overlay" class="" onclick="authHideDialog()"></div>
+    <div id="auth-dialog">
+        <h3 id="auth-dialog-title">Login</h3>
+        <div class="auth-field" id="auth-name-field" style="display:none;">
+            <label>Display Name</label>
+            <input id="auth-name-input" placeholder="Your name" autocomplete="name">
+        </div>
+        <div class="auth-field">
+            <label>Username</label>
+            <input id="auth-user-input" placeholder="Username" autocomplete="username" onkeydown="if(event.key==='Enter')authSubmit()">
+        </div>
+        <div class="auth-field">
+            <label>Password</label>
+            <input id="auth-pass-input" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')authSubmit()">
+        </div>
+        <div class="auth-error" id="auth-error"></div>
+        <div class="auth-actions">
+            <button onclick="authHideDialog()">Cancel</button>
+            <button class="auth-primary" onclick="authSubmit()" id="auth-submit-btn">Login</button>
+        </div>
+        <div class="auth-toggle" id="auth-toggle" onclick="authToggleMode()">Don't have an account? Register</div>
     </div>
 
     <!-- Room join/create dialog -->
@@ -569,6 +981,49 @@
                         <label style="display:flex;justify-content:space-between;">Bloom <span id="t3c-bloom-val">0.4</span></label>
                         <input type="range" id="t3c-bloom" min="0" max="200" value="40" step="5" oninput="t3_setBloom(+this.value/100)" style="width:100%;accent-color:#007acc;">
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Research Tab -->
+        <div id="research-tab" class="tab-content">
+            <div id="research-nav">
+                <!-- Hierarchy nav -->
+                <div class="rn-section">
+                    <div class="rn-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                        Programs <span class="rn-arrow">&#9654;</span>
+                    </div>
+                    <div class="rn-section-body" id="rn-programs"></div>
+                    <div class="rn-add-btn" onclick="rnCreateProgram()">+ Program</div>
+                </div>
+                <div class="rn-section">
+                    <div class="rn-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                        Architectures <span class="rn-arrow">&#9654;</span>
+                    </div>
+                    <div class="rn-section-body" id="rn-architectures"></div>
+                </div>
+                <div class="rn-section">
+                    <div class="rn-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                        Disclosures <span class="rn-arrow">&#9654;</span>
+                    </div>
+                    <div class="rn-section-body" id="rn-disclosures"></div>
+                    <div class="rn-add-btn" onclick="rnCreateDisclosure()">+ New Disclosure</div>
+                </div>
+                <div class="rn-section">
+                    <div class="rn-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                        Papers <span class="rn-arrow">&#9654;</span>
+                    </div>
+                    <div class="rn-section-body" id="rn-papers"></div>
+                    <div class="rn-add-btn" onclick="rnCreatePaper()">+ New Paper</div>
+                </div>
+            </div>
+            <div id="research-main">
+                <div id="research-header">
+                    <h2 id="rh-title">Research Overview</h2>
+                    <div class="rh-actions" id="rh-actions"></div>
+                </div>
+                <div id="research-body">
+                    <div id="rd-content"></div>
                 </div>
             </div>
         </div>
@@ -1554,6 +2009,940 @@
         if (tabName === 'graph') setTimeout(resizeCanvas, 50);
         if (tabName === 'code') compileGraph();
         if (tabName === '3d') setTimeout(() => t3_init(), 50);
+        if (tabName === 'research') rnRefreshAll();
+    }
+
+    // =========================================================================
+    // Research Platform UI
+    // =========================================================================
+
+    function getRndApi() { return BACKEND_URL + '/api/rnd'; }
+    let rnState = { programs: [], projects: [], threads: [], architectures: [], disclosures: [], papers: [] };
+
+    // ---- Navigation history (back button) ----
+    const rnHistory = [];
+    let rnCurrentView = null;
+    let rnPaperEditor = null; // Monaco instance for paper editing
+
+    function rnPush(viewFn, args) {
+        if (rnCurrentView) rnHistory.push(rnCurrentView);
+        rnCurrentView = { fn: viewFn, args };
+        // Push browser history state so back button works
+        history.pushState({ rn: true, idx: rnHistory.length }, '');
+    }
+
+    function rnGoBack() {
+        if (rnHistory.length === 0) { rnShowOverview(); return; }
+        rnCurrentView = rnHistory.pop();
+        rnCurrentView.fn(...rnCurrentView.args);
+    }
+
+    window.addEventListener('popstate', (e) => {
+        if (e.state && e.state.rn) { rnGoBack(); }
+    });
+
+    async function rnFetch(path, opts) {
+        const resp = await fetch(getRndApi() + path, {
+            ...opts,
+            headers: authHeaders(),
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({ error: resp.statusText }));
+            throw new Error(err.error || resp.statusText);
+        }
+        return resp.json();
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    function rnSetHeader(title, actionsHtml) {
+        document.getElementById('rh-title').textContent = title;
+        const backBtn = rnHistory.length > 0 ? '<button onclick="rnGoBack()" style="margin-right:4px;">&#8592;</button> ' : '';
+        document.getElementById('rh-actions').innerHTML = backBtn + (actionsHtml || '');
+    }
+
+    // ---- Reusable citation/disclosure attachment widget ----
+
+    function rnCitationWidget(citations, entityId) {
+        const discOptions = rnState.disclosures.map(d =>
+            '<option value="' + d.id + '">' + esc(d.title) + '</option>'
+        ).join('');
+        return `
+            <div class="rd-field" style="border-top:1px solid #3e3e42;padding-top:12px;margin-top:12px;">
+                <label>Attached Disclosures &amp; Citations (${citations.length})</label>
+            </div>
+            ${citations.map(c => {
+                if (c.disclosure_id) {
+                    const d = rnState.disclosures.find(d => d.id === c.disclosure_id);
+                    return '<div class="rd-card"><h4><span style="cursor:pointer;color:#dcdcaa;" onclick="rnShowDisclosure(\'' + c.disclosure_id + '\')">' + (d ? esc(d.title) : c.disclosure_id) + '</span> <span class="rd-tag">' + (c.relevance||'') + '</span></h4></div>';
+                }
+                const ext = c.external || {};
+                return '<div class="rd-card"><h4>' + esc(ext.title || ext.id || 'External') + ' <span class="rd-tag">' + (ext.type||'') + '</span> <span class="rd-tag">' + (ext.relevance||'') + '</span></h4></div>';
+            }).join('')}
+            <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:flex-end;">
+                <div class="rd-field" style="width:120px;margin-bottom:0;"><label>Type</label>
+                    <select id="cite-type-${entityId}" onchange="document.getElementById('cite-disc-row-${entityId}').style.display=this.value==='disclosure'?'flex':'none';document.getElementById('cite-ext-row-${entityId}').style.display=this.value!=='disclosure'?'flex':'none';">
+                        <option value="disclosure">Disclosure</option><option value="arxiv">arXiv</option><option value="doi">DOI</option><option value="url">URL</option><option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="rd-field" style="width:100px;margin-bottom:0;"><label>Relevance</label>
+                    <select id="cite-rel-${entityId}"><option value="supporting">Supporting</option><option value="originating">Originating</option><option value="contextual">Contextual</option><option value="adjacent">Adjacent</option></select>
+                </div>
+            </div>
+            <div id="cite-disc-row-${entityId}" style="display:flex;gap:8px;margin-top:4px;align-items:flex-end;">
+                <div class="rd-field" style="flex:1;margin-bottom:0;"><select id="cite-disc-${entityId}"><option value="">— pick disclosure —</option>${discOptions}</select></div>
+                <button class="rd-btn primary" onclick="rnAttachCitation('${entityId}')" style="height:30px;">Attach</button>
+            </div>
+            <div id="cite-ext-row-${entityId}" style="display:none;gap:8px;margin-top:4px;align-items:flex-end;">
+                <div class="rd-field" style="width:140px;margin-bottom:0;"><input id="cite-ext-id-${entityId}" placeholder="ID (e.g. 2401.12345)"></div>
+                <div class="rd-field" style="flex:1;margin-bottom:0;"><input id="cite-ext-title-${entityId}" placeholder="Title"></div>
+                <button class="rd-btn primary" onclick="rnAttachCitation('${entityId}')" style="height:30px;">Attach</button>
+            </div>`;
+    }
+
+    async function rnAttachCitation(entityId) {
+        const typeEl = document.getElementById('cite-type-' + entityId);
+        const relEl = document.getElementById('cite-rel-' + entityId);
+        let citData;
+        if (typeEl.value === 'disclosure') {
+            const discId = document.getElementById('cite-disc-' + entityId).value;
+            if (!discId) return;
+            citData = { disclosure_id: discId, relevance: relEl.value };
+        } else {
+            const extId = document.getElementById('cite-ext-id-' + entityId).value;
+            const extTitle = document.getElementById('cite-ext-title-' + entityId).value;
+            if (!extId && !extTitle) return;
+            citData = { external: { type: typeEl.value, id: extId, title: extTitle, relevance: relEl.value } };
+        }
+        await rnFetch('/cite/' + entityId, { method: 'POST', body: JSON.stringify(citData) });
+        // Refresh the current view — detect entity type from ID prefix
+        const prefix = entityId.split('-')[0];
+        if (prefix === 'thread') rnShowThread(entityId);
+        else if (prefix === 'stmt') rnShowStatement(entityId);
+        else if (prefix === 'exp') rnShowExperiment(entityId);
+        else if (prefix === 'find') rnShowFinding(entityId);
+        else if (prefix === 'paper') rnShowPaper(entityId);
+        else await rnRefreshAll();
+    }
+
+    function archOptions(selectedId) {
+        return '<option value="">— none —</option>' +
+            rnState.architectures.map(a =>
+                '<option value="' + a.id + '"' + (a.id === selectedId ? ' selected' : '') + '>' + esc(a.name) + ' (' + a.content_hash.substring(0,16) + '…)</option>'
+            ).join('');
+    }
+
+    function stmtOptions(statements) {
+        return '<option value="">— select —</option>' +
+            statements.map(s => '<option value="' + s.id + '">' + esc(s.hypothesis).substring(0,60) + '</option>').join('');
+    }
+
+    function threadOptions(selectedIds) {
+        const sel = new Set(selectedIds || []);
+        return rnState.threads.map(t =>
+            '<option value="' + t.id + '"' + (sel.has(t.id) ? ' selected' : '') + '>' + esc(t.question).substring(0,60) + ' [' + t.state + ']</option>'
+        ).join('');
+    }
+
+    async function rnRefreshAll() {
+        if (!authToken) {
+            document.getElementById('rn-programs').innerHTML = '';
+            document.getElementById('rn-architectures').innerHTML = '';
+            document.getElementById('rn-disclosures').innerHTML = '';
+            document.getElementById('rn-papers').innerHTML = '';
+            document.getElementById('rh-title').textContent = 'Login Required';
+            document.getElementById('rh-actions').innerHTML = '';
+            document.getElementById('rd-content').innerHTML =
+                '<div class="rd-empty" style="padding:60px 20px;">' +
+                '<p style="font-size:14px;margin-bottom:16px;">Login or register to access your research.</p>' +
+                '<button class="rd-btn primary" onclick="authShowDialog()" style="font-size:13px;padding:8px 24px;">Login / Register</button></div>';
+            return;
+        }
+        try {
+            const [programs, architectures, disclosures, papers] = await Promise.all([
+                rnFetch('/programs'), rnFetch('/architectures'), rnFetch('/disclosures'), rnFetch('/papers'),
+            ]);
+            rnState.programs = programs;
+            rnState.architectures = architectures;
+            rnState.disclosures = disclosures;
+            rnState.papers = papers;
+
+            // Load projects for all programs
+            const projArrays = await Promise.all(programs.map(p => rnFetch(`/projects?program_id=${p.id}`)));
+            rnState.projects = projArrays.flat();
+
+            // Load threads for all projects
+            const threadArrays = await Promise.all(rnState.projects.map(p => rnFetch(`/threads?project_id=${p.id}`)));
+            rnState.threads = threadArrays.flat();
+
+            // Load children for all threads upfront
+            const childArrays = await Promise.all(rnState.threads.map(t => Promise.all([
+                rnFetch('/statements?thread_id=' + t.id),
+                rnFetch('/experiments?thread_id=' + t.id),
+                rnFetch('/findings?thread_id=' + t.id),
+            ])));
+            rnState.threadChildren = {};
+            rnState.threads.forEach((t, i) => {
+                rnState.threadChildren[t.id] = { statements: childArrays[i][0], experiments: childArrays[i][1], findings: childArrays[i][2] };
+            });
+
+            rnRenderNav();
+            rnShowOverview();
+        } catch (e) {
+            console.error('RND refresh failed:', e);
+            document.getElementById('rd-content').innerHTML = `<div class="rd-empty">Failed to load: ${e.message}<br>Is the backend running?</div>`;
+        }
+    }
+
+    // ---- Nav rendering ----
+
+    function rnToggleGroup(el) {
+        el.closest('.rn-group').classList.toggle('collapsed');
+    }
+
+    function rnRenderNav() {
+        let h = '';
+        for (const prog of rnState.programs) {
+            h += '<div class="rn-item" onclick="rnShowProgram(\'' + prog.id + '\')">' +
+                '<span class="rn-icon" style="color:#569cd6;font-weight:bold;font-size:13px;">&#11042;</span>' +
+                '<span class="rn-label">' + esc(prog.name) + '</span></div>';
+
+            for (const proj of rnState.projects.filter(p => p.program_id === prog.id)) {
+                h += '<div class="rn-group depth-1 grp-project">';
+                h += '<div class="rn-group-header" onclick="rnToggleGroup(this)">' +
+                    '<span class="rn-collapse">&#9660;</span>' +
+                    '<span class="rn-gicon" style="color:#dcdcaa;">&#9881;</span>' +
+                    '<span class="rn-glabel" onclick="event.stopPropagation();rnShowProject(\'' + proj.id + '\')" style="cursor:pointer;">' + esc(proj.name) + '</span></div>';
+                h += '<div class="rn-group-body">';
+
+                const threads = rnState.threads.filter(t => t.project_id === proj.id);
+                for (const thread of threads) {
+                    const icon = thread.state === 'resolved' ? '&#10003;' : '&#10687;';
+                    const iconColor = thread.state === 'resolved' ? '#89d185' : '#6bb5ff';
+                    const grpClass = thread.state === 'resolved' ? 'grp-thread-resolved' : 'grp-thread-open';
+                    const badgeClass = thread.state === 'resolved' ? 'resolved' : 'open';
+                    const ch = rnState.threadChildren[thread.id] || { statements: [], experiments: [], findings: [] };
+                    const childCount = ch.statements.length + ch.experiments.length + ch.findings.length;
+
+                    h += '<div class="rn-group depth-2 ' + grpClass + '">';
+                    h += '<div class="rn-group-header" onclick="rnToggleGroup(this)">' +
+                        '<span class="rn-collapse">&#9660;</span>' +
+                        '<span class="rn-gicon" style="color:' + iconColor + ';">' + icon + '</span>' +
+                        '<span class="rn-glabel" onclick="event.stopPropagation();rnShowThread(\'' + thread.id + '\')" style="cursor:pointer;">' + esc(thread.question) + '</span>' +
+                        '<span class="rn-badge ' + badgeClass + '">' + thread.state + '</span></div>';
+                    h += '<div class="rn-group-body">';
+
+                    for (const s of ch.statements) {
+                        h += '<div class="rn-item rn-child" onclick="rnShowStatement(\'' + s.id + '\',\'' + thread.id + '\')">' +
+                            '<span class="rn-icon" style="color:#ce9178;">H</span>' +
+                            '<span class="rn-label">' + esc(s.hypothesis).substring(0,45) + '</span></div>';
+                    }
+                    for (const e of ch.experiments) {
+                        const ec = e.status === 'complete' ? '#89d185' : e.status === 'running' ? '#cca700' : '#888';
+                        h += '<div class="rn-item rn-child" onclick="rnShowExperiment(\'' + e.id + '\')">' +
+                            '<span class="rn-icon" style="color:' + ec + ';">&#9658;</span>' +
+                            '<span class="rn-label">' + esc(e.hypothesis || 'Experiment').substring(0,40) + '</span>' +
+                            '<span class="rn-badge ' + e.status + '">' + e.status + '</span></div>';
+                    }
+                    for (const f of ch.findings) {
+                        h += '<div class="rn-item rn-child" onclick="rnShowFinding(\'' + f.id + '\')">' +
+                            '<span class="rn-icon" style="color:#89d185;">&#10004;</span>' +
+                            '<span class="rn-label">' + esc(f.summary).substring(0,40) + '</span></div>';
+                    }
+                    if (childCount === 0) {
+                        h += '<div class="rn-item rn-child" style="color:#555;font-style:italic;">empty</div>';
+                    }
+
+                    h += '</div></div>'; // close thread group-body + group
+                }
+                h += '<div class="rn-add-btn" onclick="rnCreateThread(\'' + proj.id + '\')">+ Thread</div>';
+                h += '</div></div>'; // close project group-body + group
+            }
+            h += '<div class="rn-add-btn" style="margin-left:14px;" onclick="rnCreateProject(\'' + prog.id + '\')">+ Project</div>';
+        }
+        document.getElementById('rn-programs').innerHTML = h;
+
+        // Architectures — with import button
+        document.getElementById('rn-architectures').innerHTML =
+            '<div class="rn-add-btn" onclick="rnImportCurrentGraph()">&#8681; Import Current Graph</div>' +
+            rnState.architectures.map(a => '<div class="rn-item" onclick="rnShowArchitecture(\'' + a.id + '\')"><span class="rn-icon" style="color:#c586c0;">&#9632;</span><span class="rn-label">' + esc(a.name) + '</span></div>').join('');
+
+        // Disclosures
+        document.getElementById('rn-disclosures').innerHTML =
+            rnState.disclosures.map(d => '<div class="rn-item" onclick="rnShowDisclosure(\'' + d.id + '\')"><span class="rn-icon" style="color:#dcdcaa;">&#9998;</span><span class="rn-label">' + esc(d.title) + '</span><span class="rn-badge">' + d.type + '</span></div>').join('');
+
+        // Papers
+        document.getElementById('rn-papers').innerHTML =
+            rnState.papers.map(p => '<div class="rn-item" onclick="rnShowPaper(\'' + p.id + '\')"><span class="rn-icon" style="color:#89d185;">&#9776;</span><span class="rn-label">' + esc(p.title) + '</span><span class="rn-badge">' + p.status + '</span></div>').join('');
+    }
+
+    // ---- Overview ----
+
+    function rnShowOverview() {
+        document.getElementById('rh-title').textContent = 'Research Overview';
+        document.getElementById('rh-actions').innerHTML = '';
+        const c = document.getElementById('rd-content');
+        c.innerHTML = `
+            <div class="rd-overview">
+                <div class="rd-stat-card"><div class="rd-stat-num">${rnState.programs.length}</div><div class="rd-stat-label">Programs</div></div>
+                <div class="rd-stat-card"><div class="rd-stat-num">${rnState.projects.length}</div><div class="rd-stat-label">Projects</div></div>
+                <div class="rd-stat-card"><div class="rd-stat-num">${rnState.threads.length}</div><div class="rd-stat-label">Threads</div></div>
+                <div class="rd-stat-card"><div class="rd-stat-num">${rnState.architectures.length}</div><div class="rd-stat-label">Architectures</div></div>
+                <div class="rd-stat-card"><div class="rd-stat-num">${rnState.disclosures.length}</div><div class="rd-stat-label">Disclosures</div></div>
+                <div class="rd-stat-card"><div class="rd-stat-num">${rnState.papers.length}</div><div class="rd-stat-label">Papers</div></div>
+            </div>`;
+    }
+
+    // ---- Detail views ----
+
+    async function rnShowProgram(id) {
+        rnPush(rnShowProgram, [id]);
+        const prog = rnState.programs.find(p => p.id === id);
+        if (!prog) return;
+        const projects = rnState.projects.filter(p => p.program_id === id);
+        rnSetHeader(prog.name, `<button onclick="rnCreateProject('${id}')">+ Project</button>`);
+        document.getElementById('rd-content').innerHTML = `
+            <div class="rd-field"><label>Description</label><div class="rd-value">${esc(prog.description) || '<em style="color:#666">No description</em>'}</div></div>
+            <div class="rd-field"><label>Projects (${projects.length})</label></div>
+            ${projects.map(p => `<div class="rd-card" onclick="rnShowProject('${p.id}')"><h4>${esc(p.name)}</h4><p>${esc(p.description) || 'No description'}</p></div>`).join('')}
+            ${projects.length === 0 ? '<div class="rd-empty">No projects yet. Create one to start tracking research.</div>' : ''}`;
+    }
+
+    async function rnShowProject(id) {
+        rnPush(rnShowProject, [id]);
+        const proj = rnState.projects.find(p => p.id === id);
+        if (!proj) return;
+        const threads = rnState.threads.filter(t => t.project_id === id);
+        rnSetHeader(proj.name, `<button onclick="rnCreateThread('${id}')">+ Thread</button>`);
+        document.getElementById('rd-content').innerHTML = `
+            <div class="rd-field"><label>Description</label><div class="rd-value">${esc(proj.description) || '<em style="color:#666">No description</em>'}</div></div>
+            <div class="rd-field"><label>Threads (${threads.length})</label></div>
+            ${threads.map(t => `<div class="rd-card" onclick="rnShowThread('${t.id}')">
+                <h4>${esc(t.question)} <span class="rd-tag ${t.state}">${t.state}</span></h4>
+                <p>${esc(t.resolution_criterion) || ''}</p>
+            </div>`).join('')}
+            ${threads.length === 0 ? '<div class="rd-empty">No threads yet. A thread is a research question you want to answer.</div>' : ''}`;
+    }
+
+    async function rnShowThread(id) {
+        rnPush(rnShowThread, [id]);
+        let thread = rnState.threads.find(t => t.id === id);
+        if (!thread) return;
+        const [fullThread, statements, experiments, findings] = await Promise.all([
+            rnFetch('/threads/' + id),
+            rnFetch(`/statements?thread_id=${id}`),
+            rnFetch(`/experiments?thread_id=${id}`),
+            rnFetch(`/findings?thread_id=${id}`),
+        ]);
+        thread = fullThread; // use full thread with citations
+
+        const stateBtn = (thread.state === 'open' || thread.state === 'reopened')
+            ? `<button onclick="rnCreateFinding('${id}')">+ Finding &amp; Resolve</button>`
+            : `<button onclick="rnReopenThread('${id}')">Reopen</button>`;
+        rnSetHeader(thread.question, `<button onclick="rnCreateStatement('${id}')">+ Statement</button> <button onclick="rnCreateExperiment('${id}')">+ Experiment</button> ${stateBtn}`);
+
+        const c = document.getElementById('rd-content');
+        c.innerHTML = `
+            <div class="rd-field"><label>State</label><div class="rd-value"><span class="rd-tag ${thread.state}">${thread.state}</span></div></div>
+            <div class="rd-field"><label>Resolution Criterion</label><div class="rd-value">${esc(thread.resolution_criterion) || '<em style="color:#666">None set</em>'}</div></div>
+
+            <div class="rd-field"><label>Statements / Hypotheses (${statements.length})</label></div>
+            ${statements.map(s => `<div class="rd-card" onclick="rnShowStatement('${s.id}', '${id}')">
+                <h4>${esc(s.hypothesis)}</h4>
+                <p style="font-family:monospace;font-size:10px;color:#666;">${s.id}</p>
+            </div>`).join('')}
+            <div class="rd-btn-row"><button class="rd-btn" onclick="rnCreateStatement('${id}')">+ Statement</button></div>
+
+            <div class="rd-field" style="margin-top:20px;"><label>Experiments (${experiments.length})</label></div>
+            ${experiments.map(e => `<div class="rd-card" onclick="rnShowExperiment('${e.id}')">
+                <h4>${esc(e.hypothesis) || 'Experiment'} <span class="rd-tag ${e.status}">${e.status}</span></h4>
+                <p>${e.imported ? '<span class="rd-tag">imported</span> ' : ''}${esc(e.interpretation || '')}</p>
+            </div>`).join('')}
+            <div class="rd-btn-row"><button class="rd-btn" onclick="rnCreateExperiment('${id}')">+ Experiment</button></div>
+
+            <div class="rd-field" style="margin-top:20px;"><label>Findings (${findings.length})</label></div>
+            ${findings.map(f => `<div class="rd-card" onclick="rnShowFinding('${f.id}')">
+                <h4>${esc(f.summary)}</h4>
+                <p>${esc(f.reasoning).substring(0, 120)}${f.reasoning.length > 120 ? '...' : ''}</p>
+            </div>`).join('')}
+            ${rnCitationWidget(thread.citations || [], id)}`;
+    }
+
+    async function rnShowStatement(id, threadId) {
+        rnPush(rnShowStatement, [id, threadId]);
+        const stmt = await rnFetch(`/statements/${id}`);
+        const tid = threadId || stmt.thread_id;
+        const experiments = await rnFetch(`/experiments?thread_id=${tid}`);
+        const evidence = [];
+        for (const exp of experiments) {
+            for (const ev of (exp.evidence || [])) {
+                if (ev.statement_id === id) evidence.push({ ...ev, experiment: exp });
+            }
+        }
+        const unlinked = experiments.filter(exp => !(exp.evidence||[]).some(ev => ev.statement_id === id));
+        rnSetHeader('Statement', `<button onclick="rnShowThread('${tid}')">&#8592; Back to Thread</button>`);
+        const c = document.getElementById('rd-content');
+        c.innerHTML = `
+            <div class="rd-field"><label>Hypothesis</label><div class="rd-value" style="font-size:14px;">${esc(stmt.hypothesis)}</div></div>
+            <div class="rd-field" style="margin-top:16px;"><label>Evidence (${evidence.length})</label></div>
+            ${evidence.map(ev => `<div class="rd-card">
+                <h4><span style="cursor:pointer;color:#007acc;" onclick="rnShowExperiment('${ev.experiment.id}')">${esc(ev.experiment.hypothesis || 'Experiment')}</span></h4>
+                <p><span class="rd-tag ${ev.sign}">${ev.sign}</span> <span class="rd-tag ${ev.strength}">${ev.strength}</span>${ev.note ? ' — ' + esc(ev.note) : ''}</p>
+            </div>`).join('')}
+            ${evidence.length === 0 ? '<div class="rd-empty">No experiments linked as evidence yet.</div>' : ''}
+            ${unlinked.length > 0 ? `
+            <div class="rd-field" style="margin-top:20px;border-top:1px solid #3e3e42;padding-top:16px;"><label>Link Experiment as Evidence</label></div>
+            <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                <div class="rd-field" style="flex:1;min-width:180px;margin-bottom:0;"><label>Experiment</label>
+                    <select id="ev-exp-select">${unlinked.map(e => '<option value="' + e.id + '">' + esc(e.hypothesis || e.id).substring(0,50) + '</option>').join('')}</select>
+                </div>
+                <div class="rd-field" style="width:120px;margin-bottom:0;"><label>Sign</label>
+                    <select id="ev-sign-select"><option value="supports">Supports</option><option value="contradicts">Contradicts</option><option value="irrelevant">Irrelevant</option></select>
+                </div>
+                <div class="rd-field" style="width:120px;margin-bottom:0;"><label>Strength</label>
+                    <select id="ev-strength-select"><option value="moderate">Moderate</option><option value="strong">Strong</option><option value="weak">Weak</option></select>
+                </div>
+                <div class="rd-field" style="flex:1;min-width:140px;margin-bottom:0;"><label>Note</label>
+                    <input id="ev-note-input" placeholder="Why does this evidence matter?">
+                </div>
+                <button class="rd-btn primary" onclick="rnAttachEvidence('${id}','${tid}')" style="height:30px;">Link</button>
+            </div>` : ''}`;
+    }
+
+    async function rnAttachEvidence(stmtId, threadId) {
+        const expId = document.getElementById('ev-exp-select').value;
+        await rnFetch('/experiments/' + expId + '/evidence', {
+            method: 'POST',
+            body: JSON.stringify({
+                statement_id: stmtId,
+                sign: document.getElementById('ev-sign-select').value,
+                strength: document.getElementById('ev-strength-select').value,
+                note: document.getElementById('ev-note-input').value,
+            }),
+        });
+        rnShowStatement(stmtId, threadId);
+    }
+
+    async function rnShowExperiment(id) {
+        rnPush(rnShowExperiment, [id]);
+        const exp = await rnFetch(`/experiments/${id}`);
+        const statements = await rnFetch(`/statements?thread_id=${exp.thread_id}`);
+        const archRef = (exp.inputs.architecture_ref || '').replace('architectures/', '').replace('.json', '');
+        const arch = rnState.architectures.find(a => a.id === archRef);
+        const metrics = exp.observed ? JSON.stringify(exp.observed.metrics, null, 2) : '';
+        const statusFlow = { planned: 'running', running: 'complete' };
+        const nextStatus = statusFlow[exp.status];
+
+        rnSetHeader(exp.hypothesis || 'Experiment', `<button onclick="rnShowThread('${exp.thread_id}')">&#8592; Back to Thread</button>`);
+        const c = document.getElementById('rd-content');
+        c.innerHTML = `
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+                <div class="rd-field" style="margin-bottom:0;"><label>Status</label>
+                    <div class="rd-value"><span class="rd-tag ${exp.status}">${exp.status}</span>${exp.imported ? ' <span class="rd-tag">imported</span>' : ''}
+                        ${nextStatus ? ` <button class="rd-btn success" onclick="rnSetExpStatus('${id}','${nextStatus}')" style="margin-left:8px;">&#9654; Mark ${nextStatus}</button>` : ''}
+                        ${exp.status !== 'complete' && exp.status !== 'abandoned' ? ` <button class="rd-btn" onclick="rnSetExpStatus('${id}','abandoned')" style="margin-left:4px;">Abandon</button>` : ''}
+                    </div>
+                </div>
+            </div>
+            <div class="rd-field"><label>Hypothesis</label><div class="rd-value">${esc(exp.hypothesis) || '<em style="color:#666">None</em>'}</div></div>
+            <div class="rd-field"><label>Expected Outcome</label><div class="rd-value">${esc(exp.expected) || '<em style="color:#666">None</em>'}</div></div>
+
+            <div class="rd-field" style="border-top:1px solid #3e3e42;padding-top:12px;"><label>Architecture</label>
+                ${arch
+                    ? `<div class="rd-value"><span style="cursor:pointer;color:#007acc;" onclick="rnShowArchitecture('${arch.id}')">${esc(arch.name)}</span> <span style="font-family:monospace;font-size:10px;color:#666;">${arch.content_hash.substring(0,24)}…</span></div>`
+                    : `<div style="display:flex;gap:8px;align-items:flex-end;"><div class="rd-field" style="flex:1;margin-bottom:0;"><select id="exp-arch-select">${archOptions(archRef)}</select></div><button class="rd-btn primary" onclick="rnLinkArchToExp('${id}')" style="height:30px;">Link</button></div>`}
+            </div>
+
+            <div class="rd-field" style="border-top:1px solid #3e3e42;padding-top:12px;"><label>Observed Metrics</label>
+                <textarea class="rd-content-editor" id="exp-metrics" style="min-height:80px;font-family:monospace;">${esc(metrics)}</textarea>
+                <div class="rd-btn-row"><button class="rd-btn" onclick="rnSaveExpMetrics('${id}')">Save Metrics</button></div>
+            </div>
+
+            <div class="rd-field"><label>Interpretation</label>
+                <textarea class="rd-content-editor" id="exp-interp" style="min-height:60px;">${esc(exp.interpretation || '')}</textarea>
+                <div class="rd-btn-row"><button class="rd-btn" onclick="rnSaveExpInterp('${id}')">Save Interpretation</button></div>
+            </div>
+
+            <div class="rd-field" style="border-top:1px solid #3e3e42;padding-top:12px;"><label>Evidence Links (${(exp.evidence||[]).length})</label></div>
+            ${(exp.evidence||[]).map(ev => {
+                const s = statements.find(s => s.id === ev.statement_id);
+                return `<div class="rd-card"><h4><span style="cursor:pointer;color:#007acc;" onclick="rnShowStatement('${ev.statement_id}','${exp.thread_id}')">${s ? esc(s.hypothesis).substring(0,60) : ev.statement_id}</span></h4><p><span class="rd-tag ${ev.sign}">${ev.sign}</span> <span class="rd-tag ${ev.strength}">${ev.strength}</span>${ev.note ? ' — ' + esc(ev.note) : ''}</p></div>`;
+            }).join('')}
+
+            ${statements.length > 0 ? `
+            <div class="rd-field" style="margin-top:12px;"><label>Add Evidence Link</label></div>
+            <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                <div class="rd-field" style="flex:1;min-width:180px;margin-bottom:0;"><select id="ev2-stmt-select">${stmtOptions(statements)}</select></div>
+                <div class="rd-field" style="width:110px;margin-bottom:0;"><select id="ev2-sign"><option value="supports">Supports</option><option value="contradicts">Contradicts</option><option value="irrelevant">Irrelevant</option></select></div>
+                <div class="rd-field" style="width:110px;margin-bottom:0;"><select id="ev2-str"><option value="moderate">Moderate</option><option value="strong">Strong</option><option value="weak">Weak</option></select></div>
+                <div class="rd-field" style="flex:1;min-width:140px;margin-bottom:0;"><input id="ev2-note" placeholder="Note"></div>
+                <button class="rd-btn primary" onclick="rnAttachEvidenceFromExp('${id}')" style="height:30px;">Link</button>
+            </div>` : ''}`;
+    }
+
+    async function rnSetExpStatus(id, status) {
+        await rnFetch('/experiments/' + id, { method: 'PATCH', body: JSON.stringify({ status }) });
+        rnShowExperiment(id);
+    }
+    async function rnLinkArchToExp(expId) {
+        const archId = document.getElementById('exp-arch-select').value;
+        if (!archId) return;
+        const arch = rnState.architectures.find(a => a.id === archId);
+        await rnFetch('/experiments/' + expId, { method: 'PATCH', body: JSON.stringify({
+            inputs: { architecture_ref: 'architectures/' + archId + '.json', architecture_hash: arch ? arch.content_hash : '' },
+        }) });
+        rnShowExperiment(expId);
+    }
+    async function rnSaveExpMetrics(id) {
+        const raw = document.getElementById('exp-metrics').value.trim();
+        let metrics = {};
+        if (raw) { try { metrics = JSON.parse(raw); } catch { alert('Invalid JSON'); return; } }
+        await rnFetch('/experiments/' + id, { method: 'PATCH', body: JSON.stringify({ observed: { metrics, artifact_refs: [] } }) });
+        rnShowExperiment(id);
+    }
+    async function rnSaveExpInterp(id) {
+        await rnFetch('/experiments/' + id, { method: 'PATCH', body: JSON.stringify({ interpretation: document.getElementById('exp-interp').value }) });
+        rnShowExperiment(id);
+    }
+    async function rnAttachEvidenceFromExp(expId) {
+        const stmtId = document.getElementById('ev2-stmt-select').value;
+        if (!stmtId) return;
+        await rnFetch('/experiments/' + expId + '/evidence', { method: 'POST', body: JSON.stringify({
+            statement_id: stmtId, sign: document.getElementById('ev2-sign').value,
+            strength: document.getElementById('ev2-str').value, note: document.getElementById('ev2-note').value,
+        }) });
+        rnShowExperiment(expId);
+    }
+
+    async function rnShowFinding(id) {
+        rnPush(rnShowFinding, [id]);
+        const finding = await rnFetch(`/findings/${id}`);
+        document.getElementById('rh-title').textContent = 'Finding';
+        document.getElementById('rh-actions').innerHTML = '';
+        const c = document.getElementById('rd-content');
+        c.innerHTML = `
+            <div class="rd-field"><label>Summary</label><div class="rd-value">${esc(finding.summary)}</div></div>
+            <div class="rd-field"><label>Reasoning</label><div class="rd-value" style="white-space:pre-wrap;">${esc(finding.reasoning)}</div></div>
+            <div class="rd-field"><label>Statement Resolutions</label></div>
+            ${(finding.statement_resolutions||[]).map(r => `<div class="rd-card">
+                <h4>${r.statement_id} <span class="rd-tag">${r.resolution}</span></h4>
+                <p>${esc(r.note || '')}</p>
+            </div>`).join('')}
+            <div class="rd-field"><label>Experiment References</label></div>
+            ${(finding.experiment_refs||[]).map(ref => `<div class="rd-card" onclick="rnShowExperiment('${ref}')"><h4>${ref}</h4></div>`).join('')}`;
+    }
+
+    async function rnShowArchitecture(id) {
+        rnPush(rnShowArchitecture, [id]);
+        const arch = await rnFetch(`/architectures/${id}`);
+        const nodeCount = (arch.content.nodes || []).length;
+        const linkCount = (arch.content.links || []).length;
+        const types = [...new Set((arch.content.nodes||[]).map(n => n.type))];
+        rnSetHeader(arch.name, `<button onclick="rnLoadArchInEditor('${id}')">Open in Designer</button>${!arch.archived ? ` <button onclick="rnArchiveArch('${id}')">Archive</button>` : ''}`);
+        document.getElementById('rd-content').innerHTML = `
+            <div class="rd-field"><label>Content Hash</label><div class="rd-value" style="font-family:monospace;font-size:11px;color:#888;">${arch.content_hash}</div></div>
+            <div class="rd-field"><label>Structure</label><div class="rd-value">${nodeCount} nodes, ${linkCount} links</div></div>
+            ${arch.variant_of ? `<div class="rd-field"><label>Variant Of</label><div class="rd-value"><span style="cursor:pointer;color:#007acc;" onclick="rnShowArchitecture('${arch.variant_of}')">${arch.variant_of}</span></div></div>` : ''}
+            ${arch.archived ? '<div class="rd-field"><div class="rd-value"><span class="rd-tag contradicts">Archived</span></div></div>' : ''}
+            <div class="rd-field"><label>Node Types</label><div class="rd-value">${types.map(t => '<span class="rd-tag">' + t + '</span>').join(' ')}</div></div>
+            <div class="rd-field" style="border-top:1px solid #3e3e42;padding-top:12px;"><label>Create Variant from Current Graph</label></div>
+            <div style="display:flex;gap:8px;">
+                <input id="arch-variant-name" placeholder="Variant name" style="flex:1;padding:6px 10px;background:#1e1e1e;border:1px solid #3e3e42;border-radius:3px;color:#d4d4d4;font-size:12px;">
+                <button class="rd-btn" onclick="rnCreateVariant('${id}')">Create Variant</button>
+            </div>`;
+    }
+
+    async function rnLoadArchInEditor(id) {
+        const arch = await rnFetch(`/architectures/${id}`);
+        if (arch && arch.content) { activeGraph().configure(arch.content); switchTabDirect('graph'); }
+    }
+    async function rnImportCurrentGraph() {
+        const name = prompt('Architecture name:');
+        if (!name) return;
+        const content = activeGraph().serialize();
+        const arch = await rnFetch('/architectures', { method: 'POST', body: JSON.stringify({ name, content }) });
+        await rnRefreshAll();
+        rnShowArchitecture(arch.id);
+    }
+    async function rnCreateVariant(parentId) {
+        const name = document.getElementById('arch-variant-name').value.trim();
+        if (!name) { alert('Enter a variant name'); return; }
+        const content = activeGraph().serialize();
+        const arch = await rnFetch('/architectures', { method: 'POST', body: JSON.stringify({ name, content, variant_of: parentId }) });
+        await rnRefreshAll();
+        rnShowArchitecture(arch.id);
+    }
+    async function rnArchiveArch(id) {
+        if (!confirm('Archive this architecture?')) return;
+        await rnFetch('/architectures/' + id + '/archive', { method: 'POST' });
+        await rnRefreshAll();
+    }
+
+    function switchTabDirect(tabName) {
+        document.querySelectorAll('.tab').forEach(t => {
+            t.classList.toggle('active', t.textContent.trim().toLowerCase() === (tabName === 'graph' ? 'designer' : tabName));
+        });
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        const tabId = tabName === '3d' ? '3d-tab' : tabName + '-tab';
+        document.getElementById(tabId).classList.add('active');
+        if (tabName === 'graph') setTimeout(resizeCanvas, 50);
+    }
+
+    async function rnShowDisclosure(id) {
+        rnPush(rnShowDisclosure, [id]);
+        const disc = await rnFetch(`/disclosures/${id}?include_content=true`);
+        document.getElementById('rh-title').textContent = disc.title;
+        document.getElementById('rh-actions').innerHTML = `<button onclick="rnSaveDisclosureContent('${id}')">Save</button>`;
+        const c = document.getElementById('rd-content');
+        c.innerHTML = `
+            <div class="rd-field"><label>Type</label><div class="rd-value"><span class="rd-tag">${disc.type}</span></div></div>
+            <div class="rd-field"><label>Visibility</label><div class="rd-value">${disc.visibility}</div></div>
+            <div class="rd-field"><label>Tags</label><div class="rd-value">${(disc.tags||[]).map(t => `<span class="rd-tag">${esc(t)}</span>`).join(' ') || '<em style="color:#666">None</em>'}</div></div>
+            ${disc.source && disc.source.url ? `<div class="rd-field"><label>Source</label><div class="rd-value"><a href="${esc(disc.source.url)}" target="_blank" style="color:#007acc;">${esc(disc.source.url)}</a></div></div>` : ''}
+            <div class="rd-field"><label>Content</label></div>
+            <textarea class="rd-content-editor" id="disc-content-editor">${esc(disc.content || '')}</textarea>`;
+    }
+
+    async function rnSaveDisclosureContent(id) {
+        const content = document.getElementById('disc-content-editor').value;
+        await fetch(`${getRndApi()}/disclosures/${id}/content`, {
+            method: 'PUT',
+            body: content,
+            headers: { 'Content-Type': 'text/plain' },
+        });
+        document.getElementById('rh-title').textContent += ' (saved)';
+        setTimeout(() => { const t = document.getElementById('rh-title'); t.textContent = t.textContent.replace(' (saved)', ''); }, 1500);
+    }
+
+    async function rnShowPaper(id) {
+        rnPush(rnShowPaper, [id]);
+        const paper = await rnFetch('/papers/' + id);
+        const scopeThreads = paper.scope?.thread_ids || [];
+        // Fetch all section content for full preview
+        const sectionContents = await Promise.all(
+            (paper.sections || []).map(s =>
+                fetch(getRndApi() + '/papers/' + id + '/sections/' + s.id + '/content').then(r => r.text())
+            )
+        );
+        rnSetHeader(paper.title, '<button onclick="rnEditPaperScope(\'' + id + '\')">Edit Scope</button>');
+        document.getElementById('rd-content').innerHTML =
+            '<div class="paper-split" style="height:calc(100vh - 140px);">' +
+                '<div class="paper-editor-pane" style="overflow-y:auto;padding:12px 14px;">' +
+                    '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">' +
+                        '<div class="rd-field" style="margin-bottom:0;"><label>Status</label><div class="rd-value"><span class="rd-tag ' + paper.status + '">' + paper.status + '</span></div></div>' +
+                        '<div class="rd-field" style="margin-bottom:0;"><label>Target</label><div class="rd-value">' + paper.target + '</div></div>' +
+                        '<div class="rd-field" style="margin-bottom:0;"><label>Authors</label><div class="rd-value">' + ((paper.authors||[]).join(', ') || '<em style="color:#666">None</em>') + '</div></div>' +
+                    '</div>' +
+                    '<div class="rd-field" style="border-top:1px solid #3e3e42;padding-top:8px;"><label>Scope — Threads (' + scopeThreads.length + ')</label></div>' +
+                    scopeThreads.map(function(tid) {
+                        var t = rnState.threads.find(function(th) { return th.id === tid; });
+                        return '<div class="rd-card" onclick="rnShowThread(\'' + tid + '\')"><h4>' + (t ? esc(t.question) : tid) + ' <span class="rd-tag ' + (t?.state||'') + '">' + (t?.state||'?') + '</span></h4></div>';
+                    }).join('') +
+                    (scopeThreads.length === 0 ? '<div class="rd-empty">No threads linked yet.</div>' : '') +
+                    '<div class="rd-field" style="border-top:1px solid #3e3e42;padding-top:8px;margin-top:8px;"><label>Sections (' + (paper.sections||[]).length + ')</label></div>' +
+                    (paper.sections||[]).map(function(s, i) {
+                        return '<div class="paper-section-item" onclick="rnEditSection(\'' + id + '\',\'' + s.id + '\')">' +
+                            '<span class="psi-num">' + (i+1) + '</span>' +
+                            '<span class="psi-title">' + esc(s.title) + '</span>' +
+                            '<span class="rd-tag psi-type">' + s.type + '</span>' +
+                            '<button class="rd-btn" onclick="event.stopPropagation();rnDeleteSection(\'' + id + '\',\'' + s.id + '\')" style="font-size:10px;color:#f48771;padding:2px 6px;">&#10005;</button>' +
+                        '</div>';
+                    }).join('') +
+                    '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:flex-end;">' +
+                        '<div class="rd-field" style="flex:1;min-width:140px;margin-bottom:0;"><label>New Section</label><input id="new-sec-title" placeholder="Section title"></div>' +
+                        '<div class="rd-field" style="width:130px;margin-bottom:0;"><label>Type</label>' +
+                            '<select id="new-sec-type"><option value="abstract">Abstract</option><option value="introduction">Introduction</option><option value="method">Method</option><option value="results">Results</option><option value="discussion">Discussion</option><option value="related_work">Related Work</option><option value="other">Other</option></select>' +
+                        '</div>' +
+                        '<button class="rd-btn primary" onclick="rnAddSection(\'' + id + '\')" style="height:30px;">+ Add</button>' +
+                    '</div>' +
+                    rnCitationWidget(paper.citations || [], id) +
+                    '<div class="rd-btn-row" style="border-top:1px solid #3e3e42;padding-top:12px;">' +
+                        (paper.status === 'draft' ? '<button class="rd-btn primary" onclick="rnSetPaperStatus(\'' + id + '\',\'review\')">Submit for Review</button>' : '') +
+                        (paper.status === 'review' ? '<button class="rd-btn success" onclick="rnSetPaperStatus(\'' + id + '\',\'published\')">Publish</button> <button class="rd-btn" onclick="rnSetPaperStatus(\'' + id + '\',\'draft\')">Back to Draft</button>' : '') +
+                        (paper.status === 'published' ? '<button class="rd-btn" onclick="rnSetPaperStatus(\'' + id + '\',\'retracted\')">Retract</button>' : '') +
+                    '</div>' +
+                '</div>' +
+                '<div class="paper-preview-pane">' +
+                    '<div class="paper-preview-header">Full Paper Preview</div>' +
+                    '<div id="paper-preview"></div>' +
+                '</div>' +
+            '</div>';
+        // Render full preview from all sections
+        var fullMd = '# ' + esc(paper.title) + '\n\n' +
+            (paper.authors||[]).join(', ') + '\n\n---\n\n' +
+            (paper.sections||[]).map(function(s, i) { return '## ' + s.title + '\n\n' + (sectionContents[i] || '*(empty)*'); }).join('\n\n');
+        var previewEl = document.getElementById('paper-preview');
+        if (previewEl && typeof marked !== 'undefined') {
+            previewEl.innerHTML = marked.parse(fullMd);
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(previewEl, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false },
+                    ],
+                    throwOnError: false,
+                });
+            }
+        }
+    }
+
+    async function rnEditSection(paperId, sectionId) {
+        rnPush(rnEditSection, [paperId, sectionId]);
+        const paper = await rnFetch('/papers/' + paperId);
+        const section = (paper.sections||[]).find(s => s.id === sectionId);
+        if (!section) return;
+        const resp = await fetch(getRndApi() + '/papers/' + paperId + '/sections/' + sectionId + '/content');
+        const content = await resp.text();
+
+        // Replace entire research-body with split view
+        rnSetHeader(section.title + ' — ' + paper.title,
+            `<button onclick="rnSaveSectionEditor('${paperId}','${sectionId}')">Save</button>`);
+
+        document.getElementById('rd-content').innerHTML = `
+            <div class="paper-split" style="height:calc(100vh - 140px);">
+                <div class="paper-editor-pane">
+                    <div class="paper-editor-toolbar">
+                        <button onclick="rnInsertTex('**','**')" title="Bold"><b>B</b></button>
+                        <button onclick="rnInsertTex('*','*')" title="Italic"><i>I</i></button>
+                        <button onclick="rnInsertTex('$','$')" title="Inline math">$x$</button>
+                        <button onclick="rnInsertTex(String.fromCharCode(10)+&quot;$$&quot;+String.fromCharCode(10),String.fromCharCode(10)+&quot;$$&quot;+String.fromCharCode(10))" title="Display math">$$</button>
+                        <div class="tb-sep"></div>
+                        <button onclick="rnInsertTex('# ','')" title="Heading 1">H1</button>
+                        <button onclick="rnInsertTex('## ','')" title="Heading 2">H2</button>
+                        <button onclick="rnInsertTex('### ','')" title="Heading 3">H3</button>
+                        <div class="tb-sep"></div>
+                        <button onclick="rnInsertTex('- ','')" title="List">List</button>
+                        <button onclick="rnInsertTex('1. ','')" title="Numbered">1.</button>
+                        <button onclick="rnInsertTex('> ','')" title="Quote">Quote</button>
+                        <button onclick="rnInsertTex(String.fromCharCode(10,92)+'begin{equation}'+String.fromCharCode(10),String.fromCharCode(10,92)+'end{equation}'+String.fromCharCode(10))" title="Equation block">Eq</button>
+                        <button onclick="rnInsertTex(String.fromCharCode(92)+'frac{','}{}')" title="Fraction">a/b</button>
+                        <button onclick="rnInsertTex(String.fromCharCode(92)+'sum_{','}')" title="Sum">Sum</button>
+                        <div class="tb-sep"></div>
+                        <button onclick="rnInsertTex('![caption](',')')" title="Image">Img</button>
+                        <button onclick="rnInsertTex('[','](url)')" title="Link">Link</button>
+                        <button onclick="rnInsertTex(String.fromCharCode(96,96,96,10),String.fromCharCode(10,96,96,96))" title="Code block">Code</button>
+                    </div>
+                    <div id="paper-editor-container"></div>
+                </div>
+                <div class="paper-preview-pane">
+                    <div class="paper-preview-header">Live Preview</div>
+                    <div id="paper-preview"></div>
+                </div>
+            </div>`;
+
+        // Create Monaco editor for LaTeX/Markdown
+        if (rnPaperEditor) { rnPaperEditor.dispose(); rnPaperEditor = null; }
+
+        // Register LaTeX-markdown language if not already
+        if (!monaco.languages.getLanguages().some(l => l.id === 'latex-md')) {
+            monaco.languages.register({ id: 'latex-md' });
+            monaco.languages.setMonarchTokensProvider('latex-md', {
+                tokenizer: {
+                    root: [
+                        [/^\s*#{1,6}\s.*$/, 'keyword'],           // headings
+                        [/\*\*[^*]+\*\*/, 'strong'],              // bold
+                        [/\*[^*]+\*/, 'emphasis'],                 // italic
+                        [/\$\$[\s\S]*?\$\$/, 'string'],           // display math
+                        [/\$[^$]+\$/, 'string'],                   // inline math
+                        [/\\[a-zA-Z]+/, 'tag'],                    // LaTeX commands
+                        [/\{/, 'delimiter.curly'],
+                        [/\}/, 'delimiter.curly'],
+                        [/^\s*[-*+]\s/, 'keyword'],               // list items
+                        [/^\s*\d+\.\s/, 'keyword'],               // numbered list
+                        [/^\s*>/, 'comment'],                      // blockquote
+                        [/\[([^\]]+)\]\([^)]+\)/, 'string.link'], // links
+                        [/!\[([^\]]*)\]\([^)]+\)/, 'string.link'],// images
+                        [/`[^`]+`/, 'variable'],                   // inline code
+                        [/```/, { token: 'string', next: '@codeblock' }],
+                    ],
+                    codeblock: [
+                        [/```/, { token: 'string', next: '@pop' }],
+                        [/.*/, 'variable'],
+                    ],
+                },
+            });
+        }
+
+        rnPaperEditor = monaco.editor.create(document.getElementById('paper-editor-container'), {
+            value: content,
+            language: 'latex-md',
+            theme: 'vs-dark',
+            minimap: { enabled: false },
+            wordWrap: 'on',
+            lineNumbers: 'on',
+            fontSize: 13,
+            lineHeight: 22,
+            padding: { top: 8 },
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+        });
+
+        // Live preview update
+        let previewTimer = null;
+        function updatePreview() {
+            const text = rnPaperEditor.getValue();
+            const previewEl = document.getElementById('paper-preview');
+            if (!previewEl) return;
+            try {
+                previewEl.innerHTML = marked.parse(text);
+                renderMathInElement(previewEl, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false },
+                        { left: '\\\\(', right: '\\\\)', display: false },
+                        { left: '\\\\[', right: '\\\\]', display: true },
+                    ],
+                    throwOnError: false,
+                });
+            } catch (e) { /* ignore render errors during typing */ }
+        }
+        rnPaperEditor.onDidChangeModelContent(() => {
+            clearTimeout(previewTimer);
+            previewTimer = setTimeout(updatePreview, 300);
+        });
+        updatePreview();
+
+        // Ctrl+S to save
+        rnPaperEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+            rnSaveSectionEditor(paperId, sectionId);
+        });
+    }
+
+    function rnInsertTex(before, after) {
+        if (!rnPaperEditor) return;
+        const sel = rnPaperEditor.getSelection();
+        const text = rnPaperEditor.getModel().getValueInRange(sel);
+        rnPaperEditor.executeEdits('toolbar', [{
+            range: sel,
+            text: before + text + after,
+        }]);
+        rnPaperEditor.focus();
+    }
+
+    async function rnSaveSectionEditor(paperId, sectionId) {
+        if (!rnPaperEditor) return;
+        const content = rnPaperEditor.getValue();
+        await fetch(getRndApi() + '/papers/' + paperId + '/sections/' + sectionId + '/content', { method: 'PUT', body: content, headers: { 'Content-Type': 'text/plain' } });
+        const t = document.getElementById('rh-title');
+        const orig = t.textContent;
+        t.textContent = orig + ' — saved';
+        setTimeout(() => { t.textContent = orig; }, 1500);
+    }
+
+    async function rnAddSection(paperId) {
+        const title = document.getElementById('new-sec-title').value.trim();
+        if (!title) return;
+        const type = document.getElementById('new-sec-type').value;
+        await rnFetch('/papers/' + paperId + '/sections', { method: 'POST', body: JSON.stringify({ title, type, content: '' }) });
+        rnShowPaper(paperId);
+    }
+
+    async function rnDeleteSection(paperId, sectionId) {
+        if (!confirm('Delete this section?')) return;
+        await rnFetch('/papers/' + paperId + '/sections/' + sectionId, { method: 'DELETE' });
+        rnShowPaper(paperId);
+    }
+    async function rnEditPaperScope(paperId) {
+        const paper = await rnFetch('/papers/' + paperId);
+        const current = new Set(paper.scope?.thread_ids || []);
+        rnSetHeader('Edit Paper Scope', `<button onclick="rnShowPaper('${paperId}')">&#8592; Back</button>`);
+        document.getElementById('rd-content').innerHTML = `
+            <div class="rd-field"><label>Select Threads to Include</label>
+                <select id="paper-threads" multiple size="${Math.min(rnState.threads.length + 1, 12)}" style="width:100%;padding:6px;background:#1e1e1e;border:1px solid #3e3e42;border-radius:3px;color:#d4d4d4;font-size:12px;">
+                    ${threadOptions(current)}
+                </select>
+                <p style="font-size:10px;color:#666;margin-top:4px;">Hold Ctrl/Cmd to select multiple.</p>
+            </div>
+            <div class="rd-btn-row"><button class="rd-btn primary" onclick="rnSavePaperScope('${paperId}')">Save Scope</button></div>`;
+    }
+    async function rnSavePaperScope(paperId) {
+        const sel = document.getElementById('paper-threads');
+        const threadIds = Array.from(sel.selectedOptions).map(o => o.value);
+        await rnFetch('/papers/' + paperId, { method: 'PATCH', body: JSON.stringify({ thread_ids: threadIds }) });
+        rnShowPaper(paperId);
+    }
+    async function rnSetPaperStatus(id, status) {
+        await rnFetch('/papers/' + id, { method: 'PATCH', body: JSON.stringify({ status }) });
+        rnShowPaper(id);
+    }
+
+    // ---- Create dialogs (simple prompt-based for MVP) ----
+
+    async function rnCreateProgram() {
+        const name = prompt('Program name:');
+        if (!name) return;
+        const desc = prompt('Description (optional):') || '';
+        await rnFetch('/programs', { method: 'POST', body: JSON.stringify({ name, description: desc }) });
+        await rnRefreshAll();
+    }
+
+    async function rnCreateProject(programId) {
+        const name = prompt('Project name:');
+        if (!name) return;
+        const desc = prompt('Description (optional):') || '';
+        await rnFetch('/projects', { method: 'POST', body: JSON.stringify({ name, program_id: programId, description: desc }) });
+        await rnRefreshAll();
+    }
+
+    async function rnCreateThread(projectId) {
+        const question = prompt('Research question:');
+        if (!question) return;
+        const criterion = prompt('Resolution criterion (optional):') || '';
+        const thread = await rnFetch('/threads', { method: 'POST', body: JSON.stringify({ question, project_id: projectId, resolution_criterion: criterion }) });
+        await rnRefreshAll();
+        rnShowThread(thread.id);
+    }
+
+    async function rnCreateStatement(threadId) {
+        const hypothesis = prompt('Hypothesis:');
+        if (!hypothesis) return;
+        await rnFetch('/statements', { method: 'POST', body: JSON.stringify({ hypothesis, thread_id: threadId }) });
+        rnShowThread(threadId);
+    }
+
+    async function rnCreateExperiment(threadId) {
+        const hypothesis = prompt('Experiment hypothesis (what are you testing?):');
+        if (!hypothesis) return;
+        const exp = await rnFetch('/experiments', { method: 'POST', body: JSON.stringify({
+            thread_id: threadId, hypothesis,
+            inputs: { architecture_ref: '', architecture_hash: '' },
+        }) });
+        rnShowExperiment(exp.id);
+    }
+
+    async function rnCreateFinding(threadId) {
+        const summary = prompt('Finding summary (what did you conclude?):');
+        if (!summary) return;
+        const reasoning = prompt('Reasoning (how did you reach this conclusion?):') || '';
+        await rnFetch('/findings', { method: 'POST', body: JSON.stringify({
+            thread_id: threadId, summary, reasoning, resolve_thread: true,
+        }) });
+        await rnRefreshAll();
+        rnShowThread(threadId);
+    }
+
+    async function rnReopenThread(threadId) {
+        await rnFetch(`/threads/${threadId}`, { method: 'PATCH', body: JSON.stringify({ state: 'reopened' }) });
+        await rnRefreshAll();
+        rnShowThread(threadId);
+    }
+
+    async function rnCreateDisclosure() {
+        const title = prompt('Disclosure title:');
+        if (!title) return;
+        const type = prompt('Type (claude-transcript, personal-note, meeting-notes, other):', 'other') || 'other';
+        const disc = await rnFetch('/disclosures', { method: 'POST', body: JSON.stringify({ title, type, content: '' }) });
+        await rnRefreshAll();
+        rnShowDisclosure(disc.id);
+    }
+
+    async function rnCreatePaper() {
+        const title = prompt('Paper title:');
+        if (!title) return;
+        const target = prompt('Target (arxiv, conference, journal, internal_report):', 'arxiv') || 'arxiv';
+        const paper = await rnFetch('/papers', { method: 'POST', body: JSON.stringify({ title, target, authors: ['user-bake'] }) });
+        await rnRefreshAll();
+        rnShowPaper(paper.id);
     }
 
     // ---- File Operations ----
@@ -1631,10 +3020,134 @@
 
     // ---- Backend Execution ----
 
-    // Backend URL: use subdomain for remote access, port 5000 for local
-    const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://localhost:5000'
+    // Backend URL: same origin when served by unified backend, fallback for remote
+    // Backend URL: same origin for local dev and rnd.bake.systems, separate subdomain only for other remote hosts
+    const BACKEND_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.endsWith('.bake.systems'))
+        ? window.location.origin
         : `https://rndbackend.bake.systems`;
+
+    // =========================================================================
+    // Auth
+    // =========================================================================
+
+    let authToken = localStorage.getItem('rnd_token') || null;
+    let authUser = null;
+    let authMode = 'login'; // 'login' or 'register'
+
+    function authHeaders() {
+        const h = { 'Content-Type': 'application/json' };
+        if (authToken) h['Authorization'] = 'Bearer ' + authToken;
+        return h;
+    }
+
+    async function authCheckSession() {
+        if (!authToken) { authUpdateUI(); return; }
+        try {
+            const resp = await fetch(BACKEND_URL + '/api/auth/me', { headers: authHeaders() });
+            const data = await resp.json();
+            if (data.user) {
+                authUser = data.user;
+            } else {
+                authToken = null;
+                authUser = null;
+                localStorage.removeItem('rnd_token');
+            }
+        } catch { authToken = null; authUser = null; }
+        authUpdateUI();
+    }
+
+    function authUpdateUI() {
+        const badge = document.getElementById('auth-user-badge');
+        const loginBtn = document.getElementById('auth-login-btn');
+        if (authUser) {
+            badge.classList.add('visible');
+            document.getElementById('auth-display-name').textContent = authUser.display_name || authUser.username;
+            loginBtn.style.display = 'none';
+        } else {
+            badge.classList.remove('visible');
+            loginBtn.style.display = '';
+        }
+    }
+
+    function authShowDialog() {
+        authMode = 'login';
+        authRenderDialog();
+        document.getElementById('auth-overlay').classList.add('visible');
+        document.getElementById('auth-dialog').classList.add('visible');
+        document.getElementById('auth-user-input').focus();
+    }
+
+    function authHideDialog() {
+        document.getElementById('auth-overlay').classList.remove('visible');
+        document.getElementById('auth-dialog').classList.remove('visible');
+        document.getElementById('auth-error').textContent = '';
+    }
+
+    function authToggleMode() {
+        authMode = authMode === 'login' ? 'register' : 'login';
+        authRenderDialog();
+    }
+
+    function authRenderDialog() {
+        document.getElementById('auth-dialog-title').textContent = authMode === 'login' ? 'Login' : 'Register';
+        document.getElementById('auth-submit-btn').textContent = authMode === 'login' ? 'Login' : 'Register';
+        document.getElementById('auth-name-field').style.display = authMode === 'register' ? '' : 'none';
+        document.getElementById('auth-toggle').textContent = authMode === 'login'
+            ? "Don't have an account? Register"
+            : "Already have an account? Login";
+        document.getElementById('auth-error').textContent = '';
+    }
+
+    async function authSubmit() {
+        const username = document.getElementById('auth-user-input').value.trim();
+        const password = document.getElementById('auth-pass-input').value;
+        const errorEl = document.getElementById('auth-error');
+
+        if (!username || !password) { errorEl.textContent = 'Username and password required'; return; }
+
+        const url = BACKEND_URL + '/api/auth/' + authMode;
+        const body = { username, password };
+        if (authMode === 'register') {
+            body.display_name = document.getElementById('auth-name-input').value.trim() || username;
+        }
+
+        try {
+            const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await resp.json();
+            if (!resp.ok) { errorEl.textContent = data.error || 'Failed'; return; }
+            authToken = data.token;
+            authUser = data.user;
+            localStorage.setItem('rnd_token', authToken);
+            authHideDialog();
+            authUpdateUI();
+            // Clear inputs
+            document.getElementById('auth-user-input').value = '';
+            document.getElementById('auth-pass-input').value = '';
+            document.getElementById('auth-name-input').value = '';
+            // Refresh research tab if active
+            if (document.getElementById('research-tab').classList.contains('active')) {
+                rnRefreshAll();
+            }
+        } catch (e) {
+            errorEl.textContent = 'Connection error';
+        }
+    }
+
+    async function authLogout() {
+        if (authToken) {
+            fetch(BACKEND_URL + '/api/auth/logout', { method: 'POST', headers: authHeaders() }).catch(() => {});
+        }
+        authToken = null;
+        authUser = null;
+        localStorage.removeItem('rnd_token');
+        authUpdateUI();
+        if (document.getElementById('research-tab').classList.contains('active')) {
+            rnRefreshAll();
+        }
+    }
+
+    // Check session on page load
+    authCheckSession();
 
     async function runCode() {
         const code = monacoEditor ? monacoEditor.getValue() : '';
@@ -2692,7 +4205,7 @@
         return 0x666666;
     }
 
-    let t3 = null;
+    var t3 = null;
 
     function t3_init() {
         const canvas = document.getElementById('canvas3d');

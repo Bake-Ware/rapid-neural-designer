@@ -1,7 +1,7 @@
 """
-Simple Flask backend for executing generated Neural VM code
-Provides sandboxed execution with timeout and resource limits
-Includes room-based collaboration via SocketIO
+RND Platform Backend
+Serves the visual editor (rooms, code execution) and the research platform API
+(programs, projects, threads, experiments, findings, architectures, papers, disclosures).
 """
 
 import os
@@ -12,13 +12,165 @@ import time
 import json
 import random
 from pathlib import Path
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO, join_room, leave_room
 
-app = Flask(__name__)
+# Add parent dir to path so we can import the rnd package
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from rnd.canonical import canonicalize, content_hash
+from rnd.index import DerivedIndex
+from rnd.models import (
+    Architecture, Artifact, ArtifactCategory, Citation,
+    Disclosure, DisclosureType, EvidenceLink, EvidenceSign, EvidenceStrength,
+    Experiment, ExperimentInputs, ExperimentStatus,
+    Finding, FindingResolution, ObservedResults,
+    Paper, PaperStatus, PaperSection, SectionType,
+    Program, Project, Statement, StatementResolution,
+    Team, Thread, ThreadState, Visibility, now_iso, generate_id,
+)
+from rnd.repo import RNDRepo
+from rnd.auth import AuthDB
+from functools import wraps
+
+STATIC_DIR = Path(__file__).resolve().parent
+
+app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+auth_db: AuthDB = None  # type: ignore
+
+
+def get_current_user():
+    """Extract user from Authorization header. Returns user dict or None."""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        return auth_db.validate_token(token)
+    return None
+
+
+def require_auth(f):
+    """Decorator: require valid auth token for a route."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            return jsonify({"error": "Authentication required"}), 401
+        request.user = user
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.before_request
+def protect_rnd_routes():
+    """All /api/rnd/* routes require authentication."""
+    if request.path.startswith('/api/rnd/'):
+        user = get_current_user()
+        if not user:
+            return jsonify({"error": "Authentication required"}), 401
+        request.user = user
+
+
+# ---------------------------------------------------------------------------
+# Static file serving (replaces the old python -m http.server 8089)
+# ---------------------------------------------------------------------------
+
+@app.route("/")
+def serve_index():
+    return send_from_directory(STATIC_DIR, "index.html")
+
+@app.route("/3d.html")
+def serve_3d():
+    return send_from_directory(STATIC_DIR, "3d.html")
+
+# ---------------------------------------------------------------------------
+# Auth API
+# ---------------------------------------------------------------------------
+
+@app.route('/api/auth/register', methods=['POST'])
+def auth_register():
+    data = request.get_json()
+    if not data or not data.get('username') or not data.get('password'):
+        return api_error("'username' and 'password' required")
+    if len(data['username']) < 3:
+        return api_error("Username must be at least 3 characters")
+    if len(data['password']) < 4:
+        return api_error("Password must be at least 4 characters")
+    user = auth_db.register(
+        username=data['username'],
+        password=data['password'],
+        display_name=data.get('display_name', ''),
+    )
+    if not user:
+        return api_error("Username already taken", 409)
+    # Auto-login after registration
+    result = auth_db.login(data['username'], data['password'])
+    return jsonify(result), 201
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def auth_login():
+    data = request.get_json()
+    if not data or not data.get('username') or not data.get('password'):
+        return api_error("'username' and 'password' required")
+    result = auth_db.login(data['username'], data['password'])
+    if not result:
+        return api_error("Invalid username or password", 401)
+    return jsonify(result)
+
+
+@app.route('/api/auth/me', methods=['GET'])
+def auth_me():
+    user = get_current_user()
+    if not user:
+        return jsonify({"user": None})
+    return jsonify({"user": user})
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def auth_logout():
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        auth_db.logout(auth_header[7:])
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# RND Platform init
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+rnd_repo = RNDRepo(REPO_ROOT)
+rnd_index: DerivedIndex | None = None
+
+def init_platform():
+    """Initialize the RND repo, auth DB, and derived index on startup."""
+    global rnd_index, auth_db
+    if not rnd_repo.is_initialized():
+        rnd_repo.init(team_name="Bake Research", user_id="user-bake")
+        print("[RND] Initialized new repository")
+    # Auth database
+    auth_db = AuthDB(rnd_repo.rnd_dir / "auth.sqlite")
+    auth_db.open()
+    print("[RND] Auth ready")
+    rnd_index = DerivedIndex(rnd_repo.index_path)
+    rnd_index.open()
+    rnd_index.rebuild(rnd_repo.root)
+    print(f"[RND] Platform ready — repo at {rnd_repo.root}")
+
+def ensure_index():
+    if rnd_index and rnd_index.conn is None:
+        rnd_index.open()
+
+def api_error(msg: str, status: int = 400):
+    return jsonify({"error": msg}), status
 
 # ---- Room System ----
 
@@ -524,13 +676,571 @@ def validate_xml():
         }), 500
 
 
+# ======================================================================
+# RND Platform API (SDD §9.1)
+# ======================================================================
+
+# ---- Team ----
+
+@app.route('/api/rnd/team', methods=['GET'])
+def rnd_get_team():
+    teams = rnd_repo.list_entities("team")
+    if not teams:
+        return api_error("No team configured", 404)
+    return jsonify(teams[0].to_dict())
+
+
+# ---- Programs ----
+
+@app.route('/api/rnd/programs', methods=['GET'])
+def rnd_list_programs():
+    return jsonify([p.to_dict() for p in rnd_repo.list_entities("program")])
+
+@app.route('/api/rnd/programs', methods=['POST'])
+def rnd_create_program():
+    data = request.get_json()
+    if not data or "name" not in data:
+        return api_error("'name' required")
+    teams = rnd_repo.list_entities("team")
+    if not teams:
+        return api_error("No team configured", 500)
+    prog = Program.create(team_id=teams[0].id, name=data["name"],
+                          description=data.get("description", ""))
+    rnd_repo.save(prog)
+    return jsonify(prog.to_dict()), 201
+
+@app.route('/api/rnd/programs/<program_id>', methods=['GET'])
+def rnd_get_program(program_id):
+    prog = rnd_repo.load("program", program_id)
+    if not prog:
+        return api_error("Program not found", 404)
+    return jsonify(prog.to_dict())
+
+
+# ---- Projects ----
+
+@app.route('/api/rnd/projects', methods=['GET'])
+def rnd_list_projects():
+    program_id = request.args.get("program_id")
+    projects = rnd_repo.list_entities("project")
+    if program_id:
+        projects = [p for p in projects if p.program_id == program_id]
+    return jsonify([p.to_dict() for p in projects])
+
+@app.route('/api/rnd/projects', methods=['POST'])
+def rnd_create_project():
+    data = request.get_json()
+    if not data or "name" not in data or "program_id" not in data:
+        return api_error("'name' and 'program_id' required")
+    proj = Project.create(program_id=data["program_id"], name=data["name"],
+                          description=data.get("description", ""))
+    rnd_repo.save(proj)
+    return jsonify(proj.to_dict()), 201
+
+@app.route('/api/rnd/projects/<project_id>', methods=['GET'])
+def rnd_get_project(project_id):
+    proj = rnd_repo.load("project", project_id)
+    if not proj:
+        return api_error("Project not found", 404)
+    return jsonify(proj.to_dict())
+
+
+# ---- Threads ----
+
+@app.route('/api/rnd/threads', methods=['GET'])
+def rnd_list_threads():
+    project_id = request.args.get("project_id")
+    threads = rnd_repo.list_entities("thread")
+    if project_id:
+        threads = [t for t in threads if t.project_id == project_id]
+    return jsonify([t.to_dict() for t in threads])
+
+@app.route('/api/rnd/threads', methods=['POST'])
+def rnd_create_thread():
+    data = request.get_json()
+    if not data or "question" not in data or "project_id" not in data:
+        return api_error("'question' and 'project_id' required")
+    thread = Thread.create(project_id=data["project_id"], question=data["question"],
+                           resolution_criterion=data.get("resolution_criterion", ""))
+    rnd_repo.save(thread)
+    return jsonify(thread.to_dict()), 201
+
+@app.route('/api/rnd/threads/<thread_id>', methods=['GET'])
+def rnd_get_thread(thread_id):
+    thread = rnd_repo.load("thread", thread_id)
+    if not thread:
+        return api_error("Thread not found", 404)
+    return jsonify(thread.to_dict())
+
+@app.route('/api/rnd/threads/<thread_id>', methods=['PATCH'])
+def rnd_update_thread(thread_id):
+    thread = rnd_repo.load("thread", thread_id)
+    if not thread:
+        return api_error("Thread not found", 404)
+    data = request.get_json()
+    if "state" in data:
+        thread.state = ThreadState(data["state"])
+    if "question" in data:
+        thread.question = data["question"]
+    if "resolution_criterion" in data:
+        thread.resolution_criterion = data["resolution_criterion"]
+    thread.updated_at = now_iso()
+    rnd_repo.save(thread)
+    return jsonify(thread.to_dict())
+
+
+# ---- Statements ----
+
+@app.route('/api/rnd/statements', methods=['GET'])
+def rnd_list_statements():
+    thread_id = request.args.get("thread_id")
+    stmts = rnd_repo.list_entities("statement")
+    if thread_id:
+        stmts = [s for s in stmts if s.thread_id == thread_id]
+    return jsonify([s.to_dict() for s in stmts])
+
+@app.route('/api/rnd/statements', methods=['POST'])
+def rnd_create_statement():
+    data = request.get_json()
+    if not data or "hypothesis" not in data or "thread_id" not in data:
+        return api_error("'hypothesis' and 'thread_id' required")
+    stmt = Statement.create(thread_id=data["thread_id"], hypothesis=data["hypothesis"])
+    rnd_repo.save(stmt)
+    return jsonify(stmt.to_dict()), 201
+
+@app.route('/api/rnd/statements/<statement_id>', methods=['GET'])
+def rnd_get_statement(statement_id):
+    stmt = rnd_repo.load("statement", statement_id)
+    if not stmt:
+        return api_error("Statement not found", 404)
+    return jsonify(stmt.to_dict())
+
+
+# ---- Experiments ----
+
+@app.route('/api/rnd/experiments', methods=['GET'])
+def rnd_list_experiments():
+    thread_id = request.args.get("thread_id")
+    exps = rnd_repo.list_entities("experiment")
+    if thread_id:
+        exps = [e for e in exps if e.thread_id == thread_id]
+    return jsonify([e.to_dict() for e in exps])
+
+@app.route('/api/rnd/experiments', methods=['POST'])
+def rnd_create_experiment():
+    data = request.get_json()
+    if not data or "thread_id" not in data or "inputs" not in data:
+        return api_error("'thread_id' and 'inputs' required")
+    inputs = ExperimentInputs.from_dict(data["inputs"])
+    exp = Experiment.create(
+        thread_id=data["thread_id"],
+        created_by=data.get("created_by", "user-bake"),
+        inputs=inputs,
+        hypothesis=data.get("hypothesis", ""),
+        expected=data.get("expected", ""),
+        method=data.get("method", {}),
+        imported=data.get("imported", False),
+    )
+    if data.get("status"):
+        exp.status = ExperimentStatus(data["status"])
+    if data.get("observed"):
+        exp.observed = ObservedResults.from_dict(data["observed"])
+    if data.get("interpretation"):
+        exp.interpretation = data["interpretation"]
+    rnd_repo.save(exp)
+    return jsonify(exp.to_dict()), 201
+
+@app.route('/api/rnd/experiments/<experiment_id>', methods=['GET'])
+def rnd_get_experiment(experiment_id):
+    exp = rnd_repo.load("experiment", experiment_id)
+    if not exp:
+        return api_error("Experiment not found", 404)
+    return jsonify(exp.to_dict())
+
+@app.route('/api/rnd/experiments/<experiment_id>', methods=['PATCH'])
+def rnd_update_experiment(experiment_id):
+    exp = rnd_repo.load("experiment", experiment_id)
+    if not exp:
+        return api_error("Experiment not found", 404)
+    data = request.get_json()
+    if "status" in data:
+        exp.status = ExperimentStatus(data["status"])
+    if "observed" in data:
+        exp.observed = ObservedResults.from_dict(data["observed"])
+    if "interpretation" in data:
+        exp.interpretation = data["interpretation"]
+    if "evidence" in data:
+        exp.evidence = [EvidenceLink.from_dict(e) for e in data["evidence"]]
+    exp.updated_at = now_iso()
+    rnd_repo.save(exp)
+    return jsonify(exp.to_dict())
+
+@app.route('/api/rnd/experiments/<experiment_id>/evidence', methods=['POST'])
+def rnd_attach_evidence(experiment_id):
+    exp = rnd_repo.load("experiment", experiment_id)
+    if not exp:
+        return api_error("Experiment not found", 404)
+    data = request.get_json()
+    if not data or "statement_id" not in data or "sign" not in data:
+        return api_error("'statement_id' and 'sign' required")
+    link = EvidenceLink(
+        statement_id=data["statement_id"],
+        sign=EvidenceSign(data["sign"]),
+        strength=EvidenceStrength(data.get("strength", "moderate")),
+        note=data.get("note", ""),
+    )
+    exp.evidence.append(link)
+    exp.updated_at = now_iso()
+    rnd_repo.save(exp)
+    return jsonify(link.to_dict()), 201
+
+
+# ---- Findings ----
+
+@app.route('/api/rnd/findings', methods=['GET'])
+def rnd_list_findings():
+    thread_id = request.args.get("thread_id")
+    findings = rnd_repo.list_entities("finding")
+    if thread_id:
+        findings = [f for f in findings if f.thread_id == thread_id]
+    return jsonify([f.to_dict() for f in findings])
+
+@app.route('/api/rnd/findings', methods=['POST'])
+def rnd_create_finding():
+    data = request.get_json()
+    if not data or "thread_id" not in data or "summary" not in data:
+        return api_error("'thread_id' and 'summary' required")
+    resolutions = []
+    for r in data.get("statement_resolutions", []):
+        resolutions.append(StatementResolution(
+            statement_id=r["statement_id"],
+            resolution=FindingResolution(r["resolution"]),
+            note=r.get("note", ""),
+        ))
+    finding = Finding.create(
+        thread_id=data["thread_id"],
+        summary=data["summary"],
+        reasoning=data.get("reasoning", ""),
+        statement_resolutions=resolutions,
+        experiment_refs=data.get("experiment_refs", []),
+    )
+    rnd_repo.save(finding)
+    if data.get("resolve_thread", False):
+        thread = rnd_repo.load("thread", data["thread_id"])
+        if thread:
+            thread.state = ThreadState.RESOLVED
+            thread.updated_at = now_iso()
+            rnd_repo.save(thread)
+    return jsonify(finding.to_dict()), 201
+
+@app.route('/api/rnd/findings/<finding_id>', methods=['GET'])
+def rnd_get_finding(finding_id):
+    finding = rnd_repo.load("finding", finding_id)
+    if not finding:
+        return api_error("Finding not found", 404)
+    return jsonify(finding.to_dict())
+
+
+# ---- Architectures ----
+
+@app.route('/api/rnd/architectures', methods=['GET'])
+def rnd_list_architectures():
+    archs = rnd_repo.list_entities("architecture")
+    include_archived = request.args.get("include_archived", "false").lower() == "true"
+    if not include_archived:
+        archs = [a for a in archs if not a.archived]
+    return jsonify([a.to_dict() for a in archs])
+
+@app.route('/api/rnd/architectures', methods=['POST'])
+def rnd_import_architecture():
+    data = request.get_json()
+    if not data or "content" not in data:
+        return api_error("'content' required")
+    arch = rnd_repo.import_architecture(
+        name=data.get("name", "unnamed"),
+        content=data["content"],
+        variant_of=data.get("variant_of"),
+    )
+    return jsonify(arch.to_dict()), 201
+
+@app.route('/api/rnd/architectures/<architecture_id>', methods=['GET'])
+def rnd_get_architecture(architecture_id):
+    arch = rnd_repo.load("architecture", architecture_id)
+    if not arch:
+        return api_error("Architecture not found", 404)
+    return jsonify(arch.to_dict())
+
+@app.route('/api/rnd/architectures/<architecture_id>/archive', methods=['POST'])
+def rnd_archive_architecture(architecture_id):
+    if rnd_repo.archive("architecture", architecture_id):
+        return jsonify({"archived": True})
+    return api_error("Architecture not found", 404)
+
+@app.route('/api/rnd/architectures/by-hash/<path:hash_value>', methods=['GET'])
+def rnd_get_architecture_by_hash(hash_value):
+    arch = rnd_repo.find_architecture_by_hash(hash_value)
+    if not arch:
+        return api_error("Architecture not found for hash", 404)
+    return jsonify(arch.to_dict())
+
+
+# ---- Papers ----
+
+@app.route('/api/rnd/papers', methods=['GET'])
+def rnd_list_papers():
+    return jsonify([p.to_dict() for p in rnd_repo.list_entities("paper")])
+
+@app.route('/api/rnd/papers', methods=['POST'])
+def rnd_create_paper():
+    data = request.get_json()
+    if not data or "title" not in data:
+        return api_error("'title' required")
+    paper = Paper.create(title=data["title"], authors=data.get("authors", []),
+                         program_id=data.get("program_id", ""),
+                         target=data.get("target", "arxiv"))
+    if data.get("project_ids"):
+        paper.project_ids = data["project_ids"]
+    if data.get("thread_ids"):
+        paper.thread_ids = data["thread_ids"]
+    rnd_repo.save(paper)
+    return jsonify(paper.to_dict()), 201
+
+@app.route('/api/rnd/papers/<paper_id>', methods=['GET'])
+def rnd_get_paper(paper_id):
+    paper = rnd_repo.load("paper", paper_id)
+    if not paper:
+        return api_error("Paper not found", 404)
+    return jsonify(paper.to_dict())
+
+@app.route('/api/rnd/papers/<paper_id>', methods=['PATCH'])
+def rnd_update_paper(paper_id):
+    paper = rnd_repo.load("paper", paper_id)
+    if not paper:
+        return api_error("Paper not found", 404)
+    data = request.get_json()
+    for field in ["title", "authors", "thread_ids", "project_ids"]:
+        if field in data:
+            setattr(paper, field, data[field])
+    if "status" in data:
+        paper.status = PaperStatus(data["status"])
+    if "metadata" in data:
+        paper.metadata.update(data["metadata"])
+    paper.updated_at = now_iso()
+    rnd_repo.save(paper)
+    return jsonify(paper.to_dict())
+
+
+# ---- Paper Sections ----
+
+@app.route('/api/rnd/papers/<paper_id>/sections', methods=['POST'])
+def rnd_add_paper_section(paper_id):
+    paper = rnd_repo.load("paper", paper_id)
+    if not paper:
+        return api_error("Paper not found", 404)
+    data = request.get_json()
+    if not data or "title" not in data:
+        return api_error("'title' required")
+    section_id = generate_id("sec")
+    section = PaperSection(
+        id=section_id,
+        section_type=SectionType(data.get("type", "other")),
+        title=data["title"],
+        content_ref=f"papers/{paper_id}/sections/{section_id}.md",
+        bindings=[],
+    )
+    paper.sections.append(section)
+    paper.updated_at = now_iso()
+    rnd_repo.save(paper)
+    # Write initial content
+    content = data.get("content", "")
+    rnd_repo.save_paper_section_content(paper, section, content)
+    return jsonify(section.to_dict()), 201
+
+@app.route('/api/rnd/papers/<paper_id>/sections/<section_id>/content', methods=['GET'])
+def rnd_get_section_content(paper_id, section_id):
+    paper = rnd_repo.load("paper", paper_id)
+    if not paper:
+        return api_error("Paper not found", 404)
+    section = next((s for s in paper.sections if s.id == section_id), None)
+    if not section:
+        return api_error("Section not found", 404)
+    content = rnd_repo.load_paper_section_content(section)
+    return content, 200, {"Content-Type": "text/markdown; charset=utf-8"}
+
+@app.route('/api/rnd/papers/<paper_id>/sections/<section_id>/content', methods=['PUT'])
+def rnd_update_section_content(paper_id, section_id):
+    paper = rnd_repo.load("paper", paper_id)
+    if not paper:
+        return api_error("Paper not found", 404)
+    section = next((s for s in paper.sections if s.id == section_id), None)
+    if not section:
+        return api_error("Section not found", 404)
+    content = request.get_data(as_text=True)
+    rnd_repo.save_paper_section_content(paper, section, content)
+    return jsonify({"updated": True})
+
+@app.route('/api/rnd/papers/<paper_id>/sections/<section_id>', methods=['DELETE'])
+def rnd_delete_section(paper_id, section_id):
+    paper = rnd_repo.load("paper", paper_id)
+    if not paper:
+        return api_error("Paper not found", 404)
+    paper.sections = [s for s in paper.sections if s.id != section_id]
+    paper.updated_at = now_iso()
+    rnd_repo.save(paper)
+    return jsonify({"deleted": True})
+
+
+# ---- Generic Citation Attachment ----
+
+@app.route('/api/rnd/cite/<entity_id>', methods=['POST'])
+def rnd_add_citation(entity_id):
+    """Attach a disclosure or external citation to any entity that supports citations."""
+    prefix = entity_id.split("-")[0] if "-" in entity_id else ""
+    prefix_to_type = {
+        "thread": "thread", "stmt": "statement", "exp": "experiment",
+        "find": "finding", "paper": "paper",
+    }
+    entity_type = prefix_to_type.get(prefix)
+    if not entity_type:
+        return api_error(f"Entity type '{prefix}' does not support citations")
+    entity = rnd_repo.load(entity_type, entity_id)
+    if not entity:
+        return api_error("Entity not found", 404)
+    if not hasattr(entity, 'citations'):
+        return api_error("Entity does not support citations")
+    data = request.get_json()
+    cit = Citation.from_dict(data)
+    entity.citations.append(cit)
+    entity.updated_at = now_iso()
+    rnd_repo.save(entity)
+    return jsonify(cit.to_dict()), 201
+
+@app.route('/api/rnd/cite/<entity_id>', methods=['GET'])
+def rnd_get_citations(entity_id):
+    prefix = entity_id.split("-")[0] if "-" in entity_id else ""
+    prefix_to_type = {
+        "thread": "thread", "stmt": "statement", "exp": "experiment",
+        "find": "finding", "paper": "paper",
+    }
+    entity_type = prefix_to_type.get(prefix)
+    if not entity_type:
+        return api_error(f"Entity type does not support citations")
+    entity = rnd_repo.load(entity_type, entity_id)
+    if not entity:
+        return api_error("Entity not found", 404)
+    return jsonify([c.to_dict() for c in getattr(entity, 'citations', [])])
+
+
+# ---- Disclosures ----
+
+@app.route('/api/rnd/disclosures', methods=['GET'])
+def rnd_list_disclosures():
+    return jsonify([d.to_dict() for d in rnd_repo.list_entities("disclosure")])
+
+@app.route('/api/rnd/disclosures', methods=['POST'])
+def rnd_create_disclosure():
+    data = request.get_json()
+    if not data or "title" not in data:
+        return api_error("'title' required")
+    disc = Disclosure.create(
+        title=data["title"],
+        disclosure_type=DisclosureType(data.get("type", "other")),
+        created_by=data.get("created_by", "user-bake"),
+        tags=data.get("tags", []),
+    )
+    if data.get("source_url"):
+        disc.source_url = data["source_url"]
+    if data.get("visibility"):
+        disc.visibility = Visibility(data["visibility"])
+    rnd_repo.save(disc)
+    if data.get("content"):
+        rnd_repo.save_disclosure_content(disc, data["content"])
+    return jsonify(disc.to_dict()), 201
+
+@app.route('/api/rnd/disclosures/<disclosure_id>', methods=['GET'])
+def rnd_get_disclosure(disclosure_id):
+    disc = rnd_repo.load("disclosure", disclosure_id)
+    if not disc:
+        return api_error("Disclosure not found", 404)
+    result = disc.to_dict()
+    if request.args.get("include_content", "false").lower() == "true":
+        result["content"] = rnd_repo.load_disclosure_content(disc)
+    return jsonify(result)
+
+@app.route('/api/rnd/disclosures/<disclosure_id>/content', methods=['GET'])
+def rnd_get_disclosure_content(disclosure_id):
+    disc = rnd_repo.load("disclosure", disclosure_id)
+    if not disc:
+        return api_error("Disclosure not found", 404)
+    content = rnd_repo.load_disclosure_content(disc)
+    return content, 200, {"Content-Type": "text/markdown; charset=utf-8"}
+
+@app.route('/api/rnd/disclosures/<disclosure_id>/content', methods=['PUT'])
+def rnd_update_disclosure_content(disclosure_id):
+    disc = rnd_repo.load("disclosure", disclosure_id)
+    if not disc:
+        return api_error("Disclosure not found", 404)
+    content = request.get_data(as_text=True)
+    rnd_repo.save_disclosure_content(disc, content)
+    return jsonify({"updated": True})
+
+
+# ---- Search & Graph Queries ----
+
+@app.route('/api/rnd/search', methods=['GET'])
+def rnd_search():
+    q = request.args.get("q", "")
+    entity_type = request.args.get("type")
+    if not q:
+        return api_error("'q' query parameter required")
+    ensure_index()
+    results = rnd_index.search(q, entity_type=entity_type)
+    return jsonify(results)
+
+@app.route('/api/rnd/graph/children/<entity_id>', methods=['GET'])
+def rnd_graph_children(entity_id):
+    ensure_index()
+    return jsonify(rnd_index.find_children(entity_id))
+
+@app.route('/api/rnd/graph/evidence/<statement_id>', methods=['GET'])
+def rnd_graph_evidence(statement_id):
+    ensure_index()
+    return jsonify(rnd_index.get_evidence_for_statement(statement_id))
+
+@app.route('/api/rnd/graph/citations/<entity_id>', methods=['GET'])
+def rnd_graph_citations(entity_id):
+    ensure_index()
+    return jsonify(rnd_index.get_citations_for_entity(entity_id))
+
+@app.route('/api/rnd/graph/backlinks/<disclosure_id>', methods=['GET'])
+def rnd_graph_backlinks(disclosure_id):
+    ensure_index()
+    return jsonify(rnd_index.get_disclosure_backlinks(disclosure_id))
+
+@app.route('/api/rnd/graph/variants/<architecture_id>', methods=['GET'])
+def rnd_graph_variants(architecture_id):
+    ensure_index()
+    return jsonify(rnd_index.get_architecture_variants(architecture_id))
+
+@app.route('/api/rnd/index/rebuild', methods=['POST'])
+def rnd_rebuild_index():
+    ensure_index()
+    stats = rnd_index.rebuild(rnd_repo.root)
+    return jsonify(stats)
+
+
+# ======================================================================
+# Server startup
+# ======================================================================
+
 if __name__ == '__main__':
+    init_platform()
     print("=" * 60)
-    print("Rapid Neural Designer - Backend")
+    print("RND Platform — Unified Backend")
     print("=" * 60)
-    print(f"Starting server on http://localhost:5000")
-    print(f"Max execution time: {MAX_EXECUTION_TIME}s")
-    print(f"Room system: enabled")
-    print(f"WebSocket: enabled (SocketIO)")
+    print(f"  Editor:   http://localhost:5000  (rooms, execute, validate)")
+    print(f"  Platform: http://localhost:5000/api/rnd/*")
+    print(f"  Repo:     {rnd_repo.root}")
+    print(f"  Max exec: {MAX_EXECUTION_TIME}s")
     print("=" * 60)
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
