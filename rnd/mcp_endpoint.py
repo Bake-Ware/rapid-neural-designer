@@ -15,6 +15,7 @@ from typing import Any
 
 from flask import Blueprint, Response, jsonify, request
 
+from .auth import AuthDB
 from .repo import RNDRepo
 from .models import (
     EvidenceLink, EvidenceSign, EvidenceStrength,
@@ -35,11 +36,13 @@ mcp_bp = Blueprint("mcp", __name__)
 
 # Set by init_mcp()
 _repo: RNDRepo = None  # type: ignore
+_auth: AuthDB = None  # type: ignore
 
 
-def init_mcp(repo: RNDRepo):
-    global _repo
+def init_mcp(repo: RNDRepo, auth_db: AuthDB):
+    global _repo, _auth
     _repo = repo
+    _auth = auth_db
 
 
 # ------------------------------------------------------------------
@@ -141,9 +144,35 @@ _method_handlers = {
 # Flask route
 # ------------------------------------------------------------------
 
+def _authenticate() -> dict | None:
+    """Check MCP credentials from Authorization header.
+    Accepts:
+      - Bearer <client_id>:<secret>  (direct PSK)
+      - Bearer <oauth_access_token>  (OAuth 2.0 token from /token exchange)
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header[7:]
+
+    # Try client_id:secret format first
+    if ":" in token:
+        client_id, secret = token.split(":", 1)
+        user = _auth.validate_mcp_client(client_id, secret)
+        if user:
+            return user
+
+    # Try as OAuth access token
+    return _auth.validate_oauth_token(token)
+
+
 @mcp_bp.route("", methods=["POST"])
 def mcp_post():
     """Handle MCP Streamable HTTP POST requests (JSON-RPC 2.0)."""
+    user = _authenticate()
+    if not user:
+        return jsonify({"error": "Invalid or missing MCP credentials. Use Bearer <client_id>:<secret>"}), 401
+
     try:
         body = request.get_json(force=True)
     except Exception:

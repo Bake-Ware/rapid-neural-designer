@@ -12,7 +12,7 @@ import time
 import json
 import random
 from pathlib import Path
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, redirect, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO, join_room, leave_room
 
@@ -144,6 +144,169 @@ def auth_logout():
 
 
 # ---------------------------------------------------------------------------
+# OAuth 2.0 (for claude.ai MCP connectors)
+# ---------------------------------------------------------------------------
+
+@app.route('/authorize', methods=['GET', 'POST'])
+def oauth_authorize():
+    """OAuth 2.0 Authorization endpoint with PKCE."""
+    client_id = request.args.get('client_id', '')
+    redirect_uri = request.args.get('redirect_uri', '')
+    code_challenge = request.args.get('code_challenge', '')
+    code_challenge_method = request.args.get('code_challenge_method', 'S256')
+    state = request.args.get('state', '')
+    response_type = request.args.get('response_type', '')
+
+    if response_type != 'code':
+        return 'Unsupported response_type', 400
+
+    # Verify client_id exists
+    client_user = auth_db.get_mcp_client_user(client_id)
+    if not client_user:
+        return 'Unknown client_id', 400
+
+    if request.method == 'GET':
+        # Show login/consent form
+        return f'''<!DOCTYPE html>
+<html><head><title>RND — Authorize</title>
+<style>
+  body {{ font-family: system-ui; background: #0a0e1a; color: #e0e0e0;
+         display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
+  .card {{ background: #141824; padding: 2rem; border-radius: 12px; width: 360px;
+           box-shadow: 0 4px 24px rgba(0,0,0,0.4); }}
+  h2 {{ margin-top: 0; color: #7eb8ff; }}
+  p {{ color: #999; font-size: 0.9em; }}
+  label {{ display: block; margin-top: 1rem; font-size: 0.85em; color: #bbb; }}
+  input {{ width: 100%; padding: 0.6rem; margin-top: 0.3rem; border: 1px solid #333;
+           border-radius: 6px; background: #1a1f30; color: #e0e0e0; box-sizing: border-box; }}
+  button {{ width: 100%; padding: 0.7rem; margin-top: 1.5rem; border: none; border-radius: 6px;
+            background: #3b82f6; color: white; font-size: 1rem; cursor: pointer; }}
+  button:hover {{ background: #2563eb; }}
+  .error {{ color: #f87171; font-size: 0.85em; margin-top: 0.5rem; }}
+</style></head><body>
+<div class="card">
+  <h2>RND Platform</h2>
+  <p>Claude wants to access your research data.</p>
+  <form method="POST">
+    <input type="hidden" name="client_id" value="{client_id}">
+    <input type="hidden" name="redirect_uri" value="{redirect_uri}">
+    <input type="hidden" name="code_challenge" value="{code_challenge}">
+    <input type="hidden" name="code_challenge_method" value="{code_challenge_method}">
+    <input type="hidden" name="state" value="{state}">
+    <label>Username<input type="text" name="username" required></label>
+    <label>Password<input type="password" name="password" required></label>
+    <button type="submit">Authorize</button>
+  </form>
+</div></body></html>'''
+
+    # POST — validate credentials and issue code
+    username = request.form.get('username', '')
+    password = request.form.get('password', '')
+    client_id = request.form.get('client_id', client_id)
+    redirect_uri = request.form.get('redirect_uri', redirect_uri)
+    code_challenge = request.form.get('code_challenge', code_challenge)
+    code_challenge_method = request.form.get('code_challenge_method', code_challenge_method)
+    state = request.form.get('state', state)
+
+    # Authenticate user
+    login_result = auth_db.login(username, password)
+    if not login_result:
+        return f'''<!DOCTYPE html>
+<html><head><title>RND — Authorize</title>
+<style>
+  body {{ font-family: system-ui; background: #0a0e1a; color: #e0e0e0;
+         display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
+  .card {{ background: #141824; padding: 2rem; border-radius: 12px; width: 360px;
+           box-shadow: 0 4px 24px rgba(0,0,0,0.4); }}
+  h2 {{ margin-top: 0; color: #7eb8ff; }}
+  p {{ color: #999; font-size: 0.9em; }}
+  label {{ display: block; margin-top: 1rem; font-size: 0.85em; color: #bbb; }}
+  input {{ width: 100%; padding: 0.6rem; margin-top: 0.3rem; border: 1px solid #333;
+           border-radius: 6px; background: #1a1f30; color: #e0e0e0; box-sizing: border-box; }}
+  button {{ width: 100%; padding: 0.7rem; margin-top: 1.5rem; border: none; border-radius: 6px;
+            background: #3b82f6; color: white; font-size: 1rem; cursor: pointer; }}
+  button:hover {{ background: #2563eb; }}
+  .error {{ color: #f87171; font-size: 0.85em; margin-top: 0.5rem; }}
+</style></head><body>
+<div class="card">
+  <h2>RND Platform</h2>
+  <p class="error">Invalid username or password.</p>
+  <form method="POST">
+    <input type="hidden" name="client_id" value="{client_id}">
+    <input type="hidden" name="redirect_uri" value="{redirect_uri}">
+    <input type="hidden" name="code_challenge" value="{code_challenge}">
+    <input type="hidden" name="code_challenge_method" value="{code_challenge_method}">
+    <input type="hidden" name="state" value="{state}">
+    <label>Username<input type="text" name="username" value="{username}" required></label>
+    <label>Password<input type="password" name="password" required></label>
+    <button type="submit">Authorize</button>
+  </form>
+</div></body></html>''', 401
+
+    # Delete the session we just created (we only needed to verify credentials)
+    auth_db.logout(login_result['token'])
+
+    # Issue authorization code
+    code = auth_db.create_oauth_code(
+        client_id=client_id,
+        user_id=login_result['user']['id'],
+        redirect_uri=redirect_uri,
+        code_challenge=code_challenge,
+        code_challenge_method=code_challenge_method,
+    )
+
+    # Redirect back to claude.ai with code
+    from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
+    params = {'code': code}
+    if state:
+        params['state'] = state
+    separator = '&' if '?' in redirect_uri else '?'
+    return redirect(redirect_uri + separator + urlencode(params))
+
+
+@app.route('/token', methods=['POST'])
+def oauth_token():
+    """OAuth 2.0 Token endpoint — exchange authorization code for access token."""
+    # Accept both form-encoded and JSON
+    if request.content_type and 'json' in request.content_type:
+        data = request.get_json() or {}
+    else:
+        data = request.form.to_dict()
+
+    grant_type = data.get('grant_type', '')
+    code = data.get('code', '')
+    redirect_uri = data.get('redirect_uri', '')
+    code_verifier = data.get('code_verifier', '')
+
+    if grant_type != 'authorization_code':
+        return jsonify({"error": "unsupported_grant_type"}), 400
+
+    if not code or not code_verifier:
+        return jsonify({"error": "invalid_request", "error_description": "code and code_verifier required"}), 400
+
+    result = auth_db.exchange_oauth_code(code, code_verifier, redirect_uri)
+    if not result:
+        return jsonify({"error": "invalid_grant"}), 400
+
+    return jsonify(result)
+
+
+@app.route('/.well-known/oauth-authorization-server', methods=['GET'])
+def oauth_metadata():
+    """OAuth 2.0 Authorization Server Metadata (RFC 8414)."""
+    base = request.host_url.rstrip('/')
+    return jsonify({
+        "issuer": base,
+        "authorization_endpoint": f"{base}/authorize",
+        "token_endpoint": f"{base}/token",
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["none"],
+    })
+
+
+# ---------------------------------------------------------------------------
 # RND Platform init
 # ---------------------------------------------------------------------------
 
@@ -165,7 +328,7 @@ def init_platform():
     rnd_index.open()
     rnd_index.rebuild(rnd_repo.root)
     # MCP endpoint
-    init_mcp(rnd_repo)
+    init_mcp(rnd_repo, auth_db)
     app.register_blueprint(mcp_bp, url_prefix="/mcp")
     print(f"[RND] MCP endpoint ready at /mcp")
     print(f"[RND] Platform ready — repo at {rnd_repo.root}")
