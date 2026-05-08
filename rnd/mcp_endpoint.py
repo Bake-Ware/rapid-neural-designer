@@ -15,9 +15,21 @@ from typing import Any
 
 from flask import Blueprint, Response, jsonify, request
 
+import copy
+from pathlib import Path
+
 from .auth import AuthDB
+from .canonical import content_hash as compute_content_hash
+from .component_catalog import ComponentCatalog
+from .graph_diff import diff_graphs
+from .graph_ops import (
+    create_blank_graph, add_node as graph_add_node, remove_node as graph_remove_node,
+    update_node_properties, add_link as graph_add_link, remove_link as graph_remove_link,
+    validate_graph, get_graph_summary,
+)
 from .repo import RNDRepo
 from .models import (
+    Architecture,
     EvidenceLink, EvidenceSign, EvidenceStrength,
     ExperimentInputs, ExperimentStatus, ObservedResults,
     FindingResolution, StatementResolution,
@@ -37,12 +49,18 @@ mcp_bp = Blueprint("mcp", __name__)
 # Set by init_mcp()
 _repo: RNDRepo = None  # type: ignore
 _auth: AuthDB = None  # type: ignore
+_catalog: ComponentCatalog = None  # type: ignore
 
 
-def init_mcp(repo: RNDRepo, auth_db: AuthDB):
-    global _repo, _auth
+def init_mcp(repo: RNDRepo, auth_db: AuthDB, web_interface_root: str | Path = ""):
+    global _repo, _auth, _catalog
     _repo = repo
     _auth = auth_db
+    if web_interface_root:
+        _catalog = ComponentCatalog(Path(web_interface_root))
+    else:
+        # Default: sibling web_interface directory
+        _catalog = ComponentCatalog(Path(repo.root) / "web_interface")
 
 
 # ------------------------------------------------------------------
@@ -652,6 +670,302 @@ def archive_architecture(architecture_id: str):
     if _repo.archive("architecture", architecture_id):
         return {"archived": True, "id": architecture_id}
     raise ValueError(f"Architecture {architecture_id} not found")
+
+
+# ------------------------------------------------------------------
+# Architecture editing
+# ------------------------------------------------------------------
+
+def _edit_arch(architecture_id: str, edit_fn):
+    """Load architecture, apply edit, recompute hash, save. Returns (arch, edit_result)."""
+    arch = _repo.load("architecture", architecture_id)
+    if not arch:
+        raise ValueError(f"Architecture {architecture_id} not found")
+    result = edit_fn(arch.content)
+    arch.content_hash = compute_content_hash(arch.content)
+    arch.updated_at = now_iso()
+    _repo.save(arch)
+    return arch, result
+
+
+@tool("create_architecture", "Create a new blank architecture graph", {
+    "properties": {
+        "name": {"type": "string", "description": "Architecture name"},
+        "description": {"type": "string", "description": "Description"},
+    },
+    "required": ["name"],
+})
+def create_architecture(name: str, description: str = ""):
+    content = create_blank_graph(description)
+    arch = Architecture.create(
+        name=name,
+        content=content,
+        content_hash=compute_content_hash(content),
+    )
+    _repo.save(arch)
+    return arch.to_dict()
+
+
+@tool("add_node", "Add a component or atomic node to an architecture", {
+    "properties": {
+        "architecture_id": {"type": "string"},
+        "node_type": {"type": "string",
+                      "description": "Type: 'molecular/{component_id}' or 'atomic/{category}/{atomic_id}'"},
+        "properties": {"type": "object", "description": "Property overrides (merged with component defaults)"},
+        "title": {"type": "string", "description": "Display title"},
+        "position": {"type": "array", "items": {"type": "number"}, "description": "[x, y] position"},
+    },
+    "required": ["architecture_id", "node_type"],
+})
+def mcp_add_node(architecture_id: str, node_type: str, properties: dict = None,
+                 title: str = "", position: list = None):
+    node_id = [None]
+    def edit(content):
+        _, nid = graph_add_node(content, node_type, _catalog, properties, title, position)
+        node_id[0] = nid
+    arch, _ = _edit_arch(architecture_id, edit)
+    return {"architecture_id": architecture_id, "node_id": node_id[0],
+            "graph": get_graph_summary(arch.content)}
+
+
+@tool("remove_node", "Remove a node and its connections from an architecture", {
+    "properties": {
+        "architecture_id": {"type": "string"},
+        "node_id": {"type": "integer", "description": "Node ID to remove"},
+    },
+    "required": ["architecture_id", "node_id"],
+})
+def mcp_remove_node(architecture_id: str, node_id: int):
+    def edit(content):
+        graph_remove_node(content, node_id)
+    arch, _ = _edit_arch(architecture_id, edit)
+    return {"architecture_id": architecture_id, "removed_node": node_id,
+            "graph": get_graph_summary(arch.content)}
+
+
+@tool("connect_nodes", "Wire an output slot to an input slot between two nodes", {
+    "properties": {
+        "architecture_id": {"type": "string"},
+        "src_node_id": {"type": "integer", "description": "Source node ID"},
+        "src_slot": {"type": "integer", "description": "Output slot index on source (usually 0)"},
+        "dst_node_id": {"type": "integer", "description": "Destination node ID"},
+        "dst_slot": {"type": "integer", "description": "Input slot index on destination (usually 0)"},
+    },
+    "required": ["architecture_id", "src_node_id", "src_slot", "dst_node_id", "dst_slot"],
+})
+def mcp_connect_nodes(architecture_id: str, src_node_id: int, src_slot: int,
+                      dst_node_id: int, dst_slot: int):
+    link_id = [None]
+    def edit(content):
+        _, lid = graph_add_link(content, src_node_id, src_slot, dst_node_id, dst_slot)
+        link_id[0] = lid
+    arch, _ = _edit_arch(architecture_id, edit)
+    return {"architecture_id": architecture_id, "link_id": link_id[0],
+            "graph": get_graph_summary(arch.content)}
+
+
+@tool("disconnect", "Remove a link between nodes", {
+    "properties": {
+        "architecture_id": {"type": "string"},
+        "link_id": {"type": "integer", "description": "Link ID to remove"},
+    },
+    "required": ["architecture_id", "link_id"],
+})
+def mcp_disconnect(architecture_id: str, link_id: int):
+    def edit(content):
+        graph_remove_link(content, link_id)
+    arch, _ = _edit_arch(architecture_id, edit)
+    return {"architecture_id": architecture_id, "removed_link": link_id,
+            "graph": get_graph_summary(arch.content)}
+
+
+@tool("update_node", "Update a node's properties or title", {
+    "properties": {
+        "architecture_id": {"type": "string"},
+        "node_id": {"type": "integer"},
+        "properties": {"type": "object", "description": "Properties to update"},
+        "title": {"type": "string", "description": "New display title"},
+    },
+    "required": ["architecture_id", "node_id"],
+})
+def mcp_update_node(architecture_id: str, node_id: int, properties: dict = None,
+                    title: str = ""):
+    def edit(content):
+        update_node_properties(content, node_id, properties, title)
+    arch, _ = _edit_arch(architecture_id, edit)
+    return {"architecture_id": architecture_id, "node_id": node_id,
+            "graph": get_graph_summary(arch.content)}
+
+
+@tool("update_architecture_metadata", "Update architecture name or description", {
+    "properties": {
+        "architecture_id": {"type": "string"},
+        "name": {"type": "string", "description": "New name"},
+        "description": {"type": "string", "description": "New description (stored in graph extra.info)"},
+    },
+    "required": ["architecture_id"],
+})
+def update_architecture_metadata(architecture_id: str, name: str = "", description: str = ""):
+    arch = _repo.load("architecture", architecture_id)
+    if not arch:
+        raise ValueError(f"Architecture {architecture_id} not found")
+    if name:
+        arch.name = name
+    if description:
+        arch.content.setdefault("extra", {})["info"] = description
+        arch.content_hash = compute_content_hash(arch.content)
+    arch.updated_at = now_iso()
+    _repo.save(arch)
+    return arch.to_dict()
+
+
+@tool("validate_architecture", "Validate architecture graph for errors and warnings", {
+    "properties": {"architecture_id": {"type": "string"}},
+    "required": ["architecture_id"],
+}, annotations={"readOnlyHint": True})
+def mcp_validate_architecture(architecture_id: str):
+    arch = _repo.load("architecture", architecture_id)
+    if not arch:
+        raise ValueError(f"Architecture {architecture_id} not found")
+    issues = validate_graph(arch.content)
+    return {"architecture_id": architecture_id, "issues": issues,
+            "valid": all(i.get("level") != "error" for i in issues)}
+
+
+# ------------------------------------------------------------------
+# Architecture versioning
+# ------------------------------------------------------------------
+
+@tool("save_architecture_version", "Snapshot current architecture state with a version message", {
+    "properties": {
+        "architecture_id": {"type": "string"},
+        "message": {"type": "string", "description": "What changed in this version"},
+    },
+    "required": ["architecture_id", "message"],
+})
+def mcp_save_version(architecture_id: str, message: str):
+    version = _repo.save_architecture_version(architecture_id, message)
+    return version.to_dict()
+
+
+@tool("list_architecture_versions", "List version history for an architecture", {
+    "properties": {"architecture_id": {"type": "string"}},
+    "required": ["architecture_id"],
+}, annotations={"readOnlyHint": True})
+def mcp_list_versions(architecture_id: str):
+    versions = _repo.list_architecture_versions(architecture_id)
+    return [{"id": v.id, "name": v.name, "content_hash": v.content_hash,
+             "created_at": v.created_at, "version_info": v.version_info}
+            for v in versions]
+
+
+@tool("load_architecture_version", "Restore a previous version into the current architecture", {
+    "properties": {
+        "architecture_id": {"type": "string", "description": "Architecture to restore into"},
+        "version_id": {"type": "string", "description": "Version ID to restore from"},
+    },
+    "required": ["architecture_id", "version_id"],
+})
+def mcp_load_version(architecture_id: str, version_id: str):
+    arch = _repo.load("architecture", architecture_id)
+    if not arch:
+        raise ValueError(f"Architecture {architecture_id} not found")
+    version = _repo.load("architecture", version_id)
+    if not version:
+        raise ValueError(f"Version {version_id} not found")
+    arch.content = copy.deepcopy(version.content)
+    arch.content_hash = compute_content_hash(arch.content)
+    arch.updated_at = now_iso()
+    _repo.save(arch)
+    return arch.to_dict()
+
+
+@tool("branch_architecture", "Create a new architecture forked from an existing one", {
+    "properties": {
+        "source_id": {"type": "string", "description": "Architecture to branch from"},
+        "name": {"type": "string", "description": "Name for the new branch"},
+        "message": {"type": "string", "description": "Reason for branching"},
+    },
+    "required": ["source_id", "name"],
+})
+def mcp_branch_architecture(source_id: str, name: str, message: str = ""):
+    source = _repo.load("architecture", source_id)
+    if not source:
+        raise ValueError(f"Architecture {source_id} not found")
+    branch = Architecture.create(
+        name=name,
+        content=copy.deepcopy(source.content),
+        content_hash=source.content_hash,
+        variant_of=source_id,
+        version_info={"message": message or f"Branched from {source.name}",
+                      "version_number": 0, "source_id": source_id} if message else None,
+    )
+    _repo.save(branch)
+    return branch.to_dict()
+
+
+@tool("compare_architectures", "Compare two architectures showing structural differences", {
+    "properties": {
+        "architecture_id_a": {"type": "string", "description": "First architecture ID"},
+        "architecture_id_b": {"type": "string", "description": "Second architecture ID"},
+    },
+    "required": ["architecture_id_a", "architecture_id_b"],
+}, annotations={"readOnlyHint": True})
+def mcp_compare_architectures(architecture_id_a: str, architecture_id_b: str):
+    a = _repo.load("architecture", architecture_id_a)
+    b = _repo.load("architecture", architecture_id_b)
+    if not a:
+        raise ValueError(f"Architecture {architecture_id_a} not found")
+    if not b:
+        raise ValueError(f"Architecture {architecture_id_b} not found")
+    return diff_graphs(a.content, b.content)
+
+
+# ------------------------------------------------------------------
+# Component & Atomic catalog
+# ------------------------------------------------------------------
+
+@tool("list_components", "List all available neural components (linear, attention, transformer, etc.)", {},
+      annotations={"readOnlyHint": True})
+def mcp_list_components():
+    return _catalog.list_components()
+
+
+@tool("get_component", "Get full component definition including ports, properties, and graph decomposition", {
+    "properties": {
+        "component_id": {"type": "string", "description": "Component ID (e.g. 'linear', 'transformer_block')"},
+    },
+    "required": ["component_id"],
+}, annotations={"readOnlyHint": True})
+def mcp_get_component(component_id: str):
+    comp = _catalog.get_component(component_id)
+    if not comp:
+        raise ValueError(f"Component '{component_id}' not found")
+    return comp
+
+
+@tool("list_atomics", "List available atomic primitives (math, activations, shape ops, etc.)", {
+    "properties": {
+        "category": {"type": "string",
+                     "description": "Filter by category: math, trig, reduction, shape, comparison, init, data"},
+    },
+}, annotations={"readOnlyHint": True})
+def mcp_list_atomics(category: str = ""):
+    return _catalog.list_atomics(category)
+
+
+@tool("get_atomic", "Get full atomic primitive definition", {
+    "properties": {
+        "category": {"type": "string", "description": "Atomic category"},
+        "atomic_id": {"type": "string", "description": "Atomic ID (e.g. 'relu', 'matmul')"},
+    },
+    "required": ["category", "atomic_id"],
+}, annotations={"readOnlyHint": True})
+def mcp_get_atomic(category: str, atomic_id: str):
+    atom = _catalog.get_atomic(category, atomic_id)
+    if not atom:
+        raise ValueError(f"Atomic '{category}/{atomic_id}' not found")
+    return atom
 
 
 # ------------------------------------------------------------------

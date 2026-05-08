@@ -323,6 +323,36 @@ class RNDRepo:
                 return arch
         return None
 
+    def save_architecture_version(self, architecture_id: str, message: str) -> Architecture:
+        """Snapshot the current architecture as a new version entity."""
+        arch = self.load("architecture", architecture_id)
+        if not arch:
+            raise ValueError(f"Architecture {architecture_id} not found")
+        import copy
+        existing = [a for a in self.list_entities("architecture")
+                    if a.version_info and a.version_info.get("source_id") == architecture_id]
+        version_number = len(existing) + 1
+        version = Architecture.create(
+            name=f"{arch.name} (v{version_number})",
+            content=copy.deepcopy(arch.content),
+            content_hash=arch.content_hash,
+            variant_of=architecture_id,
+            version_info={
+                "message": message,
+                "version_number": version_number,
+                "source_id": architecture_id,
+            },
+        )
+        self.save(version)
+        return version
+
+    def list_architecture_versions(self, architecture_id: str) -> list[Architecture]:
+        """List all version snapshots for an architecture, ordered by version_number."""
+        versions = [a for a in self.list_entities("architecture")
+                    if a.version_info and a.version_info.get("source_id") == architecture_id]
+        versions.sort(key=lambda a: a.version_info.get("version_number", 0))
+        return versions
+
     # ------------------------------------------------------------------
     # Disclosure content
     # ------------------------------------------------------------------

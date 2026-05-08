@@ -729,6 +729,7 @@ class Architecture:
     updated_at: str
     variant_of: Optional[str] = None
     archived: bool = False
+    version_info: Optional[dict] = None  # {"message": "...", "version_number": N, "source_id": "arch-xxx"}
 
     def to_dict(self) -> dict:
         d = {
@@ -742,6 +743,8 @@ class Architecture:
         }
         if self.variant_of:
             d["variant_of"] = self.variant_of
+        if self.version_info:
+            d["version_info"] = self.version_info
         return d
 
     @classmethod
@@ -755,11 +758,13 @@ class Architecture:
             updated_at=data["updated_at"],
             variant_of=data.get("variant_of"),
             archived=data.get("archived", False),
+            version_info=data.get("version_info"),
         )
 
     @classmethod
     def create(cls, name: str, content: dict, content_hash: str,
-               variant_of: str | None = None) -> Architecture:
+               variant_of: str | None = None,
+               version_info: dict | None = None) -> Architecture:
         now = now_iso()
         return cls(
             id=generate_id("arch"),
@@ -769,6 +774,7 @@ class Architecture:
             created_at=now,
             updated_at=now,
             variant_of=variant_of,
+            version_info=version_info,
         )
 
 

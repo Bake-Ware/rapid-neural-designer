@@ -328,7 +328,7 @@ def init_platform():
     rnd_index.open()
     rnd_index.rebuild(rnd_repo.root)
     # MCP endpoint
-    init_mcp(rnd_repo, auth_db)
+    init_mcp(rnd_repo, auth_db, web_interface_root=STATIC_DIR)
     app.register_blueprint(mcp_bp, url_prefix="/mcp")
     print(f"[RND] MCP endpoint ready at /mcp")
     print(f"[RND] Platform ready — repo at {rnd_repo.root}")
