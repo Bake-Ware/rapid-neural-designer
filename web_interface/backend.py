@@ -32,6 +32,7 @@ from rnd.models import (
 )
 from rnd.repo import RNDRepo
 from rnd.auth import AuthDB
+from rnd.mcp_endpoint import mcp_bp, init_mcp
 from functools import wraps
 
 STATIC_DIR = Path(__file__).resolve().parent
@@ -163,6 +164,10 @@ def init_platform():
     rnd_index = DerivedIndex(rnd_repo.index_path)
     rnd_index.open()
     rnd_index.rebuild(rnd_repo.root)
+    # MCP endpoint
+    init_mcp(rnd_repo)
+    app.register_blueprint(mcp_bp, url_prefix="/mcp")
+    print(f"[RND] MCP endpoint ready at /mcp")
     print(f"[RND] Platform ready — repo at {rnd_repo.root}")
 
 def ensure_index():
@@ -1240,6 +1245,7 @@ if __name__ == '__main__':
     print("=" * 60)
     print(f"  Editor:   http://localhost:5000  (rooms, execute, validate)")
     print(f"  Platform: http://localhost:5000/api/rnd/*")
+    print(f"  MCP:      http://localhost:5000/mcp")
     print(f"  Repo:     {rnd_repo.root}")
     print(f"  Max exec: {MAX_EXECUTION_TIME}s")
     print("=" * 60)
