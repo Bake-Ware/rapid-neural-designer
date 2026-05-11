@@ -132,6 +132,7 @@ def auth_me():
     user = get_current_user()
     if not user:
         return jsonify({"user": None})
+    user["is_admin"] = auth_db.is_admin(user["id"])
     return jsonify({"user": user})
 
 
@@ -1462,6 +1463,37 @@ def rnd_promote_user_component(comp_id):
     # Remove from user_components
     auth_db.delete_user_component(comp_id, uc['owner_id'])
     return jsonify({"promoted": True, "kind": uc['kind'], "id": definition['id']})
+
+
+# ------------------------------------------------------------------
+# Admin: Deploy (git pull + restart)
+# ------------------------------------------------------------------
+
+@app.route('/api/rnd/admin/deploy', methods=['POST'])
+def admin_deploy():
+    user = get_current_user()
+    if not user or not auth_db.is_admin(user['id']):
+        return api_error("Admin only", 403)
+
+    import subprocess as _sp
+
+    # Git pull
+    result = _sp.run(
+        ['git', 'pull', 'origin', 'master'],
+        cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=30,
+    )
+    pull_output = result.stdout.strip() + '\n' + result.stderr.strip()
+
+    if result.returncode != 0:
+        return jsonify({"ok": False, "phase": "git pull", "output": pull_output}), 500
+
+    # Schedule restart after response is sent
+    _sp.Popen(
+        'sleep 1 && systemctl restart rnd 2>/dev/null || true',
+        shell=True, start_new_session=True,
+    )
+
+    return jsonify({"ok": True, "output": pull_output, "restarting": True})
 
 
 # ======================================================================

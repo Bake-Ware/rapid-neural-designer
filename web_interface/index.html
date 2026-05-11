@@ -833,6 +833,7 @@
         <button onclick="copyCode()">Copy Code</button>
         <button onclick="downloadCode()">Download .py</button>
         <div class="toolbar-sep"></div>
+        <button id="admin-deploy-btn" onclick="adminDeploy()" style="display:none;background:#2d4a22;color:#8fc97a;font-size:11px;padding:4px 10px;" title="Pull latest code and restart">Deploy</button>
         <div id="auth-user-badge">
             <span class="auth-username" id="auth-display-name"></span>
             <span class="auth-logout" onclick="authLogout()">logout</span>
@@ -3078,13 +3079,55 @@
     function authUpdateUI() {
         const badge = document.getElementById('auth-user-badge');
         const loginBtn = document.getElementById('auth-login-btn');
+        const deployBtn = document.getElementById('admin-deploy-btn');
         if (authUser) {
             badge.classList.add('visible');
             document.getElementById('auth-display-name').textContent = authUser.display_name || authUser.username;
             loginBtn.style.display = 'none';
+            deployBtn.style.display = authUser.is_admin ? '' : 'none';
         } else {
             badge.classList.remove('visible');
             loginBtn.style.display = '';
+            deployBtn.style.display = 'none';
+        }
+    }
+
+    async function adminDeploy() {
+        const btn = document.getElementById('admin-deploy-btn');
+        const origText = btn.textContent;
+        btn.textContent = 'Deploying...';
+        btn.disabled = true;
+        try {
+            const resp = await fetch('/api/rnd/admin/deploy', {
+                method: 'POST', headers: authHeaders(),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                btn.textContent = 'Restarting...';
+                btn.style.background = '#1a3a15';
+                updateStatus('Deploy: ' + data.output);
+                // Server is restarting — poll until it's back
+                setTimeout(async () => {
+                    for (let i = 0; i < 10; i++) {
+                        await new Promise(r => setTimeout(r, 2000));
+                        try {
+                            const h = await fetch('/health');
+                            if (h.ok) { location.reload(); return; }
+                        } catch(e) {}
+                    }
+                    btn.textContent = 'Reload page';
+                    btn.disabled = false;
+                    btn.onclick = () => location.reload();
+                }, 1000);
+            } else {
+                alert('Deploy failed: ' + (data.output || data.error));
+                btn.textContent = origText;
+                btn.disabled = false;
+            }
+        } catch(e) {
+            alert('Deploy error: ' + e.message);
+            btn.textContent = origText;
+            btn.disabled = false;
         }
     }
 

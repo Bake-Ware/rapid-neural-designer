@@ -51,6 +51,9 @@ web_interface/models/experimental/
 web_interface/*_compiled.py
 web_interface/test_droga_compile.py
 
+# Deployment
+deploy.sh
+
 # RND Platform data (git-backed repos are per-instance, not committed to source)
 .rnd/
 team.json
