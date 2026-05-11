@@ -1397,6 +1397,73 @@ def rnd_rebuild_index():
     return jsonify(stats)
 
 
+# ------------------------------------------------------------------
+# User Components
+# ------------------------------------------------------------------
+
+@app.route('/api/rnd/user-components', methods=['GET'])
+def rnd_list_user_components():
+    user = get_current_user()
+    if not user:
+        return jsonify([])
+    rows = auth_db.list_user_components(user['id'])
+    for r in rows:
+        r['definition'] = json.loads(r['definition'])
+    return jsonify(rows)
+
+
+@app.route('/api/rnd/user-components', methods=['POST'])
+def rnd_create_user_component():
+    data = request.get_json()
+    if not data or 'definition' not in data or 'kind' not in data:
+        return api_error("'kind' and 'definition' required")
+    user = request.user
+    result = auth_db.create_user_component(
+        owner_id=user['id'],
+        kind=data['kind'],
+        category=data.get('category', ''),
+        definition=json.dumps(data['definition']) if isinstance(data['definition'], dict) else data['definition'],
+    )
+    result['definition'] = json.loads(result['definition']) if isinstance(result['definition'], str) else result['definition']
+    return jsonify(result), 201
+
+
+@app.route('/api/rnd/user-components/<comp_id>', methods=['DELETE'])
+def rnd_delete_user_component(comp_id):
+    user = request.user
+    if not auth_db.delete_user_component(comp_id, user['id']):
+        return api_error("Component not found or not owned by you", 404)
+    return jsonify({"deleted": True})
+
+
+@app.route('/api/rnd/user-components/<comp_id>/promote', methods=['POST'])
+def rnd_promote_user_component(comp_id):
+    user = request.user
+    if not auth_db.is_admin(user['id']):
+        return api_error("Admin only", 403)
+    uc = auth_db.get_user_component(comp_id)
+    if not uc:
+        return api_error("Component not found", 404)
+
+    from rnd.component_catalog import ComponentCatalog
+    catalog = ComponentCatalog(STATIC_DIR)
+    definition = json.loads(uc['definition'])
+
+    if uc['kind'] == 'component':
+        catalog.promote_component(definition['id'], definition)
+    elif uc['kind'] == 'atomic':
+        category = uc.get('category') or definition.get('category', '')
+        if not category:
+            return api_error("Atomic must have a category")
+        catalog.promote_atomic(definition, category)
+    else:
+        return api_error(f"Unknown kind: {uc['kind']}")
+
+    # Remove from user_components
+    auth_db.delete_user_component(comp_id, uc['owner_id'])
+    return jsonify({"promoted": True, "kind": uc['kind'], "id": definition['id']})
+
+
 # ======================================================================
 # Server startup
 # ======================================================================

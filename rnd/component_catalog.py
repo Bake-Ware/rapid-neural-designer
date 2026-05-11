@@ -114,6 +114,67 @@ class ComponentCatalog:
                 return atom
         return None
 
+    # ---- Promote (write to codebase) ----
+
+    def promote_component(self, comp_id: str, definition: dict) -> Path:
+        """Write a component definition to the codebase and update index.json."""
+        self._load_components()
+        # Write the component file
+        file_name = f"{comp_id}.json"
+        file_path = self.root / "components" / file_name
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(definition, f, indent=2, ensure_ascii=False)
+
+        # Update index.json
+        index_path = self.root / "components" / "index.json"
+        with open(index_path, "r", encoding="utf-8") as f:
+            index = json.load(f)
+
+        # Check if already in index
+        existing_ids = {c["id"] for c in index["components"]}
+        if comp_id not in existing_ids:
+            index["components"].append({
+                "id": comp_id,
+                "name": definition.get("name", comp_id),
+                "description": definition.get("description", ""),
+                "file": file_name,
+                "color": definition.get("color", "#888888"),
+            })
+            with open(index_path, "w", encoding="utf-8") as f:
+                json.dump(index, f, indent=2, ensure_ascii=False)
+
+        # Invalidate cache
+        self._components = None
+        self._component_index = None
+        return file_path
+
+    def promote_atomic(self, definition: dict, category: str) -> Path:
+        """Append an atomic definition to the appropriate category file and update index."""
+        self._load_atomics()
+        if category not in self._atomic_categories:
+            raise ValueError(f"Unknown atomic category: {category}")
+
+        # Find the file for this category
+        cat_info = self._atomic_categories[category]
+        file_name = cat_info["files"][0]  # Use first file
+        file_path = self.root / "atomics" / file_name
+
+        # Load existing atomics
+        with open(file_path, "r", encoding="utf-8") as f:
+            atoms = json.load(f)
+
+        # Check if already exists
+        existing_ids = {a["id"] for a in atoms}
+        if definition["id"] not in existing_ids:
+            atoms.append(definition)
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(atoms, f, indent=2, ensure_ascii=False)
+
+        # Invalidate cache
+        self._atomics = None
+        self._atomic_categories = None
+        return file_path
+
     def get_node_definition(self, node_type: str) -> dict | None:
         """Look up a node definition by its type string.
         Format: 'molecular/{component_id}' or 'atomic/{category}/{atomic_id}'

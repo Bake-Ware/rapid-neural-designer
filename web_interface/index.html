@@ -188,6 +188,14 @@
             letter-spacing: 0.5px;
         }
 
+        .palette-node-lock {
+            display: inline-block;
+            font-size: 10px;
+            margin-right: 4px;
+            opacity: 0.6;
+            vertical-align: middle;
+        }
+
 
         .palette-section-header {
             background: #1e3a5f;
@@ -891,6 +899,17 @@
                         <div class="palette-section-content" id="molecular-palette">
                             <div style="padding:12px;color:#888;font-size:11px;">
                                 No components loaded.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="palette-section collapsed" id="user-components-section" style="display:none;">
+                        <div class="palette-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <span>My Components</span>
+                            <span class="section-arrow">▼</span>
+                        </div>
+                        <div class="palette-section-content" id="user-component-palette">
+                            <div style="padding:12px;color:#888;font-size:11px;">
+                                No custom components.
                             </div>
                         </div>
                     </div>
@@ -3226,6 +3245,49 @@
         }
     }
 
+    async function loadUserComponents() {
+        if (!authToken) return;
+        try {
+            const resp = await fetch('/api/rnd/user-components', { headers: authHeaders() });
+            if (!resp.ok) return;
+            const items = await resp.json();
+            if (!items.length) return;
+
+            const section = document.getElementById('user-components-section');
+            section.style.display = '';
+            section.classList.remove('collapsed');
+
+            const paletteEl = document.getElementById('user-component-palette');
+            paletteEl.innerHTML = '';
+
+            for (const uc of items) {
+                const def = typeof uc.definition === 'string' ? JSON.parse(uc.definition) : uc.definition;
+                let typeName;
+
+                if (uc.kind === 'atomic') {
+                    typeName = registerAtomic(def);
+                } else {
+                    def._paletteColor = def.color || '#888888';
+                    molecularRegistry[def.id] = def;
+                    registerMolecular({id: def.id, name: def.name, color: def.color || '#888888'}, def);
+                    typeName = `molecular/${def.id}`;
+                }
+
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'palette-node';
+                nodeEl.style.borderLeftColor = def.color || '#888';
+                const kindTag = uc.kind === 'atomic' ? `<span class="palette-node-tag">${def.category || 'custom'}</span>` : '';
+                nodeEl.innerHTML = `<div><span class="palette-node-lock">&#128274;</span>${def.name}${kindTag}</div>` +
+                    (def.description ? `<div class="palette-node-desc">${def.description}</div>` : '');
+                nodeEl.addEventListener('click', () => addNodeToGraph(typeName));
+                paletteEl.appendChild(nodeEl);
+            }
+            updateStatus(`Loaded ${items.length} user component(s)`);
+        } catch (err) {
+            console.log('Could not load user components:', err);
+        }
+    }
+
     function registerMolecular(meta, compDef) {
         const typeName = `molecular/${meta.id}`;
 
@@ -4175,6 +4237,9 @@
         try {
             await loadModels();
         } catch(e) { console.error('Failed to load models:', e); }
+        try {
+            await loadUserComponents();
+        } catch(e) { console.error('Failed to load user components:', e); }
         graph.start();
         compileGraph();
         updateStatus('Ready');

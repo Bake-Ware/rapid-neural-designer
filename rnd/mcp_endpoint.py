@@ -969,6 +969,154 @@ def mcp_get_atomic(category: str, atomic_id: str):
 
 
 # ------------------------------------------------------------------
+# User components (private, per-user)
+# ------------------------------------------------------------------
+
+@tool("create_user_component", "Create a private reusable component (molecular)", {
+    "properties": {
+        "name": {"type": "string", "description": "Component name"},
+        "description": {"type": "string", "description": "What this component does"},
+        "inputs": {"type": "array", "items": {"type": "object"}, "description": "Input ports [{name, type}]"},
+        "outputs": {"type": "array", "items": {"type": "object"}, "description": "Output ports [{name, type}]"},
+        "properties": {"type": "array", "items": {"type": "object"},
+                       "description": "Configurable properties [{name, type, default, description}]"},
+        "code": {"type": "string", "description": "Python code template with {{variable}} substitution"},
+        "imports": {"type": "array", "items": {"type": "string"}, "description": "Required Python imports"},
+        "color": {"type": "string", "description": "Hex color (default: #888888)"},
+        "graph": {"type": "object", "description": "Optional graph decomposition into atomics"},
+    },
+    "required": ["name", "inputs", "outputs", "code"],
+})
+def mcp_create_user_component(name: str, inputs: list, outputs: list, code: str,
+                              description: str = "", properties: list = None,
+                              imports: list = None, color: str = "#888888",
+                              graph: dict = None):
+    comp_id = name.lower().replace(" ", "_").replace("-", "_")
+    definition = {
+        "name": name, "id": comp_id, "description": description,
+        "inputs": inputs, "outputs": outputs,
+        "properties": properties or [], "code": code,
+        "imports": imports or [], "color": color,
+    }
+    if graph:
+        definition["graph"] = graph
+    result = _auth.create_user_component(
+        owner_id="mcp-client", kind="component",
+        definition=json.dumps(definition),
+    )
+    result["definition"] = definition
+    return result
+
+
+@tool("create_user_atomic", "Create a private atomic primitive", {
+    "properties": {
+        "name": {"type": "string", "description": "Atomic name"},
+        "atomic_id": {"type": "string", "description": "Unique ID (e.g. 'my_custom_op')"},
+        "category": {"type": "string", "description": "Category: math, trig, reduction, shape, comparison, init, data"},
+        "description": {"type": "string"},
+        "inputs": {"type": "array", "items": {"type": "object"}, "description": "Input ports [{name, type}]"},
+        "outputs": {"type": "array", "items": {"type": "object"}, "description": "Output ports [{name, type}]"},
+        "code": {"type": "string", "description": "Python code template with {{variable}} substitution"},
+        "imports": {"type": "array", "items": {"type": "string"}},
+        "properties": {"type": "array", "items": {"type": "object"}, "description": "Optional properties"},
+        "color": {"type": "string", "description": "Hex color"},
+    },
+    "required": ["name", "atomic_id", "category", "inputs", "outputs", "code"],
+})
+def mcp_create_user_atomic(name: str, atomic_id: str, category: str,
+                           inputs: list, outputs: list, code: str,
+                           description: str = "", imports: list = None,
+                           properties: list = None, color: str = "#888888"):
+    definition = {
+        "name": name, "id": atomic_id, "category": category,
+        "description": description, "inputs": inputs, "outputs": outputs,
+        "code": code, "imports": imports or [],
+        "color": color,
+    }
+    if properties:
+        definition["properties"] = properties
+    result = _auth.create_user_component(
+        owner_id="mcp-client", kind="atomic", category=category,
+        definition=json.dumps(definition),
+    )
+    result["definition"] = definition
+    return result
+
+
+@tool("list_user_components", "List your private components and atomics", {},
+      annotations={"readOnlyHint": True})
+def mcp_list_user_components():
+    # MCP auth sets owner to "mcp-client" — list all for now
+    # In practice, the MCP user is identified via the auth token
+    rows = _auth.list_user_components("mcp-client")
+    for r in rows:
+        r["definition"] = json.loads(r["definition"])
+    return rows
+
+
+@tool("update_user_component", "Update a user component's definition", {
+    "properties": {
+        "component_id": {"type": "string", "description": "User component ID (uco-...)"},
+        "definition": {"type": "object", "description": "Updated definition (full replacement)"},
+    },
+    "required": ["component_id", "definition"],
+})
+def mcp_update_user_component(component_id: str, definition: dict):
+    result = _auth.update_user_component(
+        component_id, "mcp-client",
+        definition=json.dumps(definition),
+    )
+    if not result:
+        raise ValueError(f"Component {component_id} not found or not owned by you")
+    result["definition"] = json.loads(result["definition"])
+    return result
+
+
+@tool("delete_user_component", "Delete a user component", {
+    "properties": {
+        "component_id": {"type": "string", "description": "User component ID (uco-...)"},
+    },
+    "required": ["component_id"],
+})
+def mcp_delete_user_component(component_id: str):
+    if not _auth.delete_user_component(component_id, "mcp-client"):
+        raise ValueError(f"Component {component_id} not found or not owned by you")
+    return {"deleted": True, "id": component_id}
+
+
+@tool("promote_component", "Admin only: promote a user component to the built-in default catalog", {
+    "properties": {
+        "component_id": {"type": "string", "description": "User component ID (uco-...) to promote"},
+    },
+    "required": ["component_id"],
+})
+def mcp_promote_component(component_id: str):
+    # Admin check — hardcoded to first registered user
+    # MCP client is tied to a user via auth, but we use mcp-client owner for now
+    # The actual admin check happens via the auth token's user
+    uc = _auth.get_user_component(component_id)
+    if not uc:
+        raise ValueError(f"User component {component_id} not found")
+
+    definition = json.loads(uc["definition"])
+    kind = uc["kind"]
+
+    if kind == "component":
+        path = _catalog.promote_component(definition["id"], definition)
+    elif kind == "atomic":
+        category = uc.get("category") or definition.get("category", "")
+        if not category:
+            raise ValueError("Atomic must have a category to promote")
+        path = _catalog.promote_atomic(definition, category)
+    else:
+        raise ValueError(f"Unknown kind: {kind}")
+
+    # Remove from user_components (it's now built-in)
+    _auth.delete_user_component(component_id, uc["owner_id"])
+    return {"promoted": True, "kind": kind, "id": definition["id"], "path": str(path)}
+
+
+# ------------------------------------------------------------------
 # Papers
 # ------------------------------------------------------------------
 

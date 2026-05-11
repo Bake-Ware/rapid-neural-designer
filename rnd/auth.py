@@ -61,10 +61,22 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
     expires_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS user_components (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'component',
+    category TEXT NOT NULL DEFAULT '',
+    definition TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (owner_id) REFERENCES users(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_mcp_clients_user ON mcp_clients(user_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user ON oauth_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_components_owner ON user_components(owner_id);
 """
 
 SESSION_DAYS = 30
@@ -351,3 +363,82 @@ class AuthDB:
             (client_id,),
         ).fetchone()
         return dict(row) if row else None
+
+    # ---- Admin ----
+
+    def is_admin(self, user_id: str) -> bool:
+        """Check if user is the first registered user (admin)."""
+        assert self.conn
+        row = self.conn.execute(
+            "SELECT id FROM users ORDER BY created_at ASC LIMIT 1"
+        ).fetchone()
+        return row is not None and row["id"] == user_id
+
+    # ---- User Components ----
+
+    def create_user_component(self, owner_id: str, kind: str, definition: str,
+                              category: str = "") -> dict:
+        """Create a user component/atomic. Returns the record dict."""
+        assert self.conn
+        comp_id = f"uco-{secrets.token_hex(6)}"
+        now = datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            "INSERT INTO user_components (id, owner_id, kind, category, definition, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (comp_id, owner_id, kind, category, definition, now, now),
+        )
+        self.conn.commit()
+        return {"id": comp_id, "owner_id": owner_id, "kind": kind, "category": category,
+                "definition": definition, "created_at": now, "updated_at": now}
+
+    def list_user_components(self, owner_id: str) -> list[dict]:
+        """List all components owned by a user."""
+        assert self.conn
+        rows = self.conn.execute(
+            "SELECT * FROM user_components WHERE owner_id = ? ORDER BY created_at DESC",
+            (owner_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_user_component(self, comp_id: str) -> dict | None:
+        """Get a user component by ID."""
+        assert self.conn
+        row = self.conn.execute(
+            "SELECT * FROM user_components WHERE id = ?", (comp_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def update_user_component(self, comp_id: str, owner_id: str,
+                              definition: str | None = None,
+                              category: str | None = None) -> dict | None:
+        """Update a user component. Only the owner can update."""
+        assert self.conn
+        row = self.conn.execute(
+            "SELECT * FROM user_components WHERE id = ? AND owner_id = ?",
+            (comp_id, owner_id),
+        ).fetchone()
+        if not row:
+            return None
+        now = datetime.now(timezone.utc).isoformat()
+        if definition is not None:
+            self.conn.execute(
+                "UPDATE user_components SET definition = ?, updated_at = ? WHERE id = ?",
+                (definition, now, comp_id),
+            )
+        if category is not None:
+            self.conn.execute(
+                "UPDATE user_components SET category = ?, updated_at = ? WHERE id = ?",
+                (category, now, comp_id),
+            )
+        self.conn.commit()
+        return self.get_user_component(comp_id)
+
+    def delete_user_component(self, comp_id: str, owner_id: str) -> bool:
+        """Delete a user component. Only the owner can delete."""
+        assert self.conn
+        cursor = self.conn.execute(
+            "DELETE FROM user_components WHERE id = ? AND owner_id = ?",
+            (comp_id, owner_id),
+        )
+        self.conn.commit()
+        return cursor.rowcount > 0
