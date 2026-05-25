@@ -1511,4 +1511,4 @@ if __name__ == '__main__':
     print(f"  Repo:     {rnd_repo.root}")
     print(f"  Max exec: {MAX_EXECUTION_TIME}s")
     print("=" * 60)
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
