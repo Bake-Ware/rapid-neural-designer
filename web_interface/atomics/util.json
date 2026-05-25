@@ -1,0 +1,90 @@
+[
+  {
+    "name": "Identity",
+    "id": "identity",
+    "category": "util",
+    "description": "Pass-through tensor. x → x. Graph hygiene and debug.",
+    "inputs": [
+      { "name": "x", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "out", "type": "tensor" }
+    ],
+    "properties": [],
+    "code": "{{out}} = {{x}}",
+    "imports": [],
+    "color": "#b0b0b0"
+  },
+  {
+    "name": "StopGradient",
+    "id": "stop_gradient",
+    "category": "util",
+    "description": "Prevents gradient flow during backward pass. Forward pass is identity.",
+    "inputs": [
+      { "name": "x", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "out", "type": "tensor" }
+    ],
+    "properties": [],
+    "code": "{{out}} = np.array({{x}}, copy=True)",
+    "imports": ["import numpy as np"],
+    "color": "#b0b0b0"
+  },
+  {
+    "name": "TensorSplit",
+    "id": "tensor_split",
+    "category": "util",
+    "description": "Fans out one tensor to N consumers. No-op; for readable graph routing.",
+    "inputs": [
+      { "name": "x", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "out_0", "type": "tensor" },
+      { "name": "out_1", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "num_outputs", "type": "int", "default": 2, "description": "Number of output branches" }
+    ],
+    "code": "_tsplit{{_id}}_out = [{{x}}] * {{num_outputs}}\n{{out_0}} = _tsplit{{_id}}_out[0]\n{{out_1}} = _tsplit{{_id}}_out[1]",
+    "imports": [],
+    "color": "#b0b0b0"
+  },
+  {
+    "name": "ConditionalGate",
+    "id": "conditional_gate",
+    "category": "util",
+    "description": "Element-wise select: where(cond, a, b).",
+    "inputs": [
+      { "name": "cond", "type": "tensor" },
+      { "name": "a", "type": "tensor" },
+      { "name": "b", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "out", "type": "tensor" }
+    ],
+    "properties": [],
+    "code": "{{out}} = np.where({{cond}}, {{a}}, {{b}})",
+    "imports": ["import numpy as np"],
+    "color": "#b0b0b0"
+  },
+  {
+    "name": "WeightedMix",
+    "id": "weighted_mix",
+    "category": "util",
+    "description": "Linear interpolation: α·x + (1-α)·y.",
+    "inputs": [
+      { "name": "x", "type": "tensor" },
+      { "name": "y", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "out", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "alpha", "type": "float", "default": 0.5, "description": "Mixing coefficient α" }
+    ],
+    "code": "{{out}} = {{alpha}} * {{x}} + (1.0 - {{alpha}}) * {{y}}",
+    "imports": [],
+    "color": "#b0b0b0"
+  }
+]

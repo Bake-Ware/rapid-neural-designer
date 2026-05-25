@@ -29,6 +29,22 @@
     { "id": "transformer_block", "name": "Transformer Block", "description": "LLaMA-style: RMSNorm -> RoPE Attn -> Residual -> RMSNorm -> SwiGLU -> Residual", "file": "transformer_block.json", "color": "#e056a0" },
     { "id": "llada_block", "name": "LLaDA Block", "description": "Diffusion transformer: bidirectional attention + SwiGLU", "file": "llada_block.json", "color": "#e056a0" },
     { "id": "qwen_block", "name": "Qwen Block", "description": "Qwen-style: GQA + RoPE + SwiGLU", "file": "qwen_block.json", "color": "#e056a0" },
-    { "id": "moe_transformer_block", "name": "MoE Transformer Block", "description": "Mixtral-style: RoPE Attn + MoE FFN (8 experts, top-2)", "file": "moe_transformer_block.json", "color": "#e056a0" }
+    { "id": "moe_transformer_block", "name": "MoE Transformer Block", "description": "Mixtral-style: RoPE Attn + MoE FFN (8 experts, top-2)", "file": "moe_transformer_block.json", "color": "#e056a0" },
+    { "id": "time_embedding", "name": "TimeEmbedding", "description": "Sinusoidal time embedding for diffusion steps", "file": "time_embedding.json", "color": "#f7b731" },
+    { "id": "noise_schedule", "name": "NoiseSchedule", "description": "Parameterized β/α noise schedule (linear or cosine)", "file": "noise_schedule.json", "color": "#f7b731" },
+    { "id": "prediction_head", "name": "PredictionHead", "description": "Norm + linear projection head for diffusion models (ε / x0 / v)", "file": "prediction_head.json", "color": "#f7b731" },
+    { "id": "cfg_dropout", "name": "CFGDropout", "description": "Training-time conditional dropout for classifier-free guidance", "file": "cfg_dropout.json", "color": "#f7b731" },
+    { "id": "pc_generative_head", "name": "PCGenerativeHead", "description": "Per-layer top-down predictor for predictive coding", "file": "pc_generative_head.json", "color": "#26de81" },
+    { "id": "pc_state_update", "name": "PCStateUpdate", "description": "Local PC update: x ← x − α·(e_top − e_bottom)", "file": "pc_state_update.json", "color": "#26de81" },
+    { "id": "witness_head", "name": "WitnessHead", "description": "Calibrated confidence scalar over (step k, latent)", "file": "witness_head.json", "color": "#a55eea" },
+    { "id": "halt_decision", "name": "HaltDecision", "description": "PonderNet-style differentiable halt probability", "file": "halt_decision.json", "color": "#a55eea" },
+    { "id": "trajectory_recorder", "name": "TrajectoryRecorder", "description": "Ring-buffer recorder for (k, x_k, conf_k) denoising trajectories", "file": "trajectory_recorder.json", "color": "#a55eea" },
+    { "id": "extract_operator", "name": "ExtractOperator", "description": "Extracts latent at halt step from trajectory buffer", "file": "extract_operator.json", "color": "#a55eea" },
+    { "id": "graph_attention_diffusion", "name": "GraphAttentionDiffusion", "description": "Iterated GAT with diffusion-style skip-connection updates", "file": "graph_attention_diffusion.json", "color": "#4bcffa" },
+    { "id": "graph_node_retrieval", "name": "GraphRetrieval", "description": "Top-k semantic node retrieval via learned query/key projection", "file": "graph_node_retrieval.json", "color": "#4bcffa" },
+    { "id": "tag_embedding", "name": "TagEmbedding", "description": "Semantic tag embedding lookup for weight pockets", "file": "tag_embedding.json", "color": "#4bcffa" },
+    { "id": "dual_track_combiner", "name": "DualTrackCombiner", "description": "Combines converged and partial-denoising states via witness gate", "file": "dual_track_combiner.json", "color": "#fd9644" },
+    { "id": "droga_actor", "name": "DROGAActor", "description": "Curriculum-conditioned action head over candidate state distribution", "file": "droga_actor.json", "color": "#fd9644" },
+    { "id": "outcome_predictor", "name": "OutcomePredictor", "description": "Predicts expected outcome distribution at action commit for PC error injection", "file": "outcome_predictor.json", "color": "#fd9644" }
   ]
 }

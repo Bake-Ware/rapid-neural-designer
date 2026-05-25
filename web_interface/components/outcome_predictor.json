@@ -1,0 +1,18 @@
+{
+  "name": "OutcomePredictor",
+  "id": "outcome_predictor",
+  "description": "At action commit, predicts expected outcome distribution. Required for PC error injection when result returns.",
+  "inputs": [
+    { "name": "action_hidden", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "outcome_dist", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "d_model", "type": "int", "default": 512, "description": "Input hidden dimension" },
+    { "name": "d_outcomes", "type": "int", "default": 128, "description": "Number of outcome classes / distribution dim" },
+    { "name": "eps", "type": "float", "default": 1e-5, "description": "LayerNorm epsilon" }
+  ],
+  "code": "_op{{_id}}_W = np.random.randn({{d_outcomes}}, {{d_model}}).astype(np.float32) * 0.02\n_op{{_id}}_b = np.zeros({{d_outcomes}}, dtype=np.float32)\n_op{{_id}}_pre = np.dot({{action_hidden}}.reshape(1, -1), _op{{_id}}_W.T) + _op{{_id}}_b\n_op{{_id}}_mean = np.mean(_op{{_id}}_pre, axis=-1, keepdims=True)\n_op{{_id}}_var = np.var(_op{{_id}}_pre, axis=-1, keepdims=True)\n_op{{_id}}_normed = (_op{{_id}}_pre - _op{{_id}}_mean) / np.sqrt(_op{{_id}}_var + {{eps}})\n_op{{_id}}_exp = np.exp(_op{{_id}}_normed - np.max(_op{{_id}}_normed, axis=-1, keepdims=True))\n{{outcome_dist}} = (_op{{_id}}_exp / (_op{{_id}}_exp.sum(axis=-1, keepdims=True) + 1e-9)).reshape(-1)",
+  "imports": ["import numpy as np"]
+}

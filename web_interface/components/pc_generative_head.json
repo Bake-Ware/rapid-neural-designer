@@ -1,0 +1,18 @@
+{
+  "name": "PCGenerativeHead",
+  "id": "pc_generative_head",
+  "description": "Per-layer top-down predictor for predictive coding. Generates predictions of the layer below via norm + linear + activation.",
+  "inputs": [
+    { "name": "hidden", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "prediction", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "d_in", "type": "int", "default": 512, "description": "Input dimension" },
+    { "name": "d_out", "type": "int", "default": 512, "description": "Predicted layer dimension" },
+    { "name": "eps", "type": "float", "default": 1e-5, "description": "LayerNorm epsilon" }
+  ],
+  "code": "_pcgh{{_id}}_mean = np.mean({{hidden}}, axis=-1, keepdims=True)\n_pcgh{{_id}}_var = np.var({{hidden}}, axis=-1, keepdims=True)\n_pcgh{{_id}}_normed = ({{hidden}} - _pcgh{{_id}}_mean) / np.sqrt(_pcgh{{_id}}_var + {{eps}})\n_pcgh{{_id}}_W = np.random.randn({{d_out}}, {{d_in}}).astype(np.float32) * 0.02\n_pcgh{{_id}}_b = np.zeros({{d_out}}, dtype=np.float32)\n_pcgh{{_id}}_pre = np.dot(_pcgh{{_id}}_normed, _pcgh{{_id}}_W.T) + _pcgh{{_id}}_b\n{{prediction}} = np.maximum(0.0, _pcgh{{_id}}_pre)",
+  "imports": ["import numpy as np"]
+}

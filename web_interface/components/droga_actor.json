@@ -1,0 +1,19 @@
+{
+  "name": "DROGAActor",
+  "id": "droga_actor",
+  "description": "Curriculum-conditioned action head. Selects from a distribution of candidate states rather than emitting a single converged token.",
+  "inputs": [
+    { "name": "hidden", "type": "tensor" },
+    { "name": "candidates", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "action", "type": "tensor" },
+    { "name": "action_dist", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "d_model", "type": "int", "default": 512, "description": "Hidden state dimension" },
+    { "name": "temperature", "type": "float", "default": 1.0, "description": "Softmax temperature for action distribution" }
+  ],
+  "code": "_da{{_id}}_W = np.random.randn({{candidates}}.shape[0], {{d_model}}).astype(np.float32) * 0.02\n_da{{_id}}_logits = np.dot({{hidden}}.reshape(1, -1), _da{{_id}}_W.T).reshape(-1) / {{temperature}}\n_da{{_id}}_exp = np.exp(_da{{_id}}_logits - np.max(_da{{_id}}_logits))\n{{action_dist}} = _da{{_id}}_exp / (_da{{_id}}_exp.sum() + 1e-9)\n_da{{_id}}_idx = int(np.argmax({{action_dist}}))\n{{action}} = {{candidates}}[_da{{_id}}_idx]",
+  "imports": ["import numpy as np"]
+}

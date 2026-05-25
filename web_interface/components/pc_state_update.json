@@ -1,0 +1,18 @@
+{
+  "name": "PCStateUpdate",
+  "id": "pc_state_update",
+  "description": "Local predictive coding state update: x ← x − α·(e_top − e_bottom). Not backprop — local Hebbian-style update.",
+  "inputs": [
+    { "name": "x", "type": "tensor" },
+    { "name": "e_top", "type": "tensor" },
+    { "name": "e_bottom", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "x_updated", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "alpha", "type": "float", "default": 0.1, "description": "Local learning rate α" }
+  ],
+  "code": "{{x_updated}} = {{x}} - {{alpha}} * ({{e_top}} - {{e_bottom}})",
+  "imports": []
+}

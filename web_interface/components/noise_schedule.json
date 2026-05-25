@@ -1,0 +1,20 @@
+{
+  "name": "NoiseSchedule",
+  "id": "noise_schedule",
+  "description": "Parameterized β/α noise schedule (linear or cosine). Outputs α_t and σ_t for a given diffusion step.",
+  "inputs": [
+    { "name": "step", "type": "int" }
+  ],
+  "outputs": [
+    { "name": "alpha_t", "type": "tensor" },
+    { "name": "sigma_t", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "num_steps", "type": "int", "default": 1000, "description": "Total diffusion steps" },
+    { "name": "schedule_type", "type": "enum", "default": "cosine", "options": ["linear", "cosine"], "description": "Schedule type" },
+    { "name": "beta_start", "type": "float", "default": 0.0001, "description": "β start (linear only)" },
+    { "name": "beta_end", "type": "float", "default": 0.02, "description": "β end (linear only)" }
+  ],
+  "code": "_ns{{_id}}_t = int({{step}})\nif '{{schedule_type}}' == 'cosine':\n    _ns{{_id}}_s = 0.008\n    _ns{{_id}}_i = np.arange({{num_steps}} + 1, dtype=np.float32)\n    _ns{{_id}}_f = np.cos((_ns{{_id}}_i / {{num_steps}} + _ns{{_id}}_s) / (1 + _ns{{_id}}_s) * np.pi / 2) ** 2\n    _ns{{_id}}_acp = _ns{{_id}}_f / _ns{{_id}}_f[0]\nelse:\n    _ns{{_id}}_betas = np.linspace({{beta_start}}, {{beta_end}}, {{num_steps}}, dtype=np.float32)\n    _ns{{_id}}_acp = np.cumprod(1.0 - _ns{{_id}}_betas)\n    _ns{{_id}}_acp = np.concatenate([[1.0], _ns{{_id}}_acp])\n{{alpha_t}} = np.array(_ns{{_id}}_acp[_ns{{_id}}_t], dtype=np.float32)\n{{sigma_t}} = np.sqrt(np.maximum(1.0 - _ns{{_id}}_acp[_ns{{_id}}_t], 0.0)).astype(np.float32)",
+  "imports": ["import numpy as np"]
+}

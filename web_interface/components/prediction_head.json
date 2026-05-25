@@ -1,0 +1,19 @@
+{
+  "name": "PredictionHead",
+  "id": "prediction_head",
+  "description": "Norm + linear projection head for diffusion models. Configurable parameterization (epsilon, x0, or v).",
+  "inputs": [
+    { "name": "hidden", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "prediction", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "d_model", "type": "int", "default": 512, "description": "Input hidden dimension" },
+    { "name": "d_out", "type": "int", "default": 512, "description": "Output dimension" },
+    { "name": "parameterization", "type": "enum", "default": "epsilon", "options": ["epsilon", "x0", "v"], "description": "Diffusion prediction target" },
+    { "name": "eps", "type": "float", "default": 1e-6, "description": "RMSNorm epsilon" }
+  ],
+  "code": "_ph{{_id}}_rms = np.sqrt(np.mean({{hidden}} ** 2, axis=-1, keepdims=True) + {{eps}})\n_ph{{_id}}_normed = {{hidden}} / _ph{{_id}}_rms\n_ph{{_id}}_W = np.random.randn({{d_out}}, {{d_model}}).astype(np.float32) * 0.02\n_ph{{_id}}_b = np.zeros({{d_out}}, dtype=np.float32)\n{{prediction}} = np.dot(_ph{{_id}}_normed, _ph{{_id}}_W.T) + _ph{{_id}}_b",
+  "imports": ["import numpy as np"]
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "name": "SurpriseGate",
+    "id": "surprise_gate",
+    "category": "control",
+    "description": "Binary trigger when |error| > threshold. Auto-triggers consolidation or witness decisions.",
+    "inputs": [
+      { "name": "error", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "triggered", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "threshold", "type": "float", "default": 0.5, "description": "Activation threshold" }
+    ],
+    "code": "{{triggered}} = (np.abs({{error}}) > {{threshold}}).astype(np.float32)",
+    "imports": ["import numpy as np"],
+    "color": "#ff9f43"
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "name": "DualTrackCombiner",
+  "id": "dual_track_combiner",
+  "description": "Combines converged extracted state with witness-filtered partial-denoising candidates. The half-baked-as-feature mechanism.",
+  "inputs": [
+    { "name": "converged", "type": "tensor" },
+    { "name": "partial", "type": "tensor" },
+    { "name": "latent", "type": "tensor" },
+    { "name": "step_embed", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "combined", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "d_model", "type": "int", "default": 512, "description": "Latent dimension" },
+    { "name": "eps", "type": "float", "default": 1e-5, "description": "LayerNorm epsilon for witness head" }
+  ],
+  "code": "_dtc{{_id}}_x = np.concatenate([{{latent}}.reshape(-1), {{step_embed}}.reshape(-1)], axis=0).reshape(1, -1)\n_dtc{{_id}}_d = _dtc{{_id}}_x.shape[-1]\n_dtc{{_id}}_mean = np.mean(_dtc{{_id}}_x, axis=-1, keepdims=True)\n_dtc{{_id}}_var = np.var(_dtc{{_id}}_x, axis=-1, keepdims=True)\n_dtc{{_id}}_normed = (_dtc{{_id}}_x - _dtc{{_id}}_mean) / np.sqrt(_dtc{{_id}}_var + {{eps}})\n_dtc{{_id}}_W = np.random.randn(1, _dtc{{_id}}_d).astype(np.float32) * 0.02\n_dtc{{_id}}_conf = 1.0 / (1.0 + np.exp(-np.dot(_dtc{{_id}}_normed, _dtc{{_id}}_W.T)))\n_dtc{{_id}}_alpha = float(_dtc{{_id}}_conf.ravel()[0])\n{{combined}} = _dtc{{_id}}_alpha * {{converged}} + (1.0 - _dtc{{_id}}_alpha) * {{partial}}",
+  "imports": ["import numpy as np"]
+}

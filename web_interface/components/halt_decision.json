@@ -1,0 +1,20 @@
+{
+  "name": "HaltDecision",
+  "id": "halt_decision",
+  "description": "PonderNet-style halt probability. Uses WitnessHead confidence with Gumbel-softmax sampling for differentiable halting.",
+  "inputs": [
+    { "name": "latent", "type": "tensor" },
+    { "name": "step_embed", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "halt_prob", "type": "tensor" },
+    { "name": "halt_sample", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "d_model", "type": "int", "default": 512, "description": "Input dimension" },
+    { "name": "temperature", "type": "float", "default": 1.0, "description": "Gumbel-softmax temperature" },
+    { "name": "eps", "type": "float", "default": 1e-5, "description": "LayerNorm epsilon" }
+  ],
+  "code": "_hd{{_id}}_x = np.concatenate([{{latent}}.reshape(-1), {{step_embed}}.reshape(-1)], axis=0).reshape(1, -1)\n_hd{{_id}}_d = _hd{{_id}}_x.shape[-1]\n_hd{{_id}}_mean = np.mean(_hd{{_id}}_x, axis=-1, keepdims=True)\n_hd{{_id}}_var = np.var(_hd{{_id}}_x, axis=-1, keepdims=True)\n_hd{{_id}}_normed = (_hd{{_id}}_x - _hd{{_id}}_mean) / np.sqrt(_hd{{_id}}_var + {{eps}})\n_hd{{_id}}_W = np.random.randn(1, _hd{{_id}}_d).astype(np.float32) * 0.02\n_hd{{_id}}_pre = np.dot(_hd{{_id}}_normed, _hd{{_id}}_W.T)\n{{halt_prob}} = 1.0 / (1.0 + np.exp(-_hd{{_id}}_pre))\n_hd{{_id}}_g = -np.log(-np.log(np.clip(np.random.rand(1, 2), 1e-20, 1.0)))\n_hd{{_id}}_logits = np.concatenate([np.log({{halt_prob}} + 1e-20), np.log(1 - {{halt_prob}} + 1e-20)], axis=-1)\n_hd{{_id}}_soft = np.exp((_hd{{_id}}_logits + _hd{{_id}}_g) / {{temperature}})\n{{halt_sample}} = (_hd{{_id}}_soft[:, 0:1] / (_hd{{_id}}_soft.sum(axis=-1, keepdims=True) + 1e-20)).astype(np.float32)",
+  "imports": ["import numpy as np"]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "GraphRetrieval",
+  "id": "graph_node_retrieval",
+  "description": "Top-k semantically similar nodes from a store given a query. Learned query/key projection + softmax similarity + top-k select.",
+  "inputs": [
+    { "name": "query", "type": "tensor" },
+    { "name": "node_store", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "retrieved", "type": "tensor" },
+    { "name": "scores", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "d_model", "type": "int", "default": 64, "description": "Query/key projection dimension" },
+    { "name": "top_k", "type": "int", "default": 4, "description": "Number of nodes to retrieve" },
+    { "name": "init_std", "type": "float", "default": 0.02, "description": "Weight init std" }
+  ],
+  "code": "_gnr{{_id}}_Wq = np.random.randn({{d_model}}, {{query}}.shape[-1]).astype(np.float32) * {{init_std}}\n_gnr{{_id}}_Wk = np.random.randn({{d_model}}, {{node_store}}.shape[-1]).astype(np.float32) * {{init_std}}\n_gnr{{_id}}_q = np.dot({{query}}.reshape(1, -1), _gnr{{_id}}_Wq.T)\n_gnr{{_id}}_k = np.dot({{node_store}}, _gnr{{_id}}_Wk.T)\n_gnr{{_id}}_sim = np.dot(_gnr{{_id}}_q, _gnr{{_id}}_k.T).reshape(-1)\n_gnr{{_id}}_sm = np.exp(_gnr{{_id}}_sim - np.max(_gnr{{_id}}_sim))\n_gnr{{_id}}_sm /= (_gnr{{_id}}_sm.sum() + 1e-9)\n_gnr{{_id}}_topk = np.argsort(_gnr{{_id}}_sm)[-{{top_k}}:][::-1]\n{{retrieved}} = {{node_store}}[_gnr{{_id}}_topk]\n{{scores}} = _gnr{{_id}}_sm[_gnr{{_id}}_topk]",
+  "imports": ["import numpy as np"]
+}

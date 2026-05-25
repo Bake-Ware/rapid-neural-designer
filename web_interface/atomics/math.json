@@ -203,5 +203,77 @@
     "code": "{{result}} = np.clip({{input}}, {{min_val}}, {{max_val}})",
     "imports": ["import numpy as np"],
     "color": "#4ecdc4"
+  },
+  {
+    "name": "PCError",
+    "id": "pc_error",
+    "category": "math",
+    "description": "Prediction error: observation − prediction. Routes error as both signal and learning trigger.",
+    "inputs": [
+      { "name": "observation", "type": "tensor" },
+      { "name": "prediction", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "error", "type": "tensor" }
+    ],
+    "properties": [],
+    "code": "{{error}} = {{observation}} - {{prediction}}",
+    "imports": [],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "ForwardNoise",
+    "id": "forward_noising",
+    "category": "math",
+    "description": "Adds Gaussian noise: x + σ·ε where ε ~ N(0, I).",
+    "inputs": [
+      { "name": "x", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "noisy_x", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "sigma", "type": "float", "default": 1.0, "description": "Noise scale σ" }
+    ],
+    "code": "{{noisy_x}} = {{x}} + {{sigma}} * np.random.randn(*{{x}}.shape).astype(np.float32)",
+    "imports": ["import numpy as np"],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "CFGCombiner",
+    "id": "cfg_combiner",
+    "category": "math",
+    "description": "Classifier-free guidance: w·cond_pred + (1-w)·uncond_pred.",
+    "inputs": [
+      { "name": "cond", "type": "tensor" },
+      { "name": "uncond", "type": "tensor" }
+    ],
+    "outputs": [
+      { "name": "out", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "guidance_scale", "type": "float", "default": 3.0, "description": "CFG guidance weight w" }
+    ],
+    "code": "{{out}} = {{guidance_scale}} * {{cond}} + (1.0 - {{guidance_scale}}) * {{uncond}}",
+    "imports": [],
+    "color": "#4ecdc4"
+  },
+  {
+    "name": "FreeEnergy",
+    "id": "free_energy",
+    "category": "math",
+    "description": "Aggregates prediction errors across layers into a scalar via sum or mean.",
+    "inputs": [
+      { "name": "errors", "type": "tensor[]" }
+    ],
+    "outputs": [
+      { "name": "energy", "type": "tensor" }
+    ],
+    "properties": [
+      { "name": "reduction", "type": "enum", "default": "sum", "options": ["sum", "mean"], "description": "Reduction method" }
+    ],
+    "code": "_fe{{_id}}_terms = np.array([float(np.sum(e ** 2)) for e in {{errors}}])\n{{energy}} = np.sum(_fe{{_id}}_terms) if '{{reduction}}' == 'sum' else np.mean(_fe{{_id}}_terms)",
+    "imports": ["import numpy as np"],
+    "color": "#4ecdc4"
   }
 ]

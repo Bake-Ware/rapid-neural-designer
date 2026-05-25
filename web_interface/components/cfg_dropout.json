@@ -1,0 +1,17 @@
+{
+  "name": "CFGDropout",
+  "id": "cfg_dropout",
+  "description": "Training-time conditional dropout. Randomly zeros conditioning with probability p to enable CFG at inference.",
+  "inputs": [
+    { "name": "conditioning", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "out", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "drop_prob", "type": "float", "default": 0.1, "description": "Probability of dropping conditioning (p)" },
+    { "name": "training", "type": "bool", "default": true, "description": "Apply dropout only during training" }
+  ],
+  "code": "if {{training}} and np.random.rand() < {{drop_prob}}:\n    {{out}} = np.zeros_like({{conditioning}})\nelse:\n    {{out}} = {{conditioning}}",
+  "imports": ["import numpy as np"]
+}

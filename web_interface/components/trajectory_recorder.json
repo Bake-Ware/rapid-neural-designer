@@ -1,0 +1,19 @@
+{
+  "name": "TrajectoryRecorder",
+  "id": "trajectory_recorder",
+  "description": "Captures (step k, latent x_k, confidence conf_k) tuples across denoising steps in a ring buffer.",
+  "inputs": [
+    { "name": "latent", "type": "tensor" },
+    { "name": "step_embed", "type": "tensor" },
+    { "name": "confidence", "type": "tensor" },
+    { "name": "buffer", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "buffer_out", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "buffer_size", "type": "int", "default": 32, "description": "Ring buffer capacity (num steps to retain)" }
+  ],
+  "code": "_tr{{_id}}_entry = np.concatenate([{{latent}}.reshape(1, -1), {{step_embed}}.reshape(1, -1), {{confidence}}.reshape(1, -1)], axis=-1)\nif {{buffer}}.shape[0] < {{buffer_size}}:\n    {{buffer_out}} = np.concatenate([{{buffer}}, _tr{{_id}}_entry], axis=0)\nelse:\n    {{buffer_out}} = np.concatenate([{{buffer}}[1:], _tr{{_id}}_entry], axis=0)",
+  "imports": ["import numpy as np"]
+}

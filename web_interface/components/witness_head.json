@@ -1,0 +1,18 @@
+{
+  "name": "WitnessHead",
+  "id": "witness_head",
+  "description": "Calibrated confidence scalar over (step k, latent). Norm + linear + sigmoid. Used to decide when denoising has converged.",
+  "inputs": [
+    { "name": "latent", "type": "tensor" },
+    { "name": "step_embed", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "confidence", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "d_model", "type": "int", "default": 512, "description": "Latent + step embedding dimension" },
+    { "name": "eps", "type": "float", "default": 1e-5, "description": "LayerNorm epsilon" }
+  ],
+  "code": "_wh{{_id}}_x = np.concatenate([{{latent}}.reshape(-1), {{step_embed}}.reshape(-1)], axis=0).reshape(1, -1)\n_wh{{_id}}_d = _wh{{_id}}_x.shape[-1]\n_wh{{_id}}_mean = np.mean(_wh{{_id}}_x, axis=-1, keepdims=True)\n_wh{{_id}}_var = np.var(_wh{{_id}}_x, axis=-1, keepdims=True)\n_wh{{_id}}_normed = (_wh{{_id}}_x - _wh{{_id}}_mean) / np.sqrt(_wh{{_id}}_var + {{eps}})\n_wh{{_id}}_W = np.random.randn(1, _wh{{_id}}_d).astype(np.float32) * 0.02\n_wh{{_id}}_pre = np.dot(_wh{{_id}}_normed, _wh{{_id}}_W.T)\n{{confidence}} = 1.0 / (1.0 + np.exp(-_wh{{_id}}_pre))",
+  "imports": ["import numpy as np"]
+}

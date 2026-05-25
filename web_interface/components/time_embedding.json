@@ -1,0 +1,16 @@
+{
+  "name": "TimeEmbedding",
+  "id": "time_embedding",
+  "description": "Sinusoidal time embedding for diffusion steps. Encodes step k via sin/cos at varying frequencies then projects via learned linear.",
+  "inputs": [
+    { "name": "step", "type": "int" }
+  ],
+  "outputs": [
+    { "name": "embedding", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "d_model", "type": "int", "default": 512, "description": "Embedding dimension" }
+  ],
+  "code": "_te{{_id}}_half = {{d_model}} // 2\n_te{{_id}}_freqs = np.exp(-np.log(10000.0) * np.arange(_te{{_id}}_half, dtype=np.float32) / _te{{_id}}_half)\n_te{{_id}}_args = float({{step}}) * _te{{_id}}_freqs\n_te{{_id}}_sincos = np.concatenate([np.sin(_te{{_id}}_args), np.cos(_te{{_id}}_args)], axis=0).reshape(1, -1)\n_te{{_id}}_W = np.random.randn({{d_model}}, {{d_model}}).astype(np.float32) * 0.02\n_te{{_id}}_b = np.zeros({{d_model}}, dtype=np.float32)\n{{embedding}} = np.dot(_te{{_id}}_sincos, _te{{_id}}_W.T) + _te{{_id}}_b",
+  "imports": ["import numpy as np"]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "ExtractOperator",
+  "id": "extract_operator",
+  "description": "Given a trajectory buffer and halt decision, returns the extracted latent at the halt step via index select.",
+  "inputs": [
+    { "name": "trajectory", "type": "tensor" },
+    { "name": "halt_sample", "type": "tensor" }
+  ],
+  "outputs": [
+    { "name": "extracted", "type": "tensor" }
+  ],
+  "properties": [
+    { "name": "latent_dim", "type": "int", "default": 512, "description": "Dimension of latent slice in trajectory entry" }
+  ],
+  "code": "_eo{{_id}}_n = {{trajectory}}.shape[0]\n_eo{{_id}}_idx = int(np.round(float({{halt_sample}}.ravel()[0]) * (_eo{{_id}}_n - 1)))\n_eo{{_id}}_idx = int(np.clip(_eo{{_id}}_idx, 0, _eo{{_id}}_n - 1))\n{{extracted}} = {{trajectory}}[_eo{{_id}}_idx, :{{latent_dim}}]",
+  "imports": ["import numpy as np"]
+}
