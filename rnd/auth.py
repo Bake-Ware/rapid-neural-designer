@@ -7,6 +7,7 @@ Users stored in SQLite. Passwords hashed with PBKDF2.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import os
 import secrets
 import sqlite3
@@ -72,6 +73,11 @@ CREATE TABLE IF NOT EXISTS user_components (
     FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS server_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_mcp_clients_user ON mcp_clients(user_id);
@@ -98,6 +104,7 @@ class AuthDB:
         self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(AUTH_SCHEMA)
+        self._ensure_server_secret()
 
     def close(self):
         if self.conn:
@@ -363,6 +370,68 @@ class AuthDB:
             (client_id,),
         ).fetchone()
         return dict(row) if row else None
+
+    # ---- Derived API tokens (client_credentials-style, no minting) ----
+
+    def _ensure_server_secret(self) -> str:
+        """Get-or-create the stable secret used to sign derived API tokens."""
+        assert self.conn
+        row = self.conn.execute(
+            "SELECT value FROM server_meta WHERE key = 'api_token_secret'"
+        ).fetchone()
+        if row:
+            return row["value"]
+        secret = os.environ.get("RND_API_SECRET") or secrets.token_hex(32)
+        self.conn.execute(
+            "INSERT INTO server_meta (key, value) VALUES ('api_token_secret', ?)", (secret,)
+        )
+        self.conn.commit()
+        return secret
+
+    def _compute_api_token(self, user_id: str, password_hash: str) -> str:
+        secret = self._ensure_server_secret()
+        sig = hmac.new(
+            secret.encode("utf-8"),
+            f"{user_id}:{password_hash}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return f"{user_id}.{sig}"
+
+    def get_api_token(self, user_id: str) -> str | None:
+        """Derive the deterministic API token for an existing user.
+
+        It's an HMAC over (user_id, password_hash), so it needs no storage,
+        is stable until the user changes their password (which rotates it),
+        and can be shown on a logged-in 'get my token' page.
+        """
+        assert self.conn
+        row = self.conn.execute(
+            "SELECT id, password_hash FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if not row:
+            return None
+        return self._compute_api_token(row["id"], row["password_hash"])
+
+    def validate_api_token(self, token: str) -> dict | None:
+        """Validate a derived API token. Returns user dict or None."""
+        assert self.conn
+        if not token or "." not in token:
+            return None
+        user_id = token.split(".", 1)[0]
+        row = self.conn.execute(
+            "SELECT id, username, display_name, password_hash FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return None
+        expected = self._compute_api_token(row["id"], row["password_hash"])
+        if not hmac.compare_digest(expected, token):
+            return None
+        return {
+            "id": row["id"],
+            "username": row["username"],
+            "display_name": row["display_name"],
+        }
 
     # ---- Admin ----
 

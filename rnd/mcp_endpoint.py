@@ -180,8 +180,8 @@ def _authenticate() -> dict | None:
         if user:
             return user
 
-    # Try as OAuth access token
-    return _auth.validate_oauth_token(token)
+    # Try as OAuth access token, then as a derived API token
+    return _auth.validate_oauth_token(token) or _auth.validate_api_token(token)
 
 
 @mcp_bp.route("", methods=["POST"])
