@@ -53,7 +53,7 @@ def get_current_user():
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
-        return auth_db.validate_token(token)
+        return auth_db.validate_token(token) or auth_db.validate_api_token(token)
     return None
 
 
@@ -142,6 +142,27 @@ def auth_logout():
     if auth_header.startswith("Bearer "):
         auth_db.logout(auth_header[7:])
     return jsonify({"ok": True})
+
+
+@app.route('/api/auth/token', methods=['GET'])
+@require_auth
+def auth_api_token():
+    """Return the caller's derived API token (for programmatic / agent / MCP access).
+
+    Derived from the user's credentials (HMAC of user_id:password_hash), so it
+    needs no storage and rotates automatically when the password changes.
+    """
+    token = auth_db.get_api_token(request.user["id"])
+    return jsonify({
+        "api_token": token,
+        "usage": "Authorization: Bearer <api_token>",
+        "note": "Stable until you change your password. Treat it like a password.",
+    })
+
+
+@app.route('/api-token')
+def serve_api_token_page():
+    return send_from_directory(STATIC_DIR, "api_token.html")
 
 
 # ---------------------------------------------------------------------------
