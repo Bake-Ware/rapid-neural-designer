@@ -1130,6 +1130,25 @@ def rnd_get_finding(finding_id):
         return api_error("Finding not found", 404)
     return jsonify(finding.to_dict())
 
+@app.route('/api/rnd/findings/<finding_id>', methods=['PATCH'])
+def rnd_update_finding(finding_id):
+    finding = rnd_repo.load("finding", finding_id)
+    if not finding:
+        return api_error("Finding not found", 404)
+    data = request.get_json()
+    for field in ["summary", "reasoning", "experiment_refs"]:
+        if field in data:
+            setattr(finding, field, data[field])
+    if "statement_resolutions" in data:
+        finding.statement_resolutions = [StatementResolution(
+            statement_id=r["statement_id"],
+            resolution=FindingResolution(r["resolution"]),
+            note=r.get("note", ""),
+        ) for r in data["statement_resolutions"]]
+    finding.updated_at = now_iso()
+    rnd_repo.save(finding)
+    return jsonify(finding.to_dict())
+
 
 # ---- Architectures ----
 

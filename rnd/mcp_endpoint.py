@@ -469,11 +469,21 @@ def list_experiments(thread_id: str = ""):
 def create_experiment(thread_id: str, hypothesis: str = "", expected: str = "",
                       method: dict = None, architecture_id: str = "",
                       dataset: str = "", hyperparameters: dict = None):
+    architecture_hash = ""
+    if architecture_id:
+        arch = _repo.load("architecture", architecture_id)
+        if not arch:
+            raise ValueError(f"Architecture {architecture_id} not found")
+        architecture_hash = arch.content_hash
     inputs = ExperimentInputs(
-        architecture_id=architecture_id,
-        dataset=dataset,
-        hyperparameters=hyperparameters or {},
+        architecture_ref=architecture_id,
+        architecture_hash=architecture_hash,
     )
+    method = dict(method or {})
+    if dataset:
+        method.setdefault("dataset", dataset)
+    if hyperparameters:
+        method.setdefault("hyperparameters", hyperparameters)
     exp = Experiment.create(
         thread_id=thread_id,
         created_by="mcp-client",
@@ -580,7 +590,7 @@ def list_findings(thread_id: str = ""):
                 "type": "object",
                 "properties": {
                     "statement_id": {"type": "string"},
-                    "resolution": {"type": "string", "enum": ["confirmed", "refuted", "modified", "inconclusive"]},
+                    "resolution": {"type": "string", "enum": ["confirms", "refutes", "complicates"]},
                     "note": {"type": "string"},
                 },
             },
@@ -1163,7 +1173,7 @@ def get_paper(paper_id: str):
     "properties": {
         "paper_id": {"type": "string"},
         "title": {"type": "string"},
-        "status": {"type": "string", "enum": ["outline", "drafting", "review", "submitted", "published"]},
+        "status": {"type": "string", "enum": ["draft", "review", "published", "retracted"]},
         "authors": {"type": "array", "items": {"type": "string"}},
         "thread_ids": {"type": "array", "items": {"type": "string"}},
         "project_ids": {"type": "array", "items": {"type": "string"}},
@@ -1194,24 +1204,26 @@ def update_paper(paper_id: str, title: str = "", status: str = "",
     "properties": {
         "paper_id": {"type": "string"},
         "title": {"type": "string", "description": "Section title"},
-        "section_type": {"type": "string", "enum": ["abstract", "introduction", "methods", "results",
-                                                     "discussion", "conclusion", "appendix", "custom"],
+        "section_type": {"type": "string", "enum": ["abstract", "introduction", "method", "results",
+                                                     "discussion", "related_work", "other"],
                          "description": "Section type (default: custom)"},
         "content": {"type": "string", "description": "Section content (markdown)"},
         "order": {"type": "integer", "description": "Sort order"},
     },
     "required": ["paper_id", "title"],
 })
-def add_paper_section(paper_id: str, title: str, section_type: str = "custom",
+def add_paper_section(paper_id: str, title: str, section_type: str = "other",
                       content: str = "", order: int = 0):
     paper = _repo.load("paper", paper_id)
     if not paper:
         raise ValueError(f"Paper {paper_id} not found")
+    section_id = f"sec-{secrets.token_hex(4)}"
     section = PaperSection(
-        id=f"sec-{secrets.token_hex(4)}",
+        id=section_id,
         title=title,
         section_type=SectionType(section_type),
-        order=order,
+        content_ref=f"papers/{paper_id}/sections/{section_id}.md",
+        bindings=[],
     )
     paper.sections.append(section)
     _repo.save(paper)

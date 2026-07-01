@@ -2641,7 +2641,7 @@
         // Fetch all section content for full preview
         const sectionContents = await Promise.all(
             (paper.sections || []).map(s =>
-                fetch(getRndApi() + '/papers/' + id + '/sections/' + s.id + '/content').then(r => r.text())
+                fetch(getRndApi() + '/papers/' + id + '/sections/' + s.id + '/content', { headers: authHeaders() }).then(r => r.ok ? r.text() : '')
             )
         );
         rnSetHeader(paper.title, '<button onclick="rnEditPaperScope(\'' + id + '\')">Edit Scope</button>');
@@ -2711,8 +2711,8 @@
         const paper = await rnFetch('/papers/' + paperId);
         const section = (paper.sections||[]).find(s => s.id === sectionId);
         if (!section) return;
-        const resp = await fetch(getRndApi() + '/papers/' + paperId + '/sections/' + sectionId + '/content');
-        const content = await resp.text();
+        const resp = await fetch(getRndApi() + '/papers/' + paperId + '/sections/' + sectionId + '/content', { headers: authHeaders() });
+        const content = resp.ok ? await resp.text() : '';
 
         // Replace entire research-body with split view
         rnSetHeader(section.title + ' — ' + paper.title,
@@ -2842,7 +2842,7 @@
     async function rnSaveSectionEditor(paperId, sectionId) {
         if (!rnPaperEditor) return;
         const content = rnPaperEditor.getValue();
-        await fetch(getRndApi() + '/papers/' + paperId + '/sections/' + sectionId + '/content', { method: 'PUT', body: content, headers: { 'Content-Type': 'text/plain' } });
+        await fetch(getRndApi() + '/papers/' + paperId + '/sections/' + sectionId + '/content', { method: 'PUT', body: content, headers: { ...authHeaders(), 'Content-Type': 'text/plain' } });
         const t = document.getElementById('rh-title');
         const orig = t.textContent;
         t.textContent = orig + ' — saved';
