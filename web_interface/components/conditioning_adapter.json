@@ -1,0 +1,43 @@
+{
+ "name": "Conditioning Adapter",
+ "id": "conditioning_adapter",
+ "category": "interface",
+ "description": "Trainable projection translating a non-linguistic cognitive state into continuous prefix conditioning for a frozen decoder (DROGA decoupling).",
+ "inputs": [
+  {
+   "name": "state",
+   "type": "tensor"
+  }
+ ],
+ "outputs": [
+  {
+   "name": "prefix",
+   "type": "tensor"
+  }
+ ],
+ "properties": [
+  {
+   "name": "state_dim",
+   "type": "int",
+   "default": 768,
+   "description": "Cognitive state dim"
+  },
+  {
+   "name": "prefix_tokens",
+   "type": "int",
+   "default": 8,
+   "description": "Prefix token count"
+  },
+  {
+   "name": "decoder_dim",
+   "type": "int",
+   "default": 768,
+   "description": "Decoder embedding dim"
+  }
+ ],
+ "code": "_ca{{_id}}_W = np.random.randn({{state_dim}}, {{prefix_tokens}}*{{decoder_dim}}).astype(np.float32)*0.02\n{{prefix}} = ({{state}} @ _ca{{_id}}_W).reshape(-1, {{prefix_tokens}}, {{decoder_dim}})",
+ "imports": [
+  "import numpy as np"
+ ],
+ "color": "#1abc9c"
+}

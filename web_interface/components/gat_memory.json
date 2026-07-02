@@ -1,0 +1,43 @@
+{
+ "name": "GAT Memory",
+ "id": "gat_memory",
+ "category": "memory",
+ "description": "Attention read over a bank of learnable atomic-memory node embeddings (DROGA GAT routing).",
+ "inputs": [
+  {
+   "name": "query_state",
+   "type": "tensor"
+  }
+ ],
+ "outputs": [
+  {
+   "name": "context",
+   "type": "tensor"
+  }
+ ],
+ "properties": [
+  {
+   "name": "n_nodes",
+   "type": "int",
+   "default": 64,
+   "description": "Memory node count"
+  },
+  {
+   "name": "dim",
+   "type": "int",
+   "default": 256,
+   "description": "State/embedding dim"
+  },
+  {
+   "name": "heads",
+   "type": "int",
+   "default": 4,
+   "description": "Attention heads (metadata)"
+  }
+ ],
+ "code": "_gm{{_id}}_E = np.random.randn({{n_nodes}}, {{dim}}).astype(np.float32)*0.02\n_gm{{_id}}_s = {{query_state}} @ _gm{{_id}}_E.T / np.sqrt({{dim}})\n_gm{{_id}}_a = np.exp(_gm{{_id}}_s - _gm{{_id}}_s.max(axis=-1, keepdims=True))\n_gm{{_id}}_a = _gm{{_id}}_a / _gm{{_id}}_a.sum(axis=-1, keepdims=True)\n{{context}} = _gm{{_id}}_a @ _gm{{_id}}_E  # {{heads}}-head (collapsed)",
+ "imports": [
+  "import numpy as np"
+ ],
+ "color": "#9b59b6"
+}

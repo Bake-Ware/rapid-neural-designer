@@ -1,0 +1,49 @@
+{
+ "name": "Tier Stack",
+ "id": "tier_stack",
+ "category": "recurrent",
+ "description": "N recurrent tiers with per-tier hidden state (DROGA multi-tier hierarchy; cycle ratios recorded as metadata).",
+ "inputs": [
+  {
+   "name": "x",
+   "type": "tensor"
+  }
+ ],
+ "outputs": [
+  {
+   "name": "tiers_out",
+   "type": "tensor"
+  }
+ ],
+ "properties": [
+  {
+   "name": "n_tiers",
+   "type": "int",
+   "default": 3,
+   "description": "Number of tiers"
+  },
+  {
+   "name": "per_tier_dim",
+   "type": "int",
+   "default": 256,
+   "description": "Hidden dim per tier"
+  },
+  {
+   "name": "cycle_ratio",
+   "type": "string",
+   "default": "9:3:1",
+   "description": "Tier update ratio (metadata)"
+  },
+  {
+   "name": "cell",
+   "type": "string",
+   "default": "GRU",
+   "description": "Recurrent cell type"
+  }
+ ],
+ "code": "_ts{{_id}}_hs = []\n_ts{{_id}}_inp = {{x}}\nfor _ts{{_id}}_i in range({{n_tiers}}):\n    _ts{{_id}}_W = np.random.randn(_ts{{_id}}_inp.shape[-1], {{per_tier_dim}}).astype(np.float32)*0.02\n    _ts{{_id}}_h = np.tanh(_ts{{_id}}_inp @ _ts{{_id}}_W)  # {{cell}} tier step (simplified)\n    _ts{{_id}}_hs.append(_ts{{_id}}_h)\n    _ts{{_id}}_inp = _ts{{_id}}_h\n{{tiers_out}} = np.stack(_ts{{_id}}_hs, axis=0)  # cycle ratio {{cycle_ratio}}",
+ "imports": [
+  "import numpy as np"
+ ],
+ "color": "#e67e22"
+}

@@ -1,0 +1,45 @@
+{
+ "name": "Predictive Coding Head",
+ "id": "predictive_coding_head",
+ "category": "learning",
+ "description": "Per-tier generative prediction of the input plus prediction error (local free-energy signal).",
+ "inputs": [
+  {
+   "name": "tier_state",
+   "type": "tensor"
+  },
+  {
+   "name": "target",
+   "type": "tensor"
+  }
+ ],
+ "outputs": [
+  {
+   "name": "prediction",
+   "type": "tensor"
+  },
+  {
+   "name": "pc_error",
+   "type": "tensor"
+  }
+ ],
+ "properties": [
+  {
+   "name": "dim",
+   "type": "int",
+   "default": 256,
+   "description": "Tier dim"
+  },
+  {
+   "name": "target_dim",
+   "type": "int",
+   "default": 256,
+   "description": "Target dim"
+  }
+ ],
+ "code": "_pc{{_id}}_W = np.random.randn({{dim}}, {{target_dim}}).astype(np.float32)*0.02\n{{prediction}} = {{tier_state}} @ _pc{{_id}}_W\n{{pc_error}} = np.mean(({{prediction}} - {{target}})**2)",
+ "imports": [
+  "import numpy as np"
+ ],
+ "color": "#f39c12"
+}

@@ -1,0 +1,29 @@
+{
+ "name": "Self-Monitor Feedback",
+ "id": "self_monitor_feedback",
+ "category": "control",
+ "description": "Feedback loop: decoded output re-injected as next-cycle input (DROGA SMFL). Identity in feedforward codegen; the loop is a runtime property.",
+ "inputs": [
+  {
+   "name": "decoded",
+   "type": "tensor"
+  }
+ ],
+ "outputs": [
+  {
+   "name": "feedback",
+   "type": "tensor"
+  }
+ ],
+ "properties": [
+  {
+   "name": "mode",
+   "type": "string",
+   "default": "speak_reinject",
+   "description": "SPEAK reinjects tokens; CONTEMPLATE reinjects H-state projection"
+  }
+ ],
+ "code": "{{feedback}} = {{decoded}}  # SMFL ({{mode}}): closed loop at runtime",
+ "imports": [],
+ "color": "#e74c3c"
+}

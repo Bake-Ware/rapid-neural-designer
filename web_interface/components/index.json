@@ -1,50 +1,370 @@
 {
-  "version": "1.0",
-  "description": "Rapid Neural Designer - Component Library",
-  "components": [
-    { "id": "embedding", "name": "Embedding", "description": "Token embedding lookup table", "file": "embedding.json", "color": "#ff6b6b" },
-    { "id": "linear", "name": "Linear", "description": "Learnable linear transformation: y = xW^T + b", "file": "linear.json", "color": "#4ecdc4" },
-    { "id": "conv2d", "name": "Conv2D", "description": "2D convolution with learnable filters", "file": "conv2d.json", "color": "#4ecdc4" },
-    { "id": "conv2d_transpose", "name": "Conv2D Transpose", "description": "2D transposed convolution (upsampling)", "file": "conv2d_transpose.json", "color": "#4ecdc4" },
-    { "id": "maxpool2d", "name": "MaxPool2D", "description": "2D max pooling", "file": "maxpool2d.json", "color": "#4ecdc4" },
-    { "id": "flatten", "name": "Flatten", "description": "Flatten spatial dims to vector", "file": "flatten.json", "color": "#95e1d3" },
-    { "id": "batchnorm", "name": "BatchNorm", "description": "Batch normalization", "file": "batchnorm.json", "color": "#aa96da" },
-    { "id": "layernorm", "name": "LayerNorm", "description": "Layer normalization (mean + variance)", "file": "layernorm.json", "color": "#aa96da" },
-    { "id": "rmsnorm", "name": "RMSNorm", "description": "Root Mean Square Layer Normalization", "file": "rmsnorm.json", "color": "#aa96da" },
-    { "id": "dropout", "name": "Dropout", "description": "Dropout regularization", "file": "dropout.json", "color": "#aa96da" },
-    { "id": "rnn_layer", "name": "RNN Layer", "description": "Vanilla RNN: h = tanh(Wx + Wh + b)", "file": "rnn_cell.json", "color": "#f0a500" },
-    { "id": "lstm_layer", "name": "LSTM Layer", "description": "LSTM with forget/input/output gates", "file": "lstm_layer.json", "color": "#f0a500" },
-    { "id": "mamba_block", "name": "Mamba Block", "description": "Selective SSM — linear-time sequence modeling", "file": "mamba_block.json", "color": "#f0a500" },
-    { "id": "liquid_cell", "name": "Liquid Cell", "description": "Liquid Time-Constant — continuous dynamics with input-dependent tau", "file": "liquid_cell.json", "color": "#f0a500" },
-    { "id": "rope", "name": "RoPE", "description": "Rotary Positional Encoding", "file": "rope.json", "color": "#f0a500" },
-    { "id": "swiglu_ffn", "name": "SwiGLU FFN", "description": "SwiGLU gated feed-forward network", "file": "swiglu_ffn.json", "color": "#95e1d3" },
-    { "id": "moe_layer", "name": "MoE Layer", "description": "Mixture of Experts — router + top-k SwiGLU experts", "file": "moe_layer.json", "color": "#95e1d3" },
-    { "id": "multi_head_attention", "name": "Multi-Head Attention", "description": "Multi-head self-attention with QKV", "file": "multi_head_attention.json", "color": "#6bb5ff" },
-    { "id": "bidirectional_attention", "name": "Bidirectional Attention", "description": "Full attention without causal mask (LLaDA-style)", "file": "bidirectional_attention.json", "color": "#6bb5ff" },
-    { "id": "cross_attention", "name": "Cross Attention", "description": "Q from decoder, K/V from encoder context", "file": "cross_attention.json", "color": "#6bb5ff" },
-    { "id": "gqa_attention", "name": "GQA Attention", "description": "Grouped Query Attention with RoPE (Qwen-style)", "file": "gqa_attention.json", "color": "#6bb5ff" },
-    { "id": "rope_attention", "name": "RoPE Attention", "description": "Multi-head attention with Rotary Positional Encoding", "file": "rope_attention.json", "color": "#6bb5ff" },
-    { "id": "gat_layer", "name": "GAT Layer", "description": "Graph Attention Network layer", "file": "gat_layer.json", "color": "#6bb5ff" },
-    { "id": "orthogonal_transform", "name": "Orthogonal Transform", "description": "Fixed orthogonal rotation Q from SO(d) — non-learned, norm-preserving", "file": "orthogonal_transform.json", "color": "#ff4444" },
-    { "id": "transformer_block", "name": "Transformer Block", "description": "LLaMA-style: RMSNorm -> RoPE Attn -> Residual -> RMSNorm -> SwiGLU -> Residual", "file": "transformer_block.json", "color": "#e056a0" },
-    { "id": "llada_block", "name": "LLaDA Block", "description": "Diffusion transformer: bidirectional attention + SwiGLU", "file": "llada_block.json", "color": "#e056a0" },
-    { "id": "qwen_block", "name": "Qwen Block", "description": "Qwen-style: GQA + RoPE + SwiGLU", "file": "qwen_block.json", "color": "#e056a0" },
-    { "id": "moe_transformer_block", "name": "MoE Transformer Block", "description": "Mixtral-style: RoPE Attn + MoE FFN (8 experts, top-2)", "file": "moe_transformer_block.json", "color": "#e056a0" },
-    { "id": "time_embedding", "name": "TimeEmbedding", "description": "Sinusoidal time embedding for diffusion steps", "file": "time_embedding.json", "color": "#f7b731" },
-    { "id": "noise_schedule", "name": "NoiseSchedule", "description": "Parameterized β/α noise schedule (linear or cosine)", "file": "noise_schedule.json", "color": "#f7b731" },
-    { "id": "prediction_head", "name": "PredictionHead", "description": "Norm + linear projection head for diffusion models (ε / x0 / v)", "file": "prediction_head.json", "color": "#f7b731" },
-    { "id": "cfg_dropout", "name": "CFGDropout", "description": "Training-time conditional dropout for classifier-free guidance", "file": "cfg_dropout.json", "color": "#f7b731" },
-    { "id": "pc_generative_head", "name": "PCGenerativeHead", "description": "Per-layer top-down predictor for predictive coding", "file": "pc_generative_head.json", "color": "#26de81" },
-    { "id": "pc_state_update", "name": "PCStateUpdate", "description": "Local PC update: x ← x − α·(e_top − e_bottom)", "file": "pc_state_update.json", "color": "#26de81" },
-    { "id": "witness_head", "name": "WitnessHead", "description": "Calibrated confidence scalar over (step k, latent)", "file": "witness_head.json", "color": "#a55eea" },
-    { "id": "halt_decision", "name": "HaltDecision", "description": "PonderNet-style differentiable halt probability", "file": "halt_decision.json", "color": "#a55eea" },
-    { "id": "trajectory_recorder", "name": "TrajectoryRecorder", "description": "Ring-buffer recorder for (k, x_k, conf_k) denoising trajectories", "file": "trajectory_recorder.json", "color": "#a55eea" },
-    { "id": "extract_operator", "name": "ExtractOperator", "description": "Extracts latent at halt step from trajectory buffer", "file": "extract_operator.json", "color": "#a55eea" },
-    { "id": "graph_attention_diffusion", "name": "GraphAttentionDiffusion", "description": "Iterated GAT with diffusion-style skip-connection updates", "file": "graph_attention_diffusion.json", "color": "#4bcffa" },
-    { "id": "graph_node_retrieval", "name": "GraphRetrieval", "description": "Top-k semantic node retrieval via learned query/key projection", "file": "graph_node_retrieval.json", "color": "#4bcffa" },
-    { "id": "tag_embedding", "name": "TagEmbedding", "description": "Semantic tag embedding lookup for weight pockets", "file": "tag_embedding.json", "color": "#4bcffa" },
-    { "id": "dual_track_combiner", "name": "DualTrackCombiner", "description": "Combines converged and partial-denoising states via witness gate", "file": "dual_track_combiner.json", "color": "#fd9644" },
-    { "id": "droga_actor", "name": "DROGAActor", "description": "Curriculum-conditioned action head over candidate state distribution", "file": "droga_actor.json", "color": "#fd9644" },
-    { "id": "outcome_predictor", "name": "OutcomePredictor", "description": "Predicts expected outcome distribution at action commit for PC error injection", "file": "outcome_predictor.json", "color": "#fd9644" }
-  ]
+ "version": "1.0",
+ "description": "Rapid Neural Designer - Component Library",
+ "components": [
+  {
+   "id": "embedding",
+   "name": "Embedding",
+   "description": "Token embedding lookup table",
+   "file": "embedding.json",
+   "color": "#ff6b6b"
+  },
+  {
+   "id": "linear",
+   "name": "Linear",
+   "description": "Learnable linear transformation: y = xW^T + b",
+   "file": "linear.json",
+   "color": "#4ecdc4"
+  },
+  {
+   "id": "conv2d",
+   "name": "Conv2D",
+   "description": "2D convolution with learnable filters",
+   "file": "conv2d.json",
+   "color": "#4ecdc4"
+  },
+  {
+   "id": "conv2d_transpose",
+   "name": "Conv2D Transpose",
+   "description": "2D transposed convolution (upsampling)",
+   "file": "conv2d_transpose.json",
+   "color": "#4ecdc4"
+  },
+  {
+   "id": "maxpool2d",
+   "name": "MaxPool2D",
+   "description": "2D max pooling",
+   "file": "maxpool2d.json",
+   "color": "#4ecdc4"
+  },
+  {
+   "id": "flatten",
+   "name": "Flatten",
+   "description": "Flatten spatial dims to vector",
+   "file": "flatten.json",
+   "color": "#95e1d3"
+  },
+  {
+   "id": "batchnorm",
+   "name": "BatchNorm",
+   "description": "Batch normalization",
+   "file": "batchnorm.json",
+   "color": "#aa96da"
+  },
+  {
+   "id": "layernorm",
+   "name": "LayerNorm",
+   "description": "Layer normalization (mean + variance)",
+   "file": "layernorm.json",
+   "color": "#aa96da"
+  },
+  {
+   "id": "rmsnorm",
+   "name": "RMSNorm",
+   "description": "Root Mean Square Layer Normalization",
+   "file": "rmsnorm.json",
+   "color": "#aa96da"
+  },
+  {
+   "id": "dropout",
+   "name": "Dropout",
+   "description": "Dropout regularization",
+   "file": "dropout.json",
+   "color": "#aa96da"
+  },
+  {
+   "id": "rnn_layer",
+   "name": "RNN Layer",
+   "description": "Vanilla RNN: h = tanh(Wx + Wh + b)",
+   "file": "rnn_cell.json",
+   "color": "#f0a500"
+  },
+  {
+   "id": "lstm_layer",
+   "name": "LSTM Layer",
+   "description": "LSTM with forget/input/output gates",
+   "file": "lstm_layer.json",
+   "color": "#f0a500"
+  },
+  {
+   "id": "mamba_block",
+   "name": "Mamba Block",
+   "description": "Selective SSM \u2014 linear-time sequence modeling",
+   "file": "mamba_block.json",
+   "color": "#f0a500"
+  },
+  {
+   "id": "liquid_cell",
+   "name": "Liquid Cell",
+   "description": "Liquid Time-Constant \u2014 continuous dynamics with input-dependent tau",
+   "file": "liquid_cell.json",
+   "color": "#f0a500"
+  },
+  {
+   "id": "rope",
+   "name": "RoPE",
+   "description": "Rotary Positional Encoding",
+   "file": "rope.json",
+   "color": "#f0a500"
+  },
+  {
+   "id": "swiglu_ffn",
+   "name": "SwiGLU FFN",
+   "description": "SwiGLU gated feed-forward network",
+   "file": "swiglu_ffn.json",
+   "color": "#95e1d3"
+  },
+  {
+   "id": "moe_layer",
+   "name": "MoE Layer",
+   "description": "Mixture of Experts \u2014 router + top-k SwiGLU experts",
+   "file": "moe_layer.json",
+   "color": "#95e1d3"
+  },
+  {
+   "id": "multi_head_attention",
+   "name": "Multi-Head Attention",
+   "description": "Multi-head self-attention with QKV",
+   "file": "multi_head_attention.json",
+   "color": "#6bb5ff"
+  },
+  {
+   "id": "bidirectional_attention",
+   "name": "Bidirectional Attention",
+   "description": "Full attention without causal mask (LLaDA-style)",
+   "file": "bidirectional_attention.json",
+   "color": "#6bb5ff"
+  },
+  {
+   "id": "cross_attention",
+   "name": "Cross Attention",
+   "description": "Q from decoder, K/V from encoder context",
+   "file": "cross_attention.json",
+   "color": "#6bb5ff"
+  },
+  {
+   "id": "gqa_attention",
+   "name": "GQA Attention",
+   "description": "Grouped Query Attention with RoPE (Qwen-style)",
+   "file": "gqa_attention.json",
+   "color": "#6bb5ff"
+  },
+  {
+   "id": "rope_attention",
+   "name": "RoPE Attention",
+   "description": "Multi-head attention with Rotary Positional Encoding",
+   "file": "rope_attention.json",
+   "color": "#6bb5ff"
+  },
+  {
+   "id": "gat_layer",
+   "name": "GAT Layer",
+   "description": "Graph Attention Network layer",
+   "file": "gat_layer.json",
+   "color": "#6bb5ff"
+  },
+  {
+   "id": "orthogonal_transform",
+   "name": "Orthogonal Transform",
+   "description": "Fixed orthogonal rotation Q from SO(d) \u2014 non-learned, norm-preserving",
+   "file": "orthogonal_transform.json",
+   "color": "#ff4444"
+  },
+  {
+   "id": "transformer_block",
+   "name": "Transformer Block",
+   "description": "LLaMA-style: RMSNorm -> RoPE Attn -> Residual -> RMSNorm -> SwiGLU -> Residual",
+   "file": "transformer_block.json",
+   "color": "#e056a0"
+  },
+  {
+   "id": "llada_block",
+   "name": "LLaDA Block",
+   "description": "Diffusion transformer: bidirectional attention + SwiGLU",
+   "file": "llada_block.json",
+   "color": "#e056a0"
+  },
+  {
+   "id": "qwen_block",
+   "name": "Qwen Block",
+   "description": "Qwen-style: GQA + RoPE + SwiGLU",
+   "file": "qwen_block.json",
+   "color": "#e056a0"
+  },
+  {
+   "id": "moe_transformer_block",
+   "name": "MoE Transformer Block",
+   "description": "Mixtral-style: RoPE Attn + MoE FFN (8 experts, top-2)",
+   "file": "moe_transformer_block.json",
+   "color": "#e056a0"
+  },
+  {
+   "id": "time_embedding",
+   "name": "TimeEmbedding",
+   "description": "Sinusoidal time embedding for diffusion steps",
+   "file": "time_embedding.json",
+   "color": "#f7b731"
+  },
+  {
+   "id": "noise_schedule",
+   "name": "NoiseSchedule",
+   "description": "Parameterized \u03b2/\u03b1 noise schedule (linear or cosine)",
+   "file": "noise_schedule.json",
+   "color": "#f7b731"
+  },
+  {
+   "id": "prediction_head",
+   "name": "PredictionHead",
+   "description": "Norm + linear projection head for diffusion models (\u03b5 / x0 / v)",
+   "file": "prediction_head.json",
+   "color": "#f7b731"
+  },
+  {
+   "id": "cfg_dropout",
+   "name": "CFGDropout",
+   "description": "Training-time conditional dropout for classifier-free guidance",
+   "file": "cfg_dropout.json",
+   "color": "#f7b731"
+  },
+  {
+   "id": "pc_generative_head",
+   "name": "PCGenerativeHead",
+   "description": "Per-layer top-down predictor for predictive coding",
+   "file": "pc_generative_head.json",
+   "color": "#26de81"
+  },
+  {
+   "id": "pc_state_update",
+   "name": "PCStateUpdate",
+   "description": "Local PC update: x \u2190 x \u2212 \u03b1\u00b7(e_top \u2212 e_bottom)",
+   "file": "pc_state_update.json",
+   "color": "#26de81"
+  },
+  {
+   "id": "witness_head",
+   "name": "WitnessHead",
+   "description": "Calibrated confidence scalar over (step k, latent)",
+   "file": "witness_head.json",
+   "color": "#a55eea"
+  },
+  {
+   "id": "halt_decision",
+   "name": "HaltDecision",
+   "description": "PonderNet-style differentiable halt probability",
+   "file": "halt_decision.json",
+   "color": "#a55eea"
+  },
+  {
+   "id": "trajectory_recorder",
+   "name": "TrajectoryRecorder",
+   "description": "Ring-buffer recorder for (k, x_k, conf_k) denoising trajectories",
+   "file": "trajectory_recorder.json",
+   "color": "#a55eea"
+  },
+  {
+   "id": "extract_operator",
+   "name": "ExtractOperator",
+   "description": "Extracts latent at halt step from trajectory buffer",
+   "file": "extract_operator.json",
+   "color": "#a55eea"
+  },
+  {
+   "id": "graph_attention_diffusion",
+   "name": "GraphAttentionDiffusion",
+   "description": "Iterated GAT with diffusion-style skip-connection updates",
+   "file": "graph_attention_diffusion.json",
+   "color": "#4bcffa"
+  },
+  {
+   "id": "graph_node_retrieval",
+   "name": "GraphRetrieval",
+   "description": "Top-k semantic node retrieval via learned query/key projection",
+   "file": "graph_node_retrieval.json",
+   "color": "#4bcffa"
+  },
+  {
+   "id": "tag_embedding",
+   "name": "TagEmbedding",
+   "description": "Semantic tag embedding lookup for weight pockets",
+   "file": "tag_embedding.json",
+   "color": "#4bcffa"
+  },
+  {
+   "id": "dual_track_combiner",
+   "name": "DualTrackCombiner",
+   "description": "Combines converged and partial-denoising states via witness gate",
+   "file": "dual_track_combiner.json",
+   "color": "#fd9644"
+  },
+  {
+   "id": "droga_actor",
+   "name": "DROGAActor",
+   "description": "Curriculum-conditioned action head over candidate state distribution",
+   "file": "droga_actor.json",
+   "color": "#fd9644"
+  },
+  {
+   "id": "outcome_predictor",
+   "name": "OutcomePredictor",
+   "description": "Predicts expected outcome distribution at action commit for PC error injection",
+   "file": "outcome_predictor.json",
+   "color": "#fd9644"
+  },
+  {
+   "id": "gru_tier",
+   "name": "GRU Tier",
+   "description": "Single recurrent tier (one GRU step)",
+   "file": "gru_tier.json",
+   "color": "#e67e22"
+  },
+  {
+   "id": "tier_stack",
+   "name": "Tier Stack",
+   "description": "N recurrent tiers (DROGA hierarchy)",
+   "file": "tier_stack.json",
+   "color": "#e67e22"
+  },
+  {
+   "id": "gat_memory",
+   "name": "GAT Memory",
+   "description": "Attention read over learnable memory nodes",
+   "file": "gat_memory.json",
+   "color": "#9b59b6"
+  },
+  {
+   "id": "conditioning_adapter",
+   "name": "Conditioning Adapter",
+   "description": "Cognitive state -> decoder prefix",
+   "file": "conditioning_adapter.json",
+   "color": "#1abc9c"
+  },
+  {
+   "id": "frozen_lm_decoder",
+   "name": "Frozen LM Decoder",
+   "description": "External frozen pretrained LM (stub in numpy)",
+   "file": "frozen_lm_decoder.json",
+   "color": "#7f8c8d"
+  },
+  {
+   "id": "self_monitor_feedback",
+   "name": "Self-Monitor Feedback",
+   "description": "SMFL output re-injection loop",
+   "file": "self_monitor_feedback.json",
+   "color": "#e74c3c"
+  },
+  {
+   "id": "predictive_coding_head",
+   "name": "Predictive Coding Head",
+   "description": "Per-tier prediction + PC error",
+   "file": "predictive_coding_head.json",
+   "color": "#f39c12"
+  },
+  {
+   "id": "decoder_head",
+   "name": "Decoder Head",
+   "description": "Token decode head (linear/AR/block-diffusion)",
+   "file": "decoder_head.json",
+   "color": "#3498db"
+  }
+ ]
 }

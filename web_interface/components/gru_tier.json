@@ -1,0 +1,41 @@
+{
+ "name": "GRU Tier",
+ "id": "gru_tier",
+ "category": "recurrent",
+ "description": "Single recurrent tier: one GRU step over input given hidden state. DROGA tiers are stacks of these at different cycle rates.",
+ "inputs": [
+  {
+   "name": "x",
+   "type": "tensor"
+  },
+  {
+   "name": "h_prev",
+   "type": "tensor"
+  }
+ ],
+ "outputs": [
+  {
+   "name": "h_new",
+   "type": "tensor"
+  }
+ ],
+ "properties": [
+  {
+   "name": "dim",
+   "type": "int",
+   "default": 256,
+   "description": "Hidden dimension"
+  },
+  {
+   "name": "in_dim",
+   "type": "int",
+   "default": 256,
+   "description": "Input dimension"
+  }
+ ],
+ "code": "_gt{{_id}}_Wz = np.random.randn({{in_dim}}+{{dim}}, {{dim}}).astype(np.float32)*0.02\n_gt{{_id}}_Wr = np.random.randn({{in_dim}}+{{dim}}, {{dim}}).astype(np.float32)*0.02\n_gt{{_id}}_Wh = np.random.randn({{in_dim}}+{{dim}}, {{dim}}).astype(np.float32)*0.02\n_gt{{_id}}_xh = np.concatenate([{{x}}, {{h_prev}}], axis=-1)\n_gt{{_id}}_z = 1/(1+np.exp(-(_gt{{_id}}_xh @ _gt{{_id}}_Wz)))\n_gt{{_id}}_r = 1/(1+np.exp(-(_gt{{_id}}_xh @ _gt{{_id}}_Wr)))\n_gt{{_id}}_c = np.tanh(np.concatenate([{{x}}, _gt{{_id}}_r*{{h_prev}}], axis=-1) @ _gt{{_id}}_Wh)\n{{h_new}} = (1-_gt{{_id}}_z)*{{h_prev}} + _gt{{_id}}_z*_gt{{_id}}_c",
+ "imports": [
+  "import numpy as np"
+ ],
+ "color": "#e67e22"
+}

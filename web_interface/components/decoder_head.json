@@ -1,0 +1,43 @@
+{
+ "name": "Decoder Head",
+ "id": "decoder_head",
+ "category": "interface",
+ "description": "Token decode head over a state (linear / autoregressive / block-diffusion selected by property; numpy codegen emits the linear form).",
+ "inputs": [
+  {
+   "name": "state",
+   "type": "tensor"
+  }
+ ],
+ "outputs": [
+  {
+   "name": "logits",
+   "type": "tensor"
+  }
+ ],
+ "properties": [
+  {
+   "name": "vocab_size",
+   "type": "int",
+   "default": 5000,
+   "description": "Vocabulary"
+  },
+  {
+   "name": "dim",
+   "type": "int",
+   "default": 256,
+   "description": "State dim"
+  },
+  {
+   "name": "decoder_type",
+   "type": "string",
+   "default": "linear",
+   "description": "linear | autoregressive | block_diffusion"
+  }
+ ],
+ "code": "_dh{{_id}}_W = np.random.randn({{dim}}, {{vocab_size}}).astype(np.float32)*0.02\n{{logits}} = {{state}} @ _dh{{_id}}_W  # decoder_type={{decoder_type}}",
+ "imports": [
+  "import numpy as np"
+ ],
+ "color": "#3498db"
+}

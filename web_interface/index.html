@@ -1436,6 +1436,7 @@
     function registerAtomic(atomic) {
         atomicRegistry[atomic.id] = atomic;
         const typeName = `atomic/${atomic.category}/${atomic.id}`;
+        ATOMIC_DEFS[typeName] = atomic;
 
         function AtomicNode() {
             const def = atomicRegistry[atomic.id];
@@ -1677,6 +1678,97 @@
         compileTimer = setTimeout(compileGraph, 150);
     }
 
+    // Registry of atomic definitions by type name (atomic/<category>/<id>)
+    const ATOMIC_DEFS = {};
+
+    // ------------------------------------------------------------------
+    // Hierarchical codegen: compile a molecular component's atomic graph
+    // into a standalone Python function. Convention:
+    //   def.graph = { nodes, links, io_map: { inputs:  { <def.input.name>:  [nodeId, slot] },
+    //                                          outputs: { <def.output.name>: [nodeId, slot] } } }
+    // Inner node property strings may reference instance properties as "$propName".
+    // ------------------------------------------------------------------
+    function compileComponentGraph(def, instProps, fnName) {
+        const g = def.graph;
+        const io = g.io_map || {};
+        const linksMap = {};
+        for (const l of (g.links || [])) {
+            linksMap[l[0]] = { origin_id: l[1], origin_slot: l[2], target_id: l[3], target_slot: l[4] };
+        }
+        const byId = {};
+        g.nodes.forEach(n => byId[n.id] = n);
+        const incoming = {};
+        g.nodes.forEach(n => incoming[n.id] = []);
+        for (const l of Object.values(linksMap)) {
+            if (incoming[l.target_id]) incoming[l.target_id].push(l);
+        }
+        const order = [], visited = new Set();
+        function visit(n) {
+            if (visited.has(n.id)) return;
+            visited.add(n.id);
+            for (const l of incoming[n.id]) { const s = byId[l.origin_id]; if (s) visit(s); }
+            order.push(n);
+        }
+        g.nodes.forEach(visit);
+
+        const argNames = (def.inputs || []).map(i => i.name);
+        const inputBinding = {};
+        for (const [arg, loc] of Object.entries(io.inputs || {})) {
+            inputBinding[`${loc[0]}:${loc[1]}`] = arg;
+        }
+        const imports = new Set();
+        const lines = [];
+        const localVar = {};
+        const used = new Set(argNames);
+
+        for (const node of order) {
+            const adef = ATOMIC_DEFS[node.type];
+            if (!adef) { lines.push(`    # unknown atomic type: ${node.type}`); continue; }
+            (adef.imports || []).forEach(i => imports.add(i));
+            const subs = { '_id': `${fnName}_${node.id}` };
+            for (let i = 0; i < (adef.outputs || []).length; i++) {
+                let base = sanitizeName(`${adef.id}_${node.id}_${adef.outputs[i].name}`);
+                let name = base, c = 2;
+                while (used.has(name)) name = `${base}_${c++}`;
+                used.add(name);
+                localVar[`${node.id}:${i}`] = name;
+                subs[adef.outputs[i].name] = name;
+            }
+            for (let i = 0; i < (adef.inputs || []).length; i++) {
+                const inName = adef.inputs[i].name;
+                const bound = inputBinding[`${node.id}:${i}`];
+                if (bound) { subs[inName] = bound; continue; }
+                const l = Object.values(linksMap).find(l => l.target_id === node.id && l.target_slot === i);
+                subs[inName] = l ? (localVar[`${l.origin_id}:${l.origin_slot}`] || 'None') : 'None';
+            }
+            const propDefaults = {};
+            (adef.properties || []).forEach(p => propDefaults[p.name] = p.default);
+            const allProps = Object.assign({}, propDefaults, node.properties || {});
+            for (const [k, v] of Object.entries(allProps)) {
+                let val = v;
+                if (typeof v === 'string') {
+                    val = v.replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g,
+                        (m, name) => (instProps && instProps[name] !== undefined) ? String(instProps[name]) : m);
+                }
+                if (typeof val === 'boolean') val = val ? 'True' : 'False';
+                subs[k] = String(val);
+            }
+            let code = adef.code;
+            for (const [key, value] of Object.entries(subs)) {
+                code = code.replace(new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, 'g'), value);
+            }
+            lines.push('    ' + code.split('\n').join('\n    '));
+        }
+        const retVars = (def.outputs || []).map(o => {
+            const loc = (io.outputs || {})[o.name];
+            return loc ? (localVar[`${loc[0]}:${loc[1]}`] || 'None') : 'None';
+        });
+        const header = `def ${fnName}(${argNames.join(', ')}):`;
+        const doc = `    """${(def.description || def.name || '').replace(/"/g, "'")}"""`;
+        const ret = retVars.length ? `    return ${retVars.join(', ')}` : '    return None';
+        return { code: [header, doc, ...lines, ret].join('\n'), imports };
+    }
+
     function compileGraph() {
         const nodes = graph._nodes;
         if (!nodes || nodes.length === 0) {
@@ -1720,6 +1812,9 @@
         // 3. Resolve inputs via wires, substitute into code templates
         const codeLines = [];
         const allImports = new Set();
+        const fnBlocks = [];
+        const emittedFns = new Map();   // "<defId>|<propsSig>" -> fnName
+        const fnIdCounts = {};          // defId -> count (for prop-variant suffixes)
 
         for (const node of sorted) {
             const def = node._atomicDef || node._molecularDef;
@@ -1735,6 +1830,37 @@
             }
 
             if (!def) continue;
+
+            // Hierarchical path: molecular component defined by an atomic
+            // composition graph compiles to its own function; the model level
+            // emits a call. Falls back to the legacy code blob below when the
+            // component has no graph/io_map.
+            if (node._molecularDef && def.graph && def.graph.io_map) {
+                const propsSig = JSON.stringify(node.properties || {});
+                const fnKey = `${def.id}|${propsSig}`;
+                let fnName = emittedFns.get(fnKey);
+                if (!fnName) {
+                    const n = (fnIdCounts[def.id] = (fnIdCounts[def.id] || 0) + 1);
+                    fnName = sanitizeName(def.id) + (n > 1 ? `_v${n}` : '');
+                    const cg = compileComponentGraph(def, node.properties || {}, fnName);
+                    cg.imports.forEach(i => allImports.add(i));
+                    fnBlocks.push(cg.code);
+                    emittedFns.set(fnKey, fnName);
+                }
+                const callArgs = (def.inputs || []).map((inp, i) => {
+                    const linkId = (node.inputs[i] && node.inputs[i].link != null) ? node.inputs[i].link : null;
+                    if (linkId !== null && linksMap[linkId]) {
+                        const link = linksMap[linkId];
+                        return varNames[`${link.origin_id}:${link.origin_slot}`] || 'None';
+                    }
+                    return 'None';
+                });
+                const outVars = (def.outputs || []).map((o, i) => varNames[`${node.id}:${i}`]);
+                codeLines.push(`# [${def.name}] node:${node.id}`);
+                codeLines.push(`${outVars.length ? outVars.join(', ') + ' = ' : ''}${fnName}(${callArgs.join(', ')})`);
+                codeLines.push('');
+                continue;
+            }
 
             if (def.imports) {
                 for (const imp of def.imports) allImports.add(imp);
@@ -1792,6 +1918,12 @@
         const sortedImports = Array.from(allImports).sort();
         if (sortedImports.length > 0) {
             script += sortedImports.join('\n') + '\n\n';
+        }
+
+        if (fnBlocks.length > 0) {
+            script += `# ---- molecular components (compiled from atomic compositions) ----\n`;
+            script += fnBlocks.join('\n\n') + '\n\n';
+            script += `# ---- model ----\n`;
         }
 
         script += codeLines.join('\n');
@@ -2022,14 +2154,26 @@
 
     function switchTab(tabName) {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        event.target.classList.add('active');
+        const btn = (typeof event !== 'undefined' && event && event.target && event.target.classList.contains('tab'))
+            ? event.target
+            : document.querySelector(`.tab[onclick*="'${tabName}'"]`);
+        if (btn) btn.classList.add('active');
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         const tabId = tabName === '3d' ? '3d-tab' : tabName + '-tab';
         document.getElementById(tabId).classList.add('active');
+        try { localStorage.setItem('rnd_active_tab', tabName); } catch (e) {}
         if (tabName === 'graph') setTimeout(resizeCanvas, 50);
         if (tabName === 'code') compileGraph();
         if (tabName === '3d') setTimeout(() => t3_init(), 50);
         if (tabName === 'research') rnRefreshAll();
+    }
+
+    function restoreLastTab() {
+        let last = null;
+        try { last = localStorage.getItem('rnd_active_tab'); } catch (e) {}
+        if (last && last !== 'graph' && document.querySelector(`.tab[onclick*="'${last}'"]`)) {
+            switchTab(last);
+        }
     }
 
     // =========================================================================
@@ -4285,6 +4429,7 @@
         } catch(e) { console.error('Failed to load user components:', e); }
         graph.start();
         compileGraph();
+        restoreLastTab();
         updateStatus('Ready');
     }
 

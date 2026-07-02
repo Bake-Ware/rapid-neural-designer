@@ -1,0 +1,43 @@
+{
+ "name": "Frozen LM Decoder",
+ "id": "frozen_lm_decoder",
+ "category": "interface",
+ "description": "External frozen pretrained language model consuming prefix conditioning. Numpy codegen emits a stub; the real model is external (e.g. GPT-2 124M).",
+ "inputs": [
+  {
+   "name": "prefix",
+   "type": "tensor"
+  }
+ ],
+ "outputs": [
+  {
+   "name": "logits",
+   "type": "tensor"
+  }
+ ],
+ "properties": [
+  {
+   "name": "model_name",
+   "type": "string",
+   "default": "gpt2",
+   "description": "HF model id"
+  },
+  {
+   "name": "params",
+   "type": "string",
+   "default": "124M",
+   "description": "Size (metadata)"
+  },
+  {
+   "name": "vocab_size",
+   "type": "int",
+   "default": 50257,
+   "description": "Vocab size"
+  }
+ ],
+ "code": "# External frozen decoder: {{model_name}} ({{params}}), 0% trainable.\n# Stub projection stands in for the frozen LM in numpy validation.\n_fd{{_id}}_W = np.random.randn({{prefix}}.shape[-1], {{vocab_size}}).astype(np.float32)*0.02\n{{logits}} = {{prefix}} @ _fd{{_id}}_W",
+ "imports": [
+  "import numpy as np"
+ ],
+ "color": "#7f8c8d"
+}
