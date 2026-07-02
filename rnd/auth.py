@@ -78,6 +78,23 @@ CREATE TABLE IF NOT EXISTS server_meta (
     value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS entity_acl (
+    entity_id TEXT PRIMARY KEY,
+    owner_user_id TEXT NOT NULL,
+    team_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS team_members (
+    team_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (team_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_acl_owner ON entity_acl(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_mcp_clients_user ON mcp_clients(user_id);
@@ -432,6 +449,134 @@ class AuthDB:
             "username": row["username"],
             "display_name": row["display_name"],
         }
+
+    # ---- Entity ACLs (ownership travels with the user; team = borrowed visibility) ----
+
+    def set_entity_acl(self, entity_id: str, owner_user_id: str, team_id: str | None = None):
+        assert self.conn
+        now = datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            "INSERT INTO entity_acl (entity_id, owner_user_id, team_id, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(entity_id) DO UPDATE SET owner_user_id=excluded.owner_user_id, "
+            "team_id=excluded.team_id, updated_at=excluded.updated_at",
+            (entity_id, owner_user_id, team_id, now, now),
+        )
+        self.conn.commit()
+
+    def get_entity_acl(self, entity_id: str) -> dict | None:
+        assert self.conn
+        row = self.conn.execute(
+            "SELECT entity_id, owner_user_id, team_id FROM entity_acl WHERE entity_id = ?",
+            (entity_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def set_entity_team(self, entity_id: str, team_id: str | None) -> bool:
+        assert self.conn
+        now = datetime.now(timezone.utc).isoformat()
+        cur = self.conn.execute(
+            "UPDATE entity_acl SET team_id = ?, updated_at = ? WHERE entity_id = ?",
+            (team_id, now, entity_id),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    # ---- Team membership (tenancy; removal instantly revokes borrowed access) ----
+
+    def add_team_member(self, team_id: str, user_id: str):
+        assert self.conn
+        now = datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            "INSERT OR IGNORE INTO team_members (team_id, user_id, added_at) VALUES (?, ?, ?)",
+            (team_id, user_id, now),
+        )
+        self.conn.commit()
+
+    def remove_team_member(self, team_id: str, user_id: str) -> bool:
+        assert self.conn
+        cur = self.conn.execute(
+            "DELETE FROM team_members WHERE team_id = ? AND user_id = ?",
+            (team_id, user_id),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def is_team_member(self, team_id: str, user_id: str) -> bool:
+        assert self.conn
+        row = self.conn.execute(
+            "SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?",
+            (team_id, user_id),
+        ).fetchone()
+        return row is not None
+
+    def user_team_ids(self, user_id: str) -> list[str]:
+        assert self.conn
+        rows = self.conn.execute(
+            "SELECT team_id FROM team_members WHERE user_id = ?", (user_id,)
+        ).fetchall()
+        return [r["team_id"] for r in rows]
+
+    def list_team_members(self, team_id: str) -> list[dict]:
+        assert self.conn
+        rows = self.conn.execute(
+            "SELECT tm.user_id, u.username, tm.added_at FROM team_members tm "
+            "JOIN users u ON u.id = tm.user_id WHERE tm.team_id = ?",
+            (team_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ---- Derived client credentials (agent access to a user's private stack) ----
+    # client_id     = sha256(username:user_id) — stable, public, identifies the user
+    # client_secret = HMAC(server_secret, "mcp-client:" + user_id + ":" + password_hash)
+    # Nothing is stored: validation recomputes from the user row, so a users-table
+    # leak alone yields no usable secret (pass-the-hash is rejected by construction),
+    # and changing the password rotates the secret automatically.
+
+    @staticmethod
+    def _client_id_for(username: str, user_id: str) -> str:
+        return hashlib.sha256(f"{username}:{user_id}".encode("utf-8")).hexdigest()
+
+    def _client_secret_for(self, user_id: str, password_hash: str) -> str:
+        secret = self._ensure_server_secret()
+        return hmac.new(
+            secret.encode("utf-8"),
+            f"mcp-client:{user_id}:{password_hash}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+    def get_client_credentials(self, user_id: str) -> dict | None:
+        """Derive the client_id/client_secret pair for a user (shown to them once
+        per request; regenerated by changing the password)."""
+        assert self.conn
+        row = self.conn.execute(
+            "SELECT id, username, password_hash FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "client_id": self._client_id_for(row["username"], row["id"]),
+            "client_secret": self._client_secret_for(row["id"], row["password_hash"]),
+        }
+
+    def validate_client_credentials(self, client_id: str, client_secret: str) -> dict | None:
+        """Validate a derived client pair. Returns user dict or None."""
+        assert self.conn
+        rows = self.conn.execute(
+            "SELECT id, username, display_name, password_hash FROM users"
+        ).fetchall()
+        for row in rows:
+            if self._client_id_for(row["username"], row["id"]) == client_id:
+                expected = self._client_secret_for(row["id"], row["password_hash"])
+                if hmac.compare_digest(expected, client_secret):
+                    return {
+                        "id": row["id"],
+                        "username": row["username"],
+                        "display_name": row["display_name"],
+                        "client_id": client_id,
+                    }
+                return None
+        return None
 
     # ---- Admin ----
 

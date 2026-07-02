@@ -173,10 +173,12 @@ def _authenticate() -> dict | None:
         return None
     token = auth_header[7:]
 
-    # Try client_id:secret format first
+    # Try client_id:secret format first (minted mcp_clients, then the
+    # password-hash-derived pair — the agent-access credential)
     if ":" in token:
         client_id, secret = token.split(":", 1)
-        user = _auth.validate_mcp_client(client_id, secret)
+        user = (_auth.validate_mcp_client(client_id, secret)
+                or _auth.validate_client_credentials(client_id, secret))
         if user:
             return user
 
@@ -190,6 +192,7 @@ def mcp_post():
     user = _authenticate()
     if not user:
         return jsonify({"error": "Invalid or missing MCP credentials. Use Bearer <client_id>:<secret>"}), 401
+    request.user = user  # identity for the authz layer (AccessControlledRepo)
 
     try:
         body = request.get_json(force=True)

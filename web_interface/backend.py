@@ -34,6 +34,7 @@ from rnd.models import (
 )
 from rnd.repo import RNDRepo
 from rnd.auth import AuthDB
+from rnd.authz import AccessControlledRepo, Forbidden
 from rnd.mcp_endpoint import mcp_bp, init_mcp
 from functools import wraps
 
@@ -51,10 +52,18 @@ auth_db: AuthDB = None  # type: ignore
 
 
 def get_current_user():
-    """Extract user from Authorization header. Returns user dict or None."""
+    """Extract user from Authorization header. Returns user dict or None.
+
+    Accepts: session tokens, derived API tokens, and client_id:client_secret
+    pairs (both minted mcp_clients and credentials derived from the user's
+    password hash — the agent-access mechanism)."""
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
+        if ":" in token:
+            client_id, _, secret = token.partition(":")
+            return (auth_db.validate_mcp_client(client_id, secret)
+                    or auth_db.validate_client_credentials(client_id, secret))
         return auth_db.validate_token(token) or auth_db.validate_api_token(token)
     return None
 
@@ -69,6 +78,64 @@ def require_auth(f):
         request.user = user
         return f(*args, **kwargs)
     return decorated
+
+
+@app.errorhandler(Forbidden)
+def handle_forbidden(e):
+    return jsonify({"error": f"Forbidden: no access to {e.entity_id}"}), 403
+
+
+@app.route('/api/rnd/credentials', methods=['GET'])
+def rnd_get_credentials():
+    """Return the requesting user's derived client credentials (client_id +
+    client_secret). Derived from the password hash — rotate by changing password."""
+    creds = auth_db.get_client_credentials(request.user["id"])
+    if not creds:
+        return api_error("User not found", 404)
+    creds["usage"] = "Authorization: Bearer <client_id>:<client_secret>"
+    return jsonify(creds)
+
+
+@app.route('/api/rnd/teams/<team_id>/members', methods=['GET'])
+def rnd_list_team_members(team_id):
+    return jsonify(auth_db.list_team_members(team_id))
+
+
+@app.route('/api/rnd/teams/<team_id>/members', methods=['POST'])
+def rnd_add_team_member(team_id):
+    if not auth_db.is_admin(request.user["id"]):
+        return api_error("Admin only", 403)
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+    if not user_id or not auth_db.get_user(user_id):
+        return api_error("'user_id' of an existing user required")
+    auth_db.add_team_member(team_id, user_id)
+    return jsonify({"added": user_id, "team_id": team_id})
+
+
+@app.route('/api/rnd/teams/<team_id>/members/<user_id>', methods=['DELETE'])
+def rnd_remove_team_member(team_id, user_id):
+    if not auth_db.is_admin(request.user["id"]):
+        return api_error("Admin only", 403)
+    removed = auth_db.remove_team_member(team_id, user_id)
+    return jsonify({"removed": removed})
+
+
+@app.route('/api/rnd/acl/<entity_id>', methods=['GET'])
+def rnd_get_acl(entity_id):
+    acl = auth_db.get_entity_acl(entity_id)
+    return jsonify(acl or {"entity_id": entity_id, "owner_user_id": None, "team_id": None})
+
+
+@app.route('/api/rnd/acl/<entity_id>', methods=['PATCH'])
+def rnd_set_acl_team(entity_id):
+    """Owner-only: set/clear the team visibility scope of an entity."""
+    acl = auth_db.get_entity_acl(entity_id)
+    if not acl or acl["owner_user_id"] != request.user["id"]:
+        return api_error("Only the owner can change an entity's team scope", 403)
+    data = request.get_json() or {}
+    auth_db.set_entity_team(entity_id, data.get("team_id"))
+    return jsonify(auth_db.get_entity_acl(entity_id))
 
 
 @app.before_request
@@ -340,7 +407,7 @@ rnd_index: DerivedIndex | None = None
 
 def init_platform():
     """Initialize the RND repo, auth DB, and derived index on startup."""
-    global rnd_index, auth_db
+    global rnd_index, auth_db, rnd_repo
     if not rnd_repo.is_initialized():
         rnd_repo.init(team_name="Bake Research", user_id="user-bake")
         print("[RND] Initialized new repository")
@@ -351,6 +418,9 @@ def init_platform():
     rnd_index = DerivedIndex(rnd_repo.index_path)
     rnd_index.open()
     rnd_index.rebuild(rnd_repo.root)
+    # Authorization: wrap the repo so every REST/MCP access is owner/team-checked
+    rnd_repo = AccessControlledRepo(rnd_repo, auth_db)
+    print("[RND] Authz enforcement active")
     # MCP endpoint
     init_mcp(rnd_repo, auth_db, web_interface_root=STATIC_DIR)
     app.register_blueprint(mcp_bp, url_prefix="/mcp")
