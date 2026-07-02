@@ -1061,6 +1061,12 @@ def rnd_update_experiment(experiment_id):
         exp.interpretation = data["interpretation"]
     if "evidence" in data:
         exp.evidence = [EvidenceLink.from_dict(e) for e in data["evidence"]]
+    if "architecture_id" in data:
+        arch = rnd_repo.load("architecture", data["architecture_id"])
+        if not arch:
+            return api_error(f"Architecture {data['architecture_id']} not found", 404)
+        exp.inputs.architecture_ref = arch.id
+        exp.inputs.architecture_hash = arch.content_hash
     exp.updated_at = now_iso()
     rnd_repo.save(exp)
     return jsonify(exp.to_dict())
