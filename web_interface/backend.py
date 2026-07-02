@@ -1274,6 +1274,7 @@ def rnd_publish_paper(paper_id):
         slug = f"{base}-{secrets.token_hex(3)}"
         paper.metadata["public_slug"] = slug
         paper.metadata["published_at"] = now_iso()
+        paper.metadata["owner_username"] = getattr(request, "user", {}).get("username", "")
         paper.updated_at = now_iso()
         rnd_repo.save(paper)
     return jsonify({"public_slug": slug, "url": f"/pub/{slug}"})
@@ -1289,14 +1290,20 @@ def rnd_unpublish_paper(paper_id):
     rnd_repo.save(paper)
     return jsonify({"unpublished": True})
 
+DEFAULT_PORTFOLIO_USER = "bake"
+
 @app.route('/portfolio', methods=['GET'])
 @app.route('/pub', methods=['GET'])
 @app.route('/pub/', methods=['GET'])
-def rnd_public_portfolio():
+def rnd_portfolio_default():
+    return redirect(f"/u/{DEFAULT_PORTFOLIO_USER}/portfolio")
+
+@app.route('/u/<username>/portfolio', methods=['GET'])
+def rnd_public_portfolio(username):
     pubs = []
     for p in rnd_repo.list_entities("paper"):
         slug = p.metadata.get("public_slug")
-        if slug:
+        if slug and p.metadata.get("owner_username") == username:
             abstract = ""
             for s in p.sections:
                 if s.section_type.value == "abstract":
