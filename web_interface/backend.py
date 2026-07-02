@@ -1185,6 +1185,20 @@ def rnd_get_architecture(architecture_id):
         return api_error("Architecture not found", 404)
     return jsonify(arch.to_dict())
 
+@app.route('/api/rnd/architectures/<architecture_id>/content', methods=['PUT'])
+def rnd_replace_architecture_content(architecture_id):
+    arch = rnd_repo.load("architecture", architecture_id)
+    if not arch:
+        return api_error("Architecture not found", 404)
+    data = request.get_json()
+    if not data or "content" not in data:
+        return api_error("'content' required")
+    arch.content = data["content"]
+    arch.content_hash = content_hash(arch.content)
+    arch.updated_at = now_iso()
+    rnd_repo.save(arch)
+    return jsonify(arch.to_dict())
+
 @app.route('/api/rnd/architectures/<architecture_id>/archive', methods=['POST'])
 def rnd_archive_architecture(architecture_id):
     if rnd_repo.archive("architecture", architecture_id):
