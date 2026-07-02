@@ -1289,6 +1289,68 @@ def rnd_unpublish_paper(paper_id):
     rnd_repo.save(paper)
     return jsonify({"unpublished": True})
 
+@app.route('/portfolio', methods=['GET'])
+@app.route('/pub', methods=['GET'])
+@app.route('/pub/', methods=['GET'])
+def rnd_public_portfolio():
+    pubs = []
+    for p in rnd_repo.list_entities("paper"):
+        slug = p.metadata.get("public_slug")
+        if slug:
+            abstract = ""
+            for s in p.sections:
+                if s.section_type.value == "abstract":
+                    try:
+                        abstract = re.sub(r'<!--.*?-->', '', rnd_repo.load_paper_section_content(s) or "", flags=re.S)
+                        abstract = re.sub(r'\*\*Keywords.*', '', abstract, flags=re.S).strip()
+                    except Exception:
+                        pass
+                    break
+            pubs.append({"title": p.title, "slug": slug,
+                         "date": p.metadata.get("published_at", "")[:10],
+                         "abstract": (abstract[:420] + "…") if len(abstract) > 420 else abstract})
+    pubs.sort(key=lambda x: x["date"], reverse=True)
+    return render_template_string(PORTFOLIO_TEMPLATE, pubs=pubs), 200, {"Content-Type": "text/html; charset=utf-8"}
+
+PORTFOLIO_TEMPLATE = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>James Baker Jr. — Independent AI Research</title>
+<style>
+ body{font-family:Georgia,'Times New Roman',serif;max-width:820px;margin:0 auto;padding:2.5rem 1.2rem;color:#1a1a1a;line-height:1.65;background:#fdfdfa}
+ h1{font-size:1.9rem;margin-bottom:.2rem} .tag{color:#666;margin-bottom:1.6rem}
+ h2{font-size:1.25rem;margin-top:2.4rem;border-bottom:1px solid #ddd;padding-bottom:.25rem}
+ .paper{margin:1.4rem 0} .paper a{font-size:1.05rem;font-weight:bold;color:#1a3c6e;text-decoration:none}
+ .paper a:hover{text-decoration:underline} .pdate{color:#888;font-size:.85rem}
+ .abst{font-size:.93rem;color:#333;margin-top:.3rem}
+ .prog{margin:.7rem 0} .prog b{color:#1a3c6e}
+ .links a{margin-right:1.2rem;color:#1a3c6e} footer{margin-top:3rem;color:#999;font-size:.8rem}
+</style></head><body>
+<h1>James Baker Jr.</h1>
+<div class="tag">Independent AI researcher · 20 years in systems &amp; solutions architecture · continuous-operation neural architectures</div>
+
+<h2>Published Research</h2>
+{% if pubs %}{% for p in pubs %}
+<div class="paper">
+ <a href="/pub/{{ p.slug }}">{{ p.title }}</a>
+ <div class="pdate">{{ p.date }}</div>
+ <div class="abst">{{ p.abstract }}</div>
+</div>
+{% endfor %}{% else %}<p>Publications forthcoming.</p>{% endif %}
+
+<h2>Research Programs</h2>
+<div class="prog"><b>DROGA</b> — multi-tier recurrent hierarchies under continuous operation: spontaneous generation during idle cycles, curriculum-driven transfer under local free-energy learning, cognition/generation decoupling via frozen decoders, and tier-count scaling under fixed capacity budgets.</div>
+<div class="prog"><b>MORE</b> — post-DROGA study of shared-attention memory ("the pond") coupled to SSM tiers; its keystone MQAR hypothesis was falsified by controlled experiment at real-SSM scale and the program pivoted accordingly — the falsification is documented alongside the positive results.</div>
+<div class="prog"><b>REVERIE</b> — design program for an always-on cognitive architecture treating latent diffusion as the substrate of thought; its first testable wedge (partial-denoising extraction as a creativity mechanism) was probed and refuted as stated at v0, with the discriminating v1 experiment specified.</div>
+
+<h2>The Platform</h2>
+<p>Everything here is produced on a self-built research platform (<i>Rapid Neural Designer</i>): a git-backed system where every paper claim binds to experiment records, every experiment is hash-anchored to the exact architecture that produced it, and negative results are first-class citizens. It includes a visual architecture designer whose graphs compile to runnable code from a catalog of atomic components, an MCP interface for agentic research workflows, and this public publishing layer.</p>
+<p>Methodologically: hypotheses are pre-registered with falsifiable predictions before GPU time is spent, controls are run before claims ship, and the record keeps the corrections. Several results on this page exist because a prior claim of mine failed its control.</p>
+
+<h2>Contact</h2>
+<p class="links"><a href="mailto:jamixzol@gmail.com">jamixzol@gmail.com</a> <a href="https://github.com/Bake-Ware">github.com/Bake-Ware</a></p>
+<footer>Served by the Rapid Neural Designer research platform.</footer>
+</body></html>"""
+
 @app.route('/pub/<slug>', methods=['GET'])
 def rnd_public_paper(slug):
     # Public, read-only. Only entities explicitly published (metadata.public_slug) are reachable.
