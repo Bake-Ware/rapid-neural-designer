@@ -2788,7 +2788,11 @@
                 fetch(getRndApi() + '/papers/' + id + '/sections/' + s.id + '/content', { headers: authHeaders() }).then(r => r.ok ? r.text() : '')
             )
         );
-        rnSetHeader(paper.title, '<button onclick="rnEditPaperScope(\'' + id + '\')">Edit Scope</button>');
+        const pubSlug = paper.metadata && paper.metadata.public_slug;
+        const pubBtn = pubSlug
+            ? '<a href="/pub/' + pubSlug + '" target="_blank" style="margin-right:6px;">🌐 View Public</a><button onclick="rnUnpublishPaper(\'' + id + '\')">Unpublish</button>'
+            : '<button onclick="rnPublishPaper(\'' + id + '\')">Publish</button>';
+        rnSetHeader(paper.title, pubBtn + ' <button onclick="rnEditPaperScope(\'' + id + '\')">Edit Scope</button>');
         document.getElementById('rd-content').innerHTML =
             '<div class="paper-split" style="height:calc(100vh - 140px);">' +
                 '<div class="paper-editor-pane" style="overflow-y:auto;padding:12px 14px;">' +
@@ -2848,6 +2852,20 @@
                 });
             }
         }
+    }
+
+    async function rnPublishPaper(id) {
+        const d = await rnFetch('/papers/' + id + '/publish', { method: 'POST' });
+        const url = window.location.origin + d.url;
+        try { await navigator.clipboard.writeText(url); } catch (e) {}
+        alert('Published:\n' + url + '\n(copied to clipboard)');
+        rnShowPaper(id);
+    }
+
+    async function rnUnpublishPaper(id) {
+        if (!confirm('Unpublish this paper? The public URL will stop working.')) return;
+        await rnFetch('/papers/' + id + '/publish', { method: 'DELETE' });
+        rnShowPaper(id);
     }
 
     async function rnEditSection(paperId, sectionId) {

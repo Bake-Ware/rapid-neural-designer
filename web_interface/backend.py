@@ -5,6 +5,8 @@ Serves the visual editor (rooms, code execution) and the research platform API
 """
 
 import os
+import re
+import secrets
 import sys
 import subprocess
 import tempfile
@@ -12,7 +14,7 @@ import time
 import json
 import random
 from pathlib import Path
-from flask import Flask, request, jsonify, redirect, send_from_directory
+from flask import Flask, request, jsonify, redirect, send_from_directory, render_template_string
 from flask_cors import CORS
 from flask_socketio import SocketIO, join_room, leave_room
 
@@ -1260,6 +1262,81 @@ def rnd_update_paper(paper_id):
 
 
 # ---- Paper Sections ----
+
+@app.route('/api/rnd/papers/<paper_id>/publish', methods=['POST'])
+def rnd_publish_paper(paper_id):
+    paper = rnd_repo.load("paper", paper_id)
+    if not paper:
+        return api_error("Paper not found", 404)
+    slug = paper.metadata.get("public_slug")
+    if not slug:
+        base = re.sub(r'[^a-z0-9]+', '-', paper.title.lower()).strip('-')[:60]
+        slug = f"{base}-{secrets.token_hex(3)}"
+        paper.metadata["public_slug"] = slug
+        paper.metadata["published_at"] = now_iso()
+        paper.updated_at = now_iso()
+        rnd_repo.save(paper)
+    return jsonify({"public_slug": slug, "url": f"/pub/{slug}"})
+
+@app.route('/api/rnd/papers/<paper_id>/publish', methods=['DELETE'])
+def rnd_unpublish_paper(paper_id):
+    paper = rnd_repo.load("paper", paper_id)
+    if not paper:
+        return api_error("Paper not found", 404)
+    paper.metadata.pop("public_slug", None)
+    paper.metadata.pop("published_at", None)
+    paper.updated_at = now_iso()
+    rnd_repo.save(paper)
+    return jsonify({"unpublished": True})
+
+@app.route('/pub/<slug>', methods=['GET'])
+def rnd_public_paper(slug):
+    # Public, read-only. Only entities explicitly published (metadata.public_slug) are reachable.
+    for p in rnd_repo.list_entities("paper"):
+        if p.metadata.get("public_slug") == slug:
+            sections = []
+            for s in p.sections:
+                try:
+                    content = rnd_repo.load_paper_section_content(s) or ""
+                except Exception:
+                    content = ""
+                # strip internal binding comments from the public view
+                content = re.sub(r'<!--.*?-->', '', content, flags=re.S)
+                sections.append({"title": s.title, "type": s.section_type.value, "content": content})
+            html = render_template_string(PUBLIC_PAPER_TEMPLATE, paper=p, sections=sections)
+            return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+    return "Not found", 404
+
+PUBLIC_PAPER_TEMPLATE = """<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ paper.title }}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<style>
+ body{font-family:Georgia,'Times New Roman',serif;max-width:760px;margin:0 auto;padding:2rem 1.2rem;color:#1a1a1a;line-height:1.65;background:#fdfdfa}
+ h1{font-size:1.7rem;line-height:1.3;margin-bottom:.3rem} .authors{color:#555;margin-bottom:.2rem}
+ .meta{color:#888;font-size:.85rem;margin-bottom:2rem} h2{font-size:1.25rem;margin-top:2.2rem;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+ table{border-collapse:collapse;margin:1rem 0;font-size:.92rem} th,td{border:1px solid #ccc;padding:.35rem .6rem}
+ code{background:#f0efe8;padding:.1rem .3rem;border-radius:3px;font-size:.9em}
+ .abstract{background:#f5f4ec;padding:1rem 1.3rem;border-left:3px solid #999;font-size:.95rem}
+</style></head><body>
+<h1>{{ paper.title }}</h1>
+<div class="authors">{{ paper.authors | join(', ') }}</div>
+<div class="meta">Published {{ paper.metadata.get('published_at','')[:10] }} · Rapid Neural Designer research platform</div>
+{% for s in sections %}
+<section class="{{ 'abstract' if s.type == 'abstract' else '' }}">
+{% if s.type != 'abstract' %}<h2>{{ s.title }}</h2>{% endif %}
+<div class="md" data-md="{{ s.content | e }}"></div>
+</section>
+{% endfor %}
+<script>
+document.querySelectorAll('.md').forEach(el => { el.innerHTML = marked.parse(el.dataset.md); });
+document.addEventListener('DOMContentLoaded', () => renderMathInElement(document.body, {
+  delimiters: [{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}], throwOnError: false }));
+</script></body></html>"""
 
 @app.route('/api/rnd/papers/<paper_id>/sections', methods=['POST'])
 def rnd_add_paper_section(paper_id):
